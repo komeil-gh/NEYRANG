@@ -1,0 +1,8 @@
+/target/
+/dist/
+/.venv/
+/results/
+*.pgn
+*.epd
+!examples/*.pgn
+!scripts/openings.epd

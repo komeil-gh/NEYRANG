@@ -1,0 +1,541 @@
+//! Iterative search driver and recursive alpha-beta implementation.
+
+use std::{
+    sync::atomic::{AtomicBool, Ordering},
+    time::{Duration, Instant},
+};
+
+use crate::{
+    chess::{Move, Position},
+    eval,
+};
+
+use super::{
+    SearchLimits,
+    history::HistoryTable,
+    ordering,
+    tt::{Bound, TranspositionTable},
+};
+
+pub const MAX_PLY: usize = 128;
+pub const VALUE_DRAW: i32 = 0;
+pub const VALUE_MATE: i32 = 30_000;
+pub const VALUE_INFINITE: i32 = 32_000;
+
+#[derive(Clone, Debug)]
+pub struct SearchInfo {
+    pub depth: u8,
+    pub seldepth: u8,
+    pub score: i32,
+    pub nodes: u64,
+    pub qnodes: u64,
+    pub elapsed: Duration,
+    pub pv: Vec<Move>,
+    pub hashfull: u16,
+}
+
+impl SearchInfo {
+    pub fn nps(&self) -> u64 {
+        let micros = self.elapsed.as_micros().max(1) as u64;
+        self.nodes.saturating_mul(1_000_000) / micros
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SearchResult {
+    pub best_move: Option<Move>,
+    pub score: i32,
+    pub depth: u8,
+    pub seldepth: u8,
+    pub nodes: u64,
+    pub qnodes: u64,
+    pub elapsed: Duration,
+    pub pv: Vec<Move>,
+    pub stopped: bool,
+    pub hashfull: u16,
+    pub statistics: SearchStatistics,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct SearchStatistics {
+    pub tt_hits: u64,
+    pub tt_cutoffs: u64,
+    pub beta_cutoffs: u64,
+    pub first_move_beta_cutoffs: u64,
+    pub pvs_zero_window_searches: u64,
+    pub pvs_researches: u64,
+    pub aspiration_searches: u64,
+    pub see_prunes: u64,
+    pub futility_prunes: u64,
+    pub null_move_cutoffs: u64,
+    pub lmr_reductions: u64,
+}
+
+pub struct Searcher<'a> {
+    stop: &'a AtomicBool,
+    limits: SearchLimits,
+    started: Instant,
+    nodes: u64,
+    qnodes: u64,
+    seldepth: usize,
+    stopped: bool,
+    hashes: Vec<u64>,
+    pv: [[Move; MAX_PLY]; MAX_PLY],
+    pv_len: [usize; MAX_PLY],
+    tt: TranspositionTable,
+    killers: [[Move; 2]; MAX_PLY],
+    history: HistoryTable,
+    statistics: SearchStatistics,
+}
+
+impl<'a> Searcher<'a> {
+    pub fn new(stop: &'a AtomicBool) -> Self {
+        Self::with_hash(stop, 1)
+    }
+
+    pub fn with_hash(stop: &'a AtomicBool, hash_megabytes: usize) -> Self {
+        Self::with_table(stop, TranspositionTable::new(hash_megabytes))
+    }
+
+    pub fn with_table(stop: &'a AtomicBool, tt: TranspositionTable) -> Self {
+        Self {
+            stop,
+            limits: SearchLimits::default(),
+            started: Instant::now(),
+            nodes: 0,
+            qnodes: 0,
+            seldepth: 0,
+            stopped: false,
+            hashes: Vec::with_capacity(MAX_PLY * 2),
+            pv: [[Move::NONE; MAX_PLY]; MAX_PLY],
+            pv_len: [0; MAX_PLY],
+            tt,
+            killers: [[Move::NONE; 2]; MAX_PLY],
+            history: HistoryTable::default(),
+            statistics: SearchStatistics::default(),
+        }
+    }
+
+    pub fn into_table(self) -> TranspositionTable {
+        self.tt
+    }
+
+    pub fn search<F>(
+        &mut self,
+        position: &mut Position,
+        limits: &SearchLimits,
+        game_hashes: &[u64],
+        mut on_info: F,
+    ) -> SearchResult
+    where
+        F: FnMut(&SearchInfo),
+    {
+        self.reset(position, limits, game_hashes);
+        let root_moves = position.legal_moves();
+        if root_moves.is_empty() {
+            return self.root_terminal(position);
+        }
+
+        let fallback = root_moves.as_slice()[0];
+        let mut best_move = fallback;
+        let mut best_score = eval::evaluate(position);
+        let mut best_depth = 0_u8;
+        let mut best_pv = vec![fallback];
+        let max_depth = limits.depth.unwrap_or((MAX_PLY - 2) as u8).max(1);
+
+        for depth in 1..=max_depth {
+            let mut delta = 50_i32;
+            let mut alpha = if depth >= 4 {
+                (best_score - delta).max(-VALUE_INFINITE)
+            } else {
+                -VALUE_INFINITE
+            };
+            let mut beta = if depth >= 4 {
+                (best_score + delta).min(VALUE_INFINITE)
+            } else {
+                VALUE_INFINITE
+            };
+            let score = loop {
+                self.pv_len.fill(0);
+                #[cfg(feature = "stats")]
+                if depth >= 4 {
+                    self.statistics.aspiration_searches += 1;
+                }
+                let score = self.negamax(position, depth as i32, 0, alpha, beta, Some(best_move));
+                if self.stopped || depth < 4 {
+                    break score;
+                }
+                if score <= alpha {
+                    alpha = (alpha - delta).max(-VALUE_INFINITE);
+                } else if score >= beta {
+                    beta = (beta + delta).min(VALUE_INFINITE);
+                } else {
+                    break score;
+                }
+                delta = (delta * 2).min(VALUE_INFINITE);
+            };
+            if self.stopped {
+                break;
+            }
+
+            let pv = self.pv_line(0);
+            if let Some(&mv) = pv.first() {
+                best_move = mv;
+                best_pv = pv;
+            }
+            best_score = score;
+            best_depth = depth;
+            let info = SearchInfo {
+                depth,
+                seldepth: self.seldepth.min(u8::MAX as usize) as u8,
+                score,
+                nodes: self.nodes,
+                qnodes: self.qnodes,
+                elapsed: self.started.elapsed(),
+                pv: best_pv.clone(),
+                hashfull: self.tt.hashfull(),
+            };
+            on_info(&info);
+
+            if self.soft_limit_reached()
+                || score.abs() >= VALUE_MATE - MAX_PLY as i32
+                || self.node_limit_reached()
+            {
+                break;
+            }
+        }
+
+        SearchResult {
+            best_move: Some(best_move),
+            score: best_score,
+            depth: best_depth,
+            seldepth: self.seldepth.min(u8::MAX as usize) as u8,
+            nodes: self.nodes,
+            qnodes: self.qnodes,
+            elapsed: self.started.elapsed(),
+            pv: best_pv,
+            stopped: self.stopped,
+            hashfull: self.tt.hashfull(),
+            statistics: self.statistics,
+        }
+    }
+
+    fn reset(&mut self, position: &Position, limits: &SearchLimits, game_hashes: &[u64]) {
+        self.limits = limits.clone();
+        self.started = Instant::now();
+        self.nodes = 0;
+        self.qnodes = 0;
+        self.seldepth = 0;
+        self.stopped = false;
+        self.statistics = SearchStatistics::default();
+        self.hashes.clear();
+        self.hashes.extend_from_slice(game_hashes);
+        if self.hashes.last().copied() != Some(position.hash()) {
+            self.hashes.push(position.hash());
+        }
+        self.pv_len.fill(0);
+        self.tt.new_search();
+        self.killers.fill([Move::NONE; 2]);
+    }
+
+    fn root_terminal(&self, position: &Position) -> SearchResult {
+        let score = if position.is_in_check(position.side_to_move()) {
+            -VALUE_MATE
+        } else {
+            VALUE_DRAW
+        };
+        SearchResult {
+            best_move: None,
+            score,
+            depth: 0,
+            seldepth: 0,
+            nodes: 0,
+            qnodes: 0,
+            elapsed: self.started.elapsed(),
+            pv: Vec::new(),
+            stopped: false,
+            hashfull: self.tt.hashfull(),
+            statistics: self.statistics,
+        }
+    }
+
+    fn negamax(
+        &mut self,
+        position: &mut Position,
+        depth: i32,
+        ply: usize,
+        mut alpha: i32,
+        beta: i32,
+        preferred: Option<Move>,
+    ) -> i32 {
+        if ply >= MAX_PLY - 1 {
+            return eval::evaluate(position);
+        }
+        self.nodes = self.nodes.saturating_add(1);
+        self.seldepth = self.seldepth.max(ply);
+        self.pv_len[ply] = ply;
+        if self.should_stop() {
+            return VALUE_DRAW;
+        }
+        if self.is_draw(position) {
+            return VALUE_DRAW;
+        }
+        if depth <= 0 {
+            return self.qsearch(position, ply, alpha, beta);
+        }
+
+        let key = position.hash();
+        let original_alpha = alpha;
+        let tt_data = self.tt.probe(key, ply);
+        #[cfg(feature = "stats")]
+        if tt_data.is_some() {
+            self.statistics.tt_hits += 1;
+        }
+        if ply != 0
+            && let Some(data) = tt_data
+            && data.depth >= depth as i16
+        {
+            match data.bound {
+                Bound::Exact => {
+                    #[cfg(feature = "stats")]
+                    {
+                        self.statistics.tt_cutoffs += 1;
+                    }
+                    return data.score;
+                }
+                Bound::Lower if data.score >= beta => {
+                    #[cfg(feature = "stats")]
+                    {
+                        self.statistics.tt_cutoffs += 1;
+                    }
+                    return data.score;
+                }
+                Bound::Upper if data.score <= alpha => {
+                    #[cfg(feature = "stats")]
+                    {
+                        self.statistics.tt_cutoffs += 1;
+                    }
+                    return data.score;
+                }
+                Bound::Lower | Bound::Upper => {}
+            }
+        }
+
+        let in_check = position.is_in_check(position.side_to_move());
+        let mut moves = position.legal_moves();
+        if moves.is_empty() {
+            return if in_check {
+                -VALUE_MATE + ply as i32
+            } else {
+                VALUE_DRAW
+            };
+        }
+        let moving_color = position.side_to_move();
+        ordering::order(
+            position,
+            &mut moves,
+            tt_data.map(|data| data.best_move).or(preferred),
+            self.killers[ply],
+            &self.history,
+            moving_color,
+        );
+
+        let mut best = -VALUE_INFINITE;
+        let mut best_move = Move::NONE;
+        for (move_index, &mv) in moves.iter().enumerate() {
+            let undo = position.make_move(mv);
+            self.hashes.push(position.hash());
+            let mut score;
+            if move_index == 0 {
+                score = -self.negamax(position, depth - 1, ply + 1, -beta, -alpha, None);
+            } else {
+                #[cfg(feature = "stats")]
+                {
+                    self.statistics.pvs_zero_window_searches += 1;
+                }
+                score = -self.negamax(position, depth - 1, ply + 1, -alpha - 1, -alpha, None);
+                if score > alpha && score < beta {
+                    #[cfg(feature = "stats")]
+                    {
+                        self.statistics.pvs_researches += 1;
+                    }
+                    score = -self.negamax(position, depth - 1, ply + 1, -beta, -alpha, None);
+                }
+            }
+            self.hashes.pop();
+            position.unmake_move(mv, undo);
+
+            if self.stopped {
+                return VALUE_DRAW;
+            }
+            if score > best {
+                best = score;
+                best_move = mv;
+                self.update_pv(ply, mv);
+            }
+            if score > alpha {
+                alpha = score;
+            }
+            if alpha >= beta {
+                #[cfg(feature = "stats")]
+                {
+                    self.statistics.beta_cutoffs += 1;
+                    if move_index == 0 {
+                        self.statistics.first_move_beta_cutoffs += 1;
+                    }
+                }
+                if !mv.is_capture() && !mv.is_promotion() {
+                    self.record_killer(ply, mv);
+                    self.history.reward(moving_color, mv, depth);
+                    for &failed in &moves.as_slice()[..move_index] {
+                        if !failed.is_capture() && !failed.is_promotion() {
+                            self.history.penalize(moving_color, failed, depth);
+                        }
+                    }
+                }
+                break;
+            }
+        }
+        let bound = if best <= original_alpha {
+            Bound::Upper
+        } else if best >= beta {
+            Bound::Lower
+        } else {
+            Bound::Exact
+        };
+        self.tt
+            .store(key, depth as i16, best, bound, best_move, ply);
+        best
+    }
+
+    fn qsearch(&mut self, position: &mut Position, ply: usize, mut alpha: i32, beta: i32) -> i32 {
+        if ply >= MAX_PLY - 1 {
+            return eval::evaluate(position);
+        }
+        self.nodes = self.nodes.saturating_add(1);
+        self.qnodes = self.qnodes.saturating_add(1);
+        self.seldepth = self.seldepth.max(ply);
+        self.pv_len[ply] = ply;
+        if self.should_stop() {
+            return VALUE_DRAW;
+        }
+        if self.is_draw(position) {
+            return VALUE_DRAW;
+        }
+
+        let in_check = position.is_in_check(position.side_to_move());
+        if !in_check {
+            let stand_pat = eval::evaluate(position);
+            if stand_pat >= beta {
+                return stand_pat;
+            }
+            alpha = alpha.max(stand_pat);
+        }
+
+        let mut moves = position.legal_moves();
+        if moves.is_empty() {
+            return if in_check {
+                -VALUE_MATE + ply as i32
+            } else {
+                VALUE_DRAW
+            };
+        }
+        ordering::order(
+            position,
+            &mut moves,
+            None,
+            self.killers[ply],
+            &self.history,
+            position.side_to_move(),
+        );
+
+        for &mv in moves.iter() {
+            if !in_check && !mv.is_capture() && !mv.is_promotion() {
+                continue;
+            }
+            let undo = position.make_move(mv);
+            self.hashes.push(position.hash());
+            let score = -self.qsearch(position, ply + 1, -beta, -alpha);
+            self.hashes.pop();
+            position.unmake_move(mv, undo);
+
+            if self.stopped {
+                return VALUE_DRAW;
+            }
+            if score > alpha {
+                alpha = score;
+                self.update_pv(ply, mv);
+                if alpha >= beta {
+                    break;
+                }
+            }
+        }
+        alpha
+    }
+
+    fn update_pv(&mut self, ply: usize, mv: Move) {
+        self.pv[ply][ply] = mv;
+        let child_end = self.pv_len[ply + 1];
+        for index in ply + 1..child_end {
+            self.pv[ply][index] = self.pv[ply + 1][index];
+        }
+        self.pv_len[ply] = child_end.max(ply + 1);
+    }
+
+    fn record_killer(&mut self, ply: usize, mv: Move) {
+        if self.killers[ply][0] != mv {
+            self.killers[ply][1] = self.killers[ply][0];
+            self.killers[ply][0] = mv;
+        }
+    }
+
+    fn pv_line(&self, ply: usize) -> Vec<Move> {
+        self.pv[ply][ply..self.pv_len[ply]].to_vec()
+    }
+
+    fn is_draw(&self, position: &Position) -> bool {
+        if position.halfmove_clock() >= 100 {
+            return true;
+        }
+        let current = position.hash();
+        self.hashes
+            .iter()
+            .rev()
+            .take(position.halfmove_clock() as usize + 1)
+            .filter(|&&hash| hash == current)
+            .take(3)
+            .count()
+            >= 3
+    }
+
+    fn should_stop(&mut self) -> bool {
+        if self.stopped {
+            return true;
+        }
+        if self.stop.load(Ordering::Relaxed) || self.node_limit_reached() {
+            self.stopped = true;
+            return true;
+        }
+        if self.nodes & 1_023 == 0
+            && self
+                .limits
+                .hard_time
+                .is_some_and(|limit| self.started.elapsed() >= limit)
+        {
+            self.stopped = true;
+        }
+        self.stopped
+    }
+
+    fn node_limit_reached(&self) -> bool {
+        self.limits.nodes.is_some_and(|limit| self.nodes >= limit)
+    }
+
+    fn soft_limit_reached(&self) -> bool {
+        !self.limits.infinite
+            && self
+                .limits
+                .soft_time
+                .is_some_and(|limit| self.started.elapsed() >= limit)
+    }
+}

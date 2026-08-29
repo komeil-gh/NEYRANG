@@ -75,6 +75,7 @@ pub struct SearchStatistics {
     pub futility_prunes: u64,
     pub null_move_cutoffs: u64,
     pub lmr_reductions: u64,
+    pub lmr_researches: u64,
 }
 
 pub struct Searcher<'a> {
@@ -292,6 +293,7 @@ impl<'a> Searcher<'a> {
 
         let key = position.hash();
         let original_alpha = alpha;
+        let is_pv_node = beta - alpha > 1;
         let tt_data = self.tt.probe(key, ply);
         #[cfg(feature = "stats")]
         if tt_data.is_some() {
@@ -356,7 +358,18 @@ impl<'a> Searcher<'a> {
             if tt_move == Some(mv) {
                 self.statistics.tt_move_searches += 1;
             }
+            let can_reduce = ply != 0
+                && depth >= 3
+                && move_index >= 4
+                && !is_pv_node
+                && !in_check
+                && !mv.is_capture()
+                && !mv.is_promotion()
+                && tt_move != Some(mv)
+                && !self.killers[ply].contains(&mv)
+                && self.history.score(moving_color, mv) < HistoryTable::MAX_SCORE / 4;
             let undo = position.make_move(mv);
+            let gives_check = can_reduce && position.is_in_check(position.side_to_move());
             self.hashes.push(position.hash());
             let mut score;
             if move_index == 0 {
@@ -366,7 +379,24 @@ impl<'a> Searcher<'a> {
                 {
                     self.statistics.pvs_zero_window_searches += 1;
                 }
-                score = -self.negamax(position, depth - 1, ply + 1, -alpha - 1, -alpha, None);
+                if can_reduce && !gives_check {
+                    #[cfg(feature = "stats")]
+                    {
+                        self.statistics.lmr_reductions += 1;
+                    }
+                    score = -self.negamax(position, depth - 2, ply + 1, -alpha - 1, -alpha, None);
+                    if score > alpha {
+                        #[cfg(feature = "stats")]
+                        {
+                            self.statistics.lmr_researches += 1;
+                            self.statistics.pvs_zero_window_searches += 1;
+                        }
+                        score =
+                            -self.negamax(position, depth - 1, ply + 1, -alpha - 1, -alpha, None);
+                    }
+                } else {
+                    score = -self.negamax(position, depth - 1, ply + 1, -alpha - 1, -alpha, None);
+                }
                 if score > alpha && score < beta {
                     #[cfg(feature = "stats")]
                     {

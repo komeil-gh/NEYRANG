@@ -116,3 +116,18 @@ fn quiescence_reports_pruned_losing_captures() {
 
     assert!(result.statistics.see_prunes > 0);
 }
+
+#[cfg(feature = "stats")]
+#[test]
+fn lmr_reduces_late_quiet_moves() {
+    let mut position = Position::startpos();
+    let hashes = [position.hash()];
+    let stop = AtomicBool::new(false);
+    let mut searcher = Searcher::new(&stop);
+
+    let result = searcher.search(&mut position, &SearchLimits::depth(6), &hashes, |_| {});
+
+    assert!(result.statistics.lmr_reductions > 0);
+    assert!(result.statistics.lmr_researches > 0);
+    assert!(result.statistics.lmr_researches <= result.statistics.lmr_reductions);
+}

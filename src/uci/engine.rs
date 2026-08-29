@@ -21,6 +21,7 @@ use crate::{
 use super::parser::{Command, GoParameters, PositionSpecification, parse};
 
 const DEFAULT_HASH_MB: usize = 64;
+const DEFAULT_MOVE_OVERHEAD_MS: u64 = 30;
 const MAX_HASH_MB: usize = 65_536;
 
 pub fn run() -> io::Result<()> {
@@ -63,7 +64,7 @@ impl UciEngine {
             game_hashes: vec![hash],
             hash_megabytes: DEFAULT_HASH_MB,
             threads: 1,
-            move_overhead_ms: 10,
+            move_overhead_ms: DEFAULT_MOVE_OVERHEAD_MS,
             active: None,
             table: Some(TranspositionTable::new(DEFAULT_HASH_MB)),
         }
@@ -134,7 +135,9 @@ impl UciEngine {
             "option name Hash type spin default {DEFAULT_HASH_MB} min 1 max {MAX_HASH_MB}"
         ))?;
         send_line("option name Threads type spin default 1 min 1 max 256")?;
-        send_line("option name Move Overhead type spin default 10 min 0 max 5000")?;
+        send_line(&format!(
+            "option name Move Overhead type spin default {DEFAULT_MOVE_OVERHEAD_MS} min 0 max 5000"
+        ))?;
         send_line("uciok")
     }
 
@@ -329,7 +332,15 @@ fn send_line(line: &str) -> io::Result<()> {
 mod tests {
     use crate::chess::Color;
 
-    use super::{GoParameters, normalize_limits};
+    use super::{DEFAULT_MOVE_OVERHEAD_MS, GoParameters, UciEngine, normalize_limits};
+
+    #[test]
+    fn default_overhead_covers_observed_external_latency_tail() {
+        let engine = UciEngine::new();
+
+        assert_eq!(engine.move_overhead_ms, DEFAULT_MOVE_OVERHEAD_MS);
+        assert_eq!(DEFAULT_MOVE_OVERHEAD_MS, 30);
+    }
 
     #[test]
     fn movetime_stops_immediately_when_overhead_consumes_the_request() {

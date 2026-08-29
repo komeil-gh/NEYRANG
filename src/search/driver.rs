@@ -583,13 +583,16 @@ impl<'a> Searcher<'a> {
             self.stopped = true;
             return true;
         }
-        if self.nodes & 1_023 == 0
-            && self
-                .limits
-                .hard_time
-                .is_some_and(|limit| self.started.elapsed() >= limit)
-        {
-            self.stopped = true;
+        if let Some(limit) = self.limits.hard_time {
+            // A 1,024-node cadence is cheap at ordinary limits, but can
+            // consume the entire budget once only a few milliseconds remain.
+            // Check every node in that emergency window and always sample the
+            // first node so a zero budget returns the legal root fallback.
+            let time_check_due =
+                self.nodes == 1 || limit <= Duration::from_millis(5) || self.nodes & 1_023 == 0;
+            if time_check_due && self.started.elapsed() >= limit {
+                self.stopped = true;
+            }
         }
         self.stopped
     }

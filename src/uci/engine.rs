@@ -266,9 +266,7 @@ fn normalize_limits(parameters: &GoParameters, color: Color, overhead_ms: u64) -
     }
     let overhead = Duration::from_millis(overhead_ms);
     if let Some(milliseconds) = parameters.move_time_ms {
-        let hard = Duration::from_millis(milliseconds)
-            .saturating_sub(overhead)
-            .max(Duration::from_millis(1));
+        let hard = Duration::from_millis(milliseconds).saturating_sub(overhead);
         limits.soft_time = Some(hard * 9 / 10);
         limits.hard_time = Some(hard);
         return limits;
@@ -325,4 +323,24 @@ fn send_line(line: &str) -> io::Result<()> {
     let mut output = stdout.lock();
     writeln!(output, "{line}")?;
     output.flush()
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::chess::Color;
+
+    use super::{GoParameters, normalize_limits};
+
+    #[test]
+    fn movetime_stops_immediately_when_overhead_consumes_the_request() {
+        let parameters = GoParameters {
+            move_time_ms: Some(5),
+            ..GoParameters::default()
+        };
+
+        let limits = normalize_limits(&parameters, Color::White, 10);
+
+        assert_eq!(limits.soft_time, Some(std::time::Duration::ZERO));
+        assert_eq!(limits.hard_time, Some(std::time::Duration::ZERO));
+    }
 }

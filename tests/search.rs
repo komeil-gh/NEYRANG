@@ -1,4 +1,5 @@
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 
 use neyrang::{
     chess::Position,
@@ -32,6 +33,25 @@ fn a_pre_signaled_stop_is_not_lost_during_search_startup() {
     let hashes = [position.hash()];
 
     let result = searcher.search(&mut position, &SearchLimits::depth(4), &hashes, |_| {});
+
+    assert!(result.stopped);
+    assert!(result.nodes <= 1);
+    assert!(result.best_move.is_some());
+}
+
+#[test]
+fn an_expired_hard_limit_returns_the_legal_fallback_immediately() {
+    let mut position = Position::startpos();
+    let stop = AtomicBool::new(false);
+    let mut searcher = Searcher::new(&stop);
+    let hashes = [position.hash()];
+    let limits = SearchLimits {
+        depth: Some(12),
+        hard_time: Some(Duration::ZERO),
+        ..SearchLimits::default()
+    };
+
+    let result = searcher.search(&mut position, &limits, &hashes, |_| {});
 
     assert!(result.stopped);
     assert!(result.nodes <= 1);

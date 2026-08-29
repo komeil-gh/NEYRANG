@@ -16,6 +16,16 @@ The suite covers FEN, compact moves, attack edges, legal start moves, hash resto
 
 Randomized invariant testing uses 64 deterministic seeds and up to 96 legal plies each, then unmakes every move and compares the exact original position.
 
+## Tactical regression suite
+
+Run the selective-search guard independently with:
+
+```bash
+cargo test --test tactical
+```
+
+The deterministic fixtures cover mate in one, two, and three; a hanging queen; a forced recapture; a quiet mating move; promotion and a promotion race; rook underpromotion to avoid stalemate; a queen-promotion stalemate trap; a KPK opposition position; and the only quiet defensive block. Each case fixes the search depth and checks an exact move or a tablebase-equivalent acceptable move set. The suite also walks every reported PV and verifies that each move is legal in sequence.
+
 ## Perft gates
 
 Required release commands:

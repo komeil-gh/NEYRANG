@@ -18,6 +18,9 @@ output="$(
     ENGINE_B_GIT_SHA=baseline-sha \
     OPENINGS_FILE="$repo_root/scripts/openings.epd" \
     OPENING_SEED=20260829 \
+    TIME_MARGIN_MS=0 \
+    SHOW_LATENCY=1 \
+    STRICT=1 \
     GAMES=10 \
     NODES=5000 \
     PGN_OUT="$pgn_out" \
@@ -40,6 +43,10 @@ require_output "nps=true"
 require_output "hashfull=true"
 require_output "pv=true"
 require_output "timeleft=true"
+require_output "latency=true"
+require_output "timemargin=0"
+require_output "-show-latency"
+require_output "-strict"
 require_output "outname=$scratch/smoke.config.json"
 
 if [[ ! -f "$meta_out" ]]; then
@@ -52,6 +59,9 @@ for expected in \
     "engine_b_git_sha=baseline-sha" \
     "opening_seed=20260829" \
     "nodes=5000" \
+    "time_margin_ms=0" \
+    "show_latency=1" \
+    "strict=1" \
     "games=10" \
     "config_out=$scratch/smoke.config.json"; do
     if ! grep -Fqx "$expected" "$meta_out"; then
@@ -72,6 +82,9 @@ sprt_output="$(
     ENGINE_B_GIT_SHA=baseline-sha \
     OPENINGS_FILE="$repo_root/scripts/openings.epd" \
     OPENING_SEED=20260829 \
+    TIME_MARGIN_MS=0 \
+    SHOW_LATENCY=1 \
+    STRICT=1 \
     ROUNDS=20 \
     SPRT_MODEL=normalized \
     META_OUT="$sprt_meta_out" \
@@ -85,6 +98,10 @@ for expected in \
     "-rounds 20" \
     "seldepth=true" \
     "timeleft=true" \
+    "latency=true" \
+    "timemargin=0" \
+    "-show-latency" \
+    "-strict" \
     "outname=$scratch/sprt.config.json"; do
     if [[ "$sprt_output" != *"$expected"* ]]; then
         echo "SPRT dry-run output is missing: $expected" >&2
@@ -103,6 +120,9 @@ for expected in \
     "opening_seed=20260829" \
     "sprt_model=normalized" \
     "rounds=20" \
+    "time_margin_ms=0" \
+    "show_latency=1" \
+    "strict=1" \
     "config_out=$scratch/sprt.config.json"; do
     if ! grep -Fqx "$expected" "$sprt_meta_out"; then
         echo "SPRT metadata is missing: $expected" >&2

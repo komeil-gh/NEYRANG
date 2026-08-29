@@ -15,6 +15,9 @@ time_control="${TC:-10+0.1}"
 nodes="${NODES:-}"
 hash_mb="${HASH_MB:-64}"
 threads="${THREADS:-1}"
+time_margin_ms="${TIME_MARGIN_MS:-}"
+strict="${STRICT:-0}"
+show_latency="${SHOW_LATENCY:-0}"
 openings_file="${OPENINGS_FILE:-$script_dir/openings.epd}"
 opening_order="${OPENING_ORDER:-random}"
 opening_seed="${OPENING_SEED:-20260829}"
@@ -38,6 +41,18 @@ if (( games < 2 || games % 2 != 0 )); then
 fi
 if [[ -n "$nodes" ]] && (( nodes < 1 )); then
     echo "NODES must be a positive integer when set" >&2
+    exit 2
+fi
+if [[ -n "$time_margin_ms" ]] && ! [[ "$time_margin_ms" =~ ^[0-9]+$ ]]; then
+    echo "TIME_MARGIN_MS must be a non-negative integer when set" >&2
+    exit 2
+fi
+if [[ "$strict" != "0" && "$strict" != "1" ]]; then
+    echo "STRICT must be 0 or 1" >&2
+    exit 2
+fi
+if [[ "$show_latency" != "0" && "$show_latency" != "1" ]]; then
+    echo "SHOW_LATENCY must be 0 or 1" >&2
     exit 2
 fi
 if [[ "$opening_order" != "random" && "$opening_order" != "sequential" ]]; then
@@ -85,6 +100,9 @@ if [[ -n "$nodes" ]]; then
     search_limit=("nodes=$nodes")
     limit_mode="nodes"
 fi
+if [[ -n "$time_margin_ms" ]]; then
+    search_limit+=("timemargin=$time_margin_ms")
+fi
 
 command=(
     "$fastchess_path"
@@ -95,12 +113,18 @@ command=(
     -srand "$opening_seed"
     -rounds "$((games / 2))" -repeat
     -concurrency "$concurrency"
-    -pgnout "file=$pgn_out" notation=san append=false nodes=true seldepth=true nps=true hashfull=true pv=true timeleft=true
+    -pgnout "file=$pgn_out" notation=san append=false nodes=true seldepth=true nps=true hashfull=true pv=true timeleft=true latency=true
     -report penta=true
     -ratinginterval 10
     -config "outname=$config_out"
     -recover
 )
+if [[ "$show_latency" == "1" ]]; then
+    command+=(-show-latency)
+fi
+if [[ "$strict" == "1" ]]; then
+    command+=(-strict)
+fi
 
 {
     echo "format=neyrang-match-v1"
@@ -130,6 +154,9 @@ command=(
     echo "threads=$threads"
     echo "hash_mb=$hash_mb"
     echo "concurrency=$concurrency"
+    echo "time_margin_ms=$time_margin_ms"
+    echo "show_latency=$show_latency"
+    echo "strict=$strict"
     echo "adjudication=fastchess-default"
     echo "pgn_out=$pgn_out"
     echo "log_out=$log_out"

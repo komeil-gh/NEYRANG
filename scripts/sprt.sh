@@ -14,6 +14,9 @@ concurrency="${CONCURRENCY:-1}"
 time_control="${TC:-10+0.1}"
 hash_mb="${HASH_MB:-64}"
 threads="${THREADS:-1}"
+time_margin_ms="${TIME_MARGIN_MS:-}"
+strict="${STRICT:-0}"
+show_latency="${SHOW_LATENCY:-0}"
 elo0="${ELO0:-0}"
 elo1="${ELO1:-5}"
 alpha="${ALPHA:-0.05}"
@@ -53,6 +56,18 @@ if (( rounds < 1 )); then
     echo "ROUNDS must be positive" >&2
     exit 2
 fi
+if [[ -n "$time_margin_ms" ]] && ! [[ "$time_margin_ms" =~ ^[0-9]+$ ]]; then
+    echo "TIME_MARGIN_MS must be a non-negative integer when set" >&2
+    exit 2
+fi
+if [[ "$strict" != "0" && "$strict" != "1" ]]; then
+    echo "STRICT must be 0 or 1" >&2
+    exit 2
+fi
+if [[ "$show_latency" != "0" && "$show_latency" != "1" ]]; then
+    echo "SHOW_LATENCY must be 0 or 1" >&2
+    exit 2
+fi
 if [[ "$opening_order" != "random" && "$opening_order" != "sequential" ]]; then
     echo "OPENING_ORDER must be random or sequential" >&2
     exit 2
@@ -79,22 +94,33 @@ baseline_sha256="$(sha256_file "$baseline")"
 openings_sha256="$(sha256_file "$openings_file")"
 fastchess_sha256="$(sha256_file "$fastchess_path")"
 
+time_options=("tc=$time_control")
+if [[ -n "$time_margin_ms" ]]; then
+    time_options+=("timemargin=$time_margin_ms")
+fi
+
 command=(
     "$fastchess_path"
     -engine "cmd=$candidate" "name=$candidate_name"
     -engine "cmd=$baseline" "name=$baseline_name"
-    -each "tc=$time_control" "option.Hash=$hash_mb" "option.Threads=$threads"
+    -each "${time_options[@]}" "option.Hash=$hash_mb" "option.Threads=$threads"
     -openings "file=$openings_file" format=epd "order=$opening_order"
     -srand "$opening_seed"
     -sprt "elo0=$elo0" "elo1=$elo1" "alpha=$alpha" "beta=$beta" "model=$sprt_model"
     -rounds "$rounds" -repeat
     -concurrency "$concurrency"
-    -pgnout "file=$pgn_out" notation=san append=false nodes=true seldepth=true nps=true hashfull=true pv=true timeleft=true
+    -pgnout "file=$pgn_out" notation=san append=false nodes=true seldepth=true nps=true hashfull=true pv=true timeleft=true latency=true
     -report penta=true
     -ratinginterval 10
     -config "outname=$config_out"
     -recover
 )
+if [[ "$show_latency" == "1" ]]; then
+    command+=(-show-latency)
+fi
+if [[ "$strict" == "1" ]]; then
+    command+=(-strict)
+fi
 
 {
     echo "format=neyrang-sprt-v1"
@@ -122,6 +148,9 @@ command=(
     echo "threads=$threads"
     echo "hash_mb=$hash_mb"
     echo "concurrency=$concurrency"
+    echo "time_margin_ms=$time_margin_ms"
+    echo "show_latency=$show_latency"
+    echo "strict=$strict"
     echo "sprt_elo0=$elo0"
     echo "sprt_elo1=$elo1"
     echo "sprt_alpha=$alpha"

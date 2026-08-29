@@ -172,10 +172,9 @@ fn see_handles_multiple_attackers_and_defenders() {
 
 #[test]
 fn threshold_see_preserves_the_existing_lva_choice_in_an_ambiguous_exchange() {
-    let mut position = Position::from_fen(
-        "6k1/r2qb1p1/p1nP1p1r/1p3Q2/3P2N1/B3pP1p/P1P4P/2R1KBR1 w - - 2 32",
-    )
-    .expect("ambiguous LVA fixture must be valid");
+    let mut position =
+        Position::from_fen("6k1/r2qb1p1/p1nP1p1r/1p3Q2/3P2N1/B3pP1p/P1P4P/2R1KBR1 w - - 2 32")
+            .expect("ambiguous LVA fixture must be valid");
     let mv = legal_move(&mut position, "f5f6");
     let exact_lva = see(&position, mv);
 

@@ -2,6 +2,7 @@
 /dist/
 /.venv/
 /results/
+__pycache__/
 *.pgn
 *.epd
 !examples/*.pgn

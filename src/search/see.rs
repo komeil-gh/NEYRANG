@@ -8,6 +8,16 @@ struct ExchangeState {
     target_kind: PieceType,
     pieces: [[u64; 6]; 2],
     occupancy: u64,
+    #[cfg(feature = "stats")]
+    immediate: i32,
+}
+
+#[derive(Clone, Copy)]
+struct ExchangeHeader {
+    color: Color,
+    moving_kind: PieceType,
+    capture_square: Square,
+    target_kind: PieceType,
     immediate: i32,
 }
 
@@ -43,36 +53,12 @@ impl SeeObserver for SeeWork {
 /// Static exchange evaluation on the destination square. Positive values favor
 /// the side making `mv`; either side may decline a continuation capture.
 pub fn see(position: &Position, mv: Move) -> i32 {
-    #[cfg(feature = "stats")]
-    {
-        see_with_work(position, mv).0
+    if !mv.is_capture() && !mv.is_promotion() {
+        return 0;
     }
-    #[cfg(not(feature = "stats"))]
-    {
-        see_observed(position, mv, &mut NoSeeObserver)
-    }
-}
-
-fn see_observed<O: SeeObserver>(position: &Position, mv: Move, observer: &mut O) -> i32 {
-    let Some(exchange) = prepare_exchange(position, mv) else {
+    let Some((color, moving_kind)) = position.piece_at(mv.from()) else {
         return 0;
     };
-    exchange.immediate
-        - recapture_gain(
-            exchange.color.opposite(),
-            exchange.target,
-            exchange.target_kind,
-            exchange.pieces,
-            exchange.occupancy,
-            observer,
-        )
-}
-
-fn prepare_exchange(position: &Position, mv: Move) -> Option<ExchangeState> {
-    if !mv.is_capture() && !mv.is_promotion() {
-        return None;
-    }
-    let (color, moving_kind) = position.piece_at(mv.from())?;
     let mut pieces = [[0_u64; 6]; 2];
     for side in [Color::White, Color::Black] {
         for kind in PieceType::ALL {
@@ -101,14 +87,78 @@ fn prepare_exchange(position: &Position, mv: Move) -> Option<ExchangeState> {
         VALUE[kind.index()] - VALUE[PieceType::Pawn.index()]
     });
     let immediate = captured_kind.map_or(0, |kind| VALUE[kind.index()]) + promotion_gain;
-    Some(ExchangeState {
+    immediate - recapture_gain(color.opposite(), mv.to(), target_kind, pieces, occupancy)
+}
+
+#[cfg(feature = "stats")]
+fn see_observed<O: SeeObserver>(position: &Position, mv: Move, observer: &mut O) -> i32 {
+    let Some(header) = exchange_header(position, mv) else {
+        return 0;
+    };
+    let exchange = prepare_exchange(position, mv, header);
+    exchange.immediate
+        - recapture_gain_observed(
+            exchange.color.opposite(),
+            exchange.target,
+            exchange.target_kind,
+            exchange.pieces,
+            exchange.occupancy,
+            observer,
+        )
+}
+
+fn exchange_header(position: &Position, mv: Move) -> Option<ExchangeHeader> {
+    if !mv.is_capture() && !mv.is_promotion() {
+        return None;
+    }
+    let (color, moving_kind) = position.piece_at(mv.from())?;
+    let capture_square = if mv.is_en_passant() {
+        Square::from_coords(mv.to().file(), mv.from().rank())
+            .expect("legal en-passant capture square is valid")
+    } else {
+        mv.to()
+    };
+    let captured_kind = position.piece_at(capture_square).map(|(_, kind)| kind);
+    let target_kind = mv.promotion().unwrap_or(moving_kind);
+    let promotion_gain = mv.promotion().map_or(0, |kind| {
+        VALUE[kind.index()] - VALUE[PieceType::Pawn.index()]
+    });
+    let immediate = captured_kind.map_or(0, |kind| VALUE[kind.index()]) + promotion_gain;
+    Some(ExchangeHeader {
         color,
-        target: mv.to(),
+        moving_kind,
+        capture_square,
         target_kind,
-        pieces,
-        occupancy,
         immediate,
     })
+}
+
+fn prepare_exchange(position: &Position, mv: Move, header: ExchangeHeader) -> ExchangeState {
+    let mut pieces = [[0_u64; 6]; 2];
+    for side in [Color::White, Color::Black] {
+        for kind in PieceType::ALL {
+            pieces[side.index()][kind.index()] = position.pieces(side, kind);
+        }
+    }
+    let mut occupancy = position.all_occupancy();
+    pieces[header.color.index()][header.moving_kind.index()] &= !mv.from().bit();
+    occupancy &= !mv.from().bit();
+    if let Some((captured_color, kind)) = position.piece_at(header.capture_square) {
+        pieces[captured_color.index()][kind.index()] &= !header.capture_square.bit();
+        occupancy &= !header.capture_square.bit();
+    }
+    pieces[header.color.index()][header.target_kind.index()] |= mv.to().bit();
+    occupancy |= mv.to().bit();
+
+    ExchangeState {
+        color: header.color,
+        target: mv.to(),
+        target_kind: header.target_kind,
+        pieces,
+        occupancy,
+        #[cfg(feature = "stats")]
+        immediate: header.immediate,
+    }
 }
 
 /// Return whether the static exchange result reaches `threshold`.
@@ -133,17 +183,33 @@ fn see_ge_observed<O: SeeObserver>(
     threshold: i32,
     observer: &mut O,
 ) -> bool {
-    let Some(exchange) = prepare_exchange(position, mv) else {
+    let Some(header) = exchange_header(position, mv) else {
         return 0 >= threshold;
     };
 
     // SEE = immediate - opponent_recapture_gain. The query therefore asks
     // whether the opponent's non-negative gain is at most this bound.
-    let opponent_bound = i64::from(exchange.immediate) - i64::from(threshold);
+    let opponent_bound = i64::from(header.immediate) - i64::from(threshold);
     if opponent_bound < 0 {
         observer.early_exit();
         return false;
     }
+    let opponent = header.color.opposite();
+    let promotion_gain = if matches!(
+        (opponent, mv.to().rank()),
+        (Color::White, 7) | (Color::Black, 0)
+    ) {
+        VALUE[PieceType::Queen.index()] - VALUE[PieceType::Pawn.index()]
+    } else {
+        0
+    };
+    let maximum_recapture_gain = i64::from(VALUE[header.target_kind.index()] + promotion_gain);
+    if opponent_bound >= maximum_recapture_gain {
+        observer.early_exit();
+        return true;
+    }
+
+    let exchange = prepare_exchange(position, mv, header);
     !recapture_gain_ge(
         exchange.color.opposite(),
         exchange.target,
@@ -169,7 +235,48 @@ pub(crate) fn see_ge_with_work(position: &Position, mv: Move, threshold: i32) ->
     (passes, work)
 }
 
-fn recapture_gain<O: SeeObserver>(
+fn recapture_gain(
+    color: Color,
+    target: Square,
+    target_kind: PieceType,
+    pieces: [[u64; 6]; 2],
+    occupancy: u64,
+) -> i32 {
+    let attackers = attackers_to(target, occupancy, &pieces) & color_occupancy(color, &pieces);
+    let Some((attacker_kind, from)) =
+        least_valuable_attacker(color, target, target_kind, attackers, &pieces, occupancy)
+    else {
+        return 0;
+    };
+
+    let (next_pieces, next_occupancy, promoted_kind) = recapture_state(
+        color,
+        target,
+        target_kind,
+        attacker_kind,
+        from,
+        pieces,
+        occupancy,
+    );
+
+    let promotion_gain = if promoted_kind != attacker_kind {
+        VALUE[promoted_kind.index()] - VALUE[attacker_kind.index()]
+    } else {
+        0
+    };
+    let gain = VALUE[target_kind.index()] + promotion_gain
+        - recapture_gain(
+            color.opposite(),
+            target,
+            promoted_kind,
+            next_pieces,
+            next_occupancy,
+        );
+    gain.max(0)
+}
+
+#[cfg(feature = "stats")]
+fn recapture_gain_observed<O: SeeObserver>(
     color: Color,
     target: Square,
     target_kind: PieceType,
@@ -201,7 +308,7 @@ fn recapture_gain<O: SeeObserver>(
         0
     };
     let gain = VALUE[target_kind.index()] + promotion_gain
-        - recapture_gain(
+        - recapture_gain_observed(
             color.opposite(),
             target,
             promoted_kind,

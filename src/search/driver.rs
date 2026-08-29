@@ -66,6 +66,14 @@ pub struct SearchStatistics {
     pub quiet_beta_cutoffs: u64,
     pub tt_move_searches: u64,
     pub see_calls: u64,
+    #[cfg(feature = "stats")]
+    pub see_exchange_steps: u64,
+    #[cfg(feature = "stats")]
+    pub see_ge_calls: u64,
+    #[cfg(feature = "stats")]
+    pub see_ge_early_exits: u64,
+    #[cfg(feature = "stats")]
+    pub see_ge_exchange_steps: u64,
     pub good_captures: u64,
     pub bad_captures: u64,
     pub pvs_zero_window_searches: u64,
@@ -95,6 +103,8 @@ pub struct SearchStatistics {
     #[cfg(feature = "stats")]
     pub see_scored_moves_searched: u64,
     #[cfg(feature = "stats")]
+    pub tactical_candidates_untested: u64,
+    #[cfg(feature = "stats")]
     pub picker_tt_stage_visits: u64,
     #[cfg(feature = "stats")]
     pub picker_good_tactical_stage_visits: u64,
@@ -113,8 +123,11 @@ impl SearchStatistics {
     }
 
     pub fn see_scored_moves_unused(self) -> u64 {
-        self.see_calls
-            .saturating_sub(self.see_scored_moves_searched)
+        (self.see_calls + self.see_ge_calls).saturating_sub(self.see_scored_moves_searched)
+    }
+
+    pub fn total_see_exchange_steps(self) -> u64 {
+        self.see_exchange_steps + self.see_ge_exchange_steps
     }
 
     pub(crate) fn accumulate(&mut self, other: Self) {
@@ -126,6 +139,10 @@ impl SearchStatistics {
         self.quiet_beta_cutoffs += other.quiet_beta_cutoffs;
         self.tt_move_searches += other.tt_move_searches;
         self.see_calls += other.see_calls;
+        self.see_exchange_steps += other.see_exchange_steps;
+        self.see_ge_calls += other.see_ge_calls;
+        self.see_ge_early_exits += other.see_ge_early_exits;
+        self.see_ge_exchange_steps += other.see_ge_exchange_steps;
         self.good_captures += other.good_captures;
         self.bad_captures += other.bad_captures;
         self.pvs_zero_window_searches += other.pvs_zero_window_searches;
@@ -145,6 +162,7 @@ impl SearchStatistics {
         self.scored_moves_searched += other.scored_moves_searched;
         self.tactical_moves_searched += other.tactical_moves_searched;
         self.see_scored_moves_searched += other.see_scored_moves_searched;
+        self.tactical_candidates_untested += other.tactical_candidates_untested;
         self.picker_tt_stage_visits += other.picker_tt_stage_visits;
         self.picker_good_tactical_stage_visits += other.picker_good_tactical_stage_visits;
         self.picker_killer_stage_visits += other.picker_killer_stage_visits;
@@ -438,7 +456,7 @@ impl<'a> Searcher<'a> {
                 }
                 if mv.is_capture() || mv.is_promotion() {
                     self.statistics.tactical_moves_searched += 1;
-                    if picker.last_move_was_scored() {
+                    if picker.last_move_was_see_tested() {
                         self.statistics.see_scored_moves_searched += 1;
                     }
                 }
@@ -601,7 +619,7 @@ impl<'a> Searcher<'a> {
                 }
                 if mv.is_capture() || mv.is_promotion() {
                     self.statistics.tactical_moves_searched += 1;
-                    if picker.last_move_was_scored() {
+                    if picker.last_move_was_see_tested() {
                         self.statistics.see_scored_moves_searched += 1;
                     }
                 }
@@ -661,6 +679,11 @@ impl<'a> Searcher<'a> {
         self.statistics.moves_scored += statistics.moves_scored;
         self.statistics.full_sorts += statistics.full_sorts;
         self.statistics.see_calls += statistics.see_calls;
+        self.statistics.see_exchange_steps += statistics.see_exchange_steps;
+        self.statistics.see_ge_calls += statistics.see_ge_calls;
+        self.statistics.see_ge_early_exits += statistics.see_ge_early_exits;
+        self.statistics.see_ge_exchange_steps += statistics.see_ge_exchange_steps;
+        self.statistics.tactical_candidates_untested += statistics.tactical_candidates_untested;
         self.statistics.good_captures += statistics.good_captures;
         self.statistics.bad_captures += statistics.bad_captures;
         self.statistics.picker_tt_stage_visits += statistics.tt_stage_visits;

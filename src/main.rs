@@ -96,7 +96,28 @@ fn print_benchmark_statistics(statistics: neyrang::search::SearchStatistics) {
         "stats.moves_scored_unused: {}",
         statistics.moves_scored_unused()
     );
-    println!("stats.see_calls: {}", statistics.see_calls);
+    println!("stats.exact_see_calls: {}", statistics.see_calls);
+    println!(
+        "stats.exact_see_exchange_steps: {}",
+        statistics.see_exchange_steps
+    );
+    println!("stats.see_ge_calls: {}", statistics.see_ge_calls);
+    println!(
+        "stats.see_ge_early_exits: {}",
+        statistics.see_ge_early_exits
+    );
+    println!(
+        "stats.see_ge_exchange_steps: {}",
+        statistics.see_ge_exchange_steps
+    );
+    println!(
+        "stats.total_see_exchange_steps: {}",
+        statistics.total_see_exchange_steps()
+    );
+    println!(
+        "stats.tactical_candidates_untested: {}",
+        statistics.tactical_candidates_untested
+    );
     println!(
         "stats.see_scored_moves_searched: {}",
         statistics.see_scored_moves_searched

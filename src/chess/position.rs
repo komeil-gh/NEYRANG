@@ -1,6 +1,6 @@
 use super::{
     Bitboard, Color, FenError, Move, MoveFlag, MoveList, Piece, PieceType, Square, UndoState,
-    zobrist,
+    attacks, zobrist,
 };
 
 /// Castling flags stored as KQkq bits.
@@ -122,6 +122,54 @@ impl Position {
     #[inline]
     pub const fn hash(&self) -> u64 {
         self.hash
+    }
+
+    /// Return the position key used for repetition detection.
+    ///
+    /// The transposition hash retains the FEN en-passant field verbatim. For
+    /// repetition, that field distinguishes positions only when the side to
+    /// move can legally capture en passant.
+    pub fn repetition_hash(&mut self) -> u64 {
+        let Some(target) = self.en_passant else {
+            return self.hash;
+        };
+        if self.has_legal_en_passant_capture(target) {
+            self.hash
+        } else {
+            self.hash ^ zobrist::en_passant_key(target.file())
+        }
+    }
+
+    fn has_legal_en_passant_capture(&mut self, target: Square) -> bool {
+        let moving_color = self.side_to_move;
+        let expected_rank = match moving_color {
+            Color::White => 5,
+            Color::Black => 2,
+        };
+        if target.rank() != expected_rank || self.piece_at(target).is_some() {
+            return false;
+        }
+        let mut candidates = attacks::pawn_attacks(moving_color.opposite(), target)
+            & self.pieces(moving_color, PieceType::Pawn);
+        while candidates != 0 {
+            let index = candidates.trailing_zeros() as u8;
+            candidates &= candidates - 1;
+            let from = Square::from_index(index).expect("a pawn bit identifies a valid square");
+            let captured_square = Square::from_coords(target.file(), from.rank())
+                .expect("an en-passant capture square is on the board");
+            if self.piece_at(captured_square) != Some((moving_color.opposite(), PieceType::Pawn)) {
+                continue;
+            }
+
+            let mv = Move::new(from, target, MoveFlag::EnPassant);
+            let undo = self.make_move(mv);
+            let legal = !self.is_in_check(moving_color);
+            self.unmake_move(mv, undo);
+            if legal {
+                return true;
+            }
+        }
+        false
     }
 
     pub(crate) fn place_piece(&mut self, square: Square, piece: Piece) {

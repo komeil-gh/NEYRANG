@@ -57,8 +57,8 @@ struct UciEngine {
 
 impl UciEngine {
     fn new() -> Self {
-        let position = Position::startpos();
-        let hash = position.hash();
+        let mut position = Position::startpos();
+        let hash = position.repetition_hash();
         Self {
             position,
             game_hashes: vec![hash],
@@ -78,7 +78,7 @@ impl UciEngine {
                 self.stop_search();
                 self.position = Position::startpos();
                 self.game_hashes.clear();
-                self.game_hashes.push(self.position.hash());
+                self.game_hashes.push(self.position.repetition_hash());
                 if let Some(table) = &mut self.table {
                     table.clear();
                 }
@@ -146,13 +146,13 @@ impl UciEngine {
             Some(fen) => Position::from_fen(&fen).map_err(|error| error.to_string())?,
             None => Position::startpos(),
         };
-        let mut hashes = vec![position.hash()];
+        let mut hashes = vec![position.repetition_hash()];
         for notation in specification.moves {
             let mv = position
                 .find_legal_move(&notation)
                 .ok_or_else(|| format!("illegal move '{notation}' in position command"))?;
             position.make_move(mv);
-            hashes.push(position.hash());
+            hashes.push(position.repetition_hash());
         }
         self.position = position;
         self.game_hashes = hashes;

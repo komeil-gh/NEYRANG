@@ -302,7 +302,7 @@ impl<'a> Searcher<'a> {
         }
     }
 
-    fn reset(&mut self, position: &Position, limits: &SearchLimits, game_hashes: &[u64]) {
+    fn reset(&mut self, position: &mut Position, limits: &SearchLimits, game_hashes: &[u64]) {
         self.limits = limits.clone();
         self.started = Instant::now();
         self.nodes = 0;
@@ -312,8 +312,9 @@ impl<'a> Searcher<'a> {
         self.statistics = SearchStatistics::default();
         self.hashes.clear();
         self.hashes.extend_from_slice(game_hashes);
-        if self.hashes.last().copied() != Some(position.hash()) {
-            self.hashes.push(position.hash());
+        let repetition_hash = position.repetition_hash();
+        if self.hashes.last().copied() != Some(repetition_hash) {
+            self.hashes.push(repetition_hash);
         }
         self.pv_len.fill(0);
         self.tt.new_search();
@@ -458,7 +459,7 @@ impl<'a> Searcher<'a> {
                 && self.history.score(moving_color, mv) < HistoryTable::MAX_SCORE / 4;
             let undo = position.make_move(mv);
             let gives_check = can_reduce && position.is_in_check(position.side_to_move());
-            self.hashes.push(position.hash());
+            self.hashes.push(position.repetition_hash());
             let mut score;
             if move_index == 0 {
                 score = -self.negamax(position, depth - 1, ply + 1, -beta, -alpha, None);
@@ -606,7 +607,7 @@ impl<'a> Searcher<'a> {
                 }
             }
             let undo = position.make_move(mv);
-            self.hashes.push(position.hash());
+            self.hashes.push(position.repetition_hash());
             let score = -self.qsearch(position, ply + 1, -beta, -alpha);
             self.hashes.pop();
             position.unmake_move(mv, undo);
@@ -677,7 +678,11 @@ impl<'a> Searcher<'a> {
         if position.halfmove_clock() >= 100 {
             return true;
         }
-        let current = position.hash();
+        let current = self
+            .hashes
+            .last()
+            .copied()
+            .expect("repetition history always contains the current position");
         self.hashes
             .iter()
             .rev()
@@ -744,7 +749,7 @@ mod tests {
         let stop = AtomicBool::new(false);
         let mut searcher = Searcher::new(&stop);
         let hashes = [position.hash()];
-        searcher.reset(&position, &SearchLimits::depth(1), &hashes);
+        searcher.reset(&mut position, &SearchLimits::depth(1), &hashes);
 
         let _ = searcher.qsearch(&mut position, 0, -VALUE_INFINITE, VALUE_INFINITE);
 

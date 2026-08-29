@@ -88,6 +88,45 @@ fn stalemate_and_fifty_move_rule_return_draw_scores() {
     assert!(result.best_move.is_some());
 }
 
+#[test]
+fn principal_variation_stops_at_threefold_after_uncapturable_en_passant() {
+    const MOVES: &str = "e2c4 c8d7 c1d2 g8f6 f1d3 a5b4 c3e4 b4b2 d2c3 b2b6 \
+        e4f6 g7f6 c3f6 h8g8 e1g1 h7h5 d3e2 g8g6 f6c3 g6g5 c3f6 g5f5 c4h4 b6b4 \
+        c2c4 f8e7 a2a3 b4c5 f6e7 c5e7 h4g3 f5g5 g3e3 a7a5 h2h4 g5g8 e3e4 g8h8 \
+        f1d1 e6e5 a1b1 f7f5 e4d3 a5a4 c4c5 e5e4 d3g3 e8f8 d1d6 h8g8 g3h3 g8g7 \
+        e2h5 f5f4 h3h2 e7e5 h5e2 a8e8 h4h5 e4e3 b1f1 g7f7 e2c4 e3e2 c4e2 e5e2 \
+        d6d7 f7d7 h2f4 f8g8 f4a4 d7d5 g2g4 e8e4 a4a8 e4e8 a8a4 e8e4 a4a8 e4e8";
+
+    let mut position =
+        Position::from_fen("r1b1kbnr/p4ppp/2p1p3/q7/8/2N5/PPP1QPPP/R1B1KB1R w KQkq - 2 9")
+            .expect("fixture is valid");
+    let mut hashes = vec![position.repetition_hash()];
+    for notation in MOVES.split_whitespace() {
+        let mv = position
+            .find_legal_move(notation)
+            .unwrap_or_else(|| panic!("fixture move {notation} must be legal"));
+        position.make_move(mv);
+        hashes.push(position.repetition_hash());
+    }
+
+    let stop = AtomicBool::new(false);
+    let mut searcher = Searcher::new(&stop);
+    let result = searcher.search(&mut position, &SearchLimits::depth(1), &hashes, |_| {});
+
+    assert_eq!(
+        result.best_move.map(|mv| mv.to_string()).as_deref(),
+        Some("a8a4")
+    );
+    assert_eq!(
+        result
+            .pv
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>(),
+        ["a8a4"]
+    );
+}
+
 #[cfg(feature = "stats")]
 #[test]
 fn pvs_uses_zero_window_searches_after_the_first_move() {

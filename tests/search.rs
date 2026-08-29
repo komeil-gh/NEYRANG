@@ -201,35 +201,3 @@ fn lmr_reduces_late_quiet_moves() {
     assert!(result.statistics.lmr_researches > 0);
     assert!(result.statistics.lmr_researches <= result.statistics.lmr_reductions);
 }
-
-#[cfg(feature = "stats")]
-#[test]
-fn continuation_history_reports_updates_reordering_and_quiet_ranks() {
-    let mut position = Position::startpos();
-    let hashes = [position.hash()];
-    let stop = AtomicBool::new(false);
-    let mut searcher = Searcher::new(&stop);
-
-    let result = searcher.search(&mut position, &SearchLimits::depth(6), &hashes, |_| {});
-    let statistics = result.statistics;
-
-    assert!(statistics.continuation_probes > 0);
-    assert!(statistics.continuation_nonzero_probes > 0);
-    assert!(statistics.continuation_reorderings > 0);
-    assert!(statistics.continuation_rewards > 0);
-    assert!(statistics.continuation_maluses > 0);
-    assert!(statistics.continuation_quiet_cutoffs > 0);
-    assert!(statistics.continuation_quiet_rank_sum >= statistics.continuation_quiet_cutoffs);
-    assert_eq!(
-        statistics.continuation_rewards,
-        statistics.continuation_quiet_cutoffs
-    );
-    assert_eq!(statistics.continuation_entries, 294_912);
-    assert_eq!(
-        statistics.continuation_distribution.iter().sum::<u64>(),
-        statistics.continuation_entries
-    );
-    assert!(statistics.continuation_saturation <= statistics.continuation_entries);
-    assert!(statistics.lmr_reductions > 0);
-    assert!(statistics.lmr_researches <= statistics.lmr_reductions);
-}

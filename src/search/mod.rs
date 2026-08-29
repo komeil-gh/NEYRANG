@@ -1,7 +1,6 @@
 //! Deterministic single-thread search. Parallel search is intentionally deferred
 //! until this implementation is correct and measurable.
 
-pub mod continuation_history;
 mod driver;
 pub mod history;
 mod limits;

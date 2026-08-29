@@ -130,52 +130,6 @@ fn print_benchmark_statistics(statistics: neyrang::search::SearchStatistics) {
         "stats.picker_bad_tactical_stage_visits: {}",
         statistics.picker_bad_tactical_stage_visits
     );
-    println!(
-        "stats.continuation_probes: {}",
-        statistics.continuation_probes
-    );
-    println!(
-        "stats.continuation_nonzero_probes: {}",
-        statistics.continuation_nonzero_probes
-    );
-    println!(
-        "stats.continuation_reorderings: {}",
-        statistics.continuation_reorderings
-    );
-    println!(
-        "stats.continuation_rewards: {}",
-        statistics.continuation_rewards
-    );
-    println!(
-        "stats.continuation_maluses: {}",
-        statistics.continuation_maluses
-    );
-    println!(
-        "stats.continuation_quiet_cutoffs: {}",
-        statistics.continuation_quiet_cutoffs
-    );
-    println!(
-        "stats.continuation_quiet_rank_sum: {}",
-        statistics.continuation_quiet_rank_sum
-    );
-    println!(
-        "stats.continuation_distribution: {:?}",
-        statistics.continuation_distribution
-    );
-    println!(
-        "stats.continuation_entries: {}",
-        statistics.continuation_entries
-    );
-    println!(
-        "stats.continuation_saturation: {}",
-        statistics.continuation_saturation
-    );
-    println!(
-        "stats.quiet_beta_cutoffs: {}",
-        statistics.quiet_beta_cutoffs
-    );
-    println!("stats.lmr_reductions: {}", statistics.lmr_reductions);
-    println!("stats.lmr_researches: {}", statistics.lmr_researches);
 }
 
 fn parse_depth(value: Option<&String>) -> Result<u8, String> {

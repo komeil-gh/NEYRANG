@@ -171,6 +171,23 @@ fn see_handles_multiple_attackers_and_defenders() {
 }
 
 #[test]
+fn threshold_see_preserves_the_existing_lva_choice_in_an_ambiguous_exchange() {
+    let mut position = Position::from_fen(
+        "6k1/r2qb1p1/p1nP1p1r/1p3Q2/3P2N1/B3pP1p/P1P4P/2R1KBR1 w - - 2 32",
+    )
+    .expect("ambiguous LVA fixture must be valid");
+    let mv = legal_move(&mut position, "f5f6");
+    let exact_lva = see(&position, mv);
+
+    // NEYRANG's retained SEE follows one legal least-valuable-attacker sequence,
+    // like conventional fast SEE. Exhaustively choosing among equal-valued
+    // recapturers is a different semantic change and is outside Phase B.
+    assert_eq!(exact_lva, -700);
+    assert_eq!(reference_see(&position, mv), -790);
+    assert_threshold_equivalence(&position, mv, exact_lva);
+}
+
+#[test]
 fn threshold_see_matches_exact_see_over_thousands_of_legal_positions() {
     let mut position = Position::startpos();
     let mut state = 0xB0B1_5EE0_2026_0829_u64;

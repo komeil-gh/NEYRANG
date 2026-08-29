@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::{
-    chess::{Move, Position},
+    chess::{Move, MoveList, Position},
     eval,
 };
 
@@ -405,7 +405,7 @@ impl<'a> Searcher<'a> {
         }
 
         let in_check = position.is_in_check(position.side_to_move());
-        let mut moves = position.legal_moves();
+        let moves = position.legal_moves();
         #[cfg(feature = "stats")]
         {
             self.statistics.move_generation_calls += 1;
@@ -421,27 +421,23 @@ impl<'a> Searcher<'a> {
         let moving_color = position.side_to_move();
         let tt_move = tt_data.map(|data| data.best_move);
         let ordering_preferred = tt_move.or(preferred);
-        let _ordering_statistics = ordering::order(
-            position,
-            &mut moves,
-            ordering_preferred,
-            self.killers[ply],
-            &self.history,
-            moving_color,
-        );
-        #[cfg(feature = "stats")]
-        self.record_ordering_statistics(_ordering_statistics);
+        let mut picker =
+            ordering::MovePicker::main(moves, ordering_preferred, self.killers[ply], moving_color);
 
         let mut best = -VALUE_INFINITE;
         let mut best_move = Move::NONE;
-        for (move_index, &mv) in moves.iter().enumerate() {
+        let mut searched_moves = MoveList::new();
+        while let Some(mv) = picker.next_move(position, &self.history) {
+            let move_index = searched_moves.len();
             #[cfg(feature = "stats")]
             {
                 self.statistics.moves_searched += 1;
-                self.statistics.scored_moves_searched += 1;
+                if picker.last_move_was_scored() {
+                    self.statistics.scored_moves_searched += 1;
+                }
                 if mv.is_capture() || mv.is_promotion() {
                     self.statistics.tactical_moves_searched += 1;
-                    if ordering_preferred != Some(mv) {
+                    if picker.last_move_was_scored() {
                         self.statistics.see_scored_moves_searched += 1;
                     }
                 }
@@ -501,6 +497,8 @@ impl<'a> Searcher<'a> {
             position.unmake_move(mv, undo);
 
             if self.stopped {
+                #[cfg(feature = "stats")]
+                self.record_ordering_statistics(picker.statistics());
                 return VALUE_DRAW;
             }
             if score > best {
@@ -527,7 +525,7 @@ impl<'a> Searcher<'a> {
                 if !mv.is_capture() && !mv.is_promotion() {
                     self.record_killer(ply, mv);
                     self.history.reward(moving_color, mv, depth);
-                    for &failed in &moves.as_slice()[..move_index] {
+                    for &failed in searched_moves.iter() {
                         if !failed.is_capture() && !failed.is_promotion() {
                             self.history.penalize(moving_color, failed, depth);
                         }
@@ -535,7 +533,10 @@ impl<'a> Searcher<'a> {
                 }
                 break;
             }
+            searched_moves.push(mv);
         }
+        #[cfg(feature = "stats")]
+        self.record_ordering_statistics(picker.statistics());
         let bound = if best <= original_alpha {
             Bound::Upper
         } else if best >= beta {
@@ -572,7 +573,7 @@ impl<'a> Searcher<'a> {
             alpha = alpha.max(stand_pat);
         }
 
-        let mut moves = position.legal_moves();
+        let moves = position.legal_moves();
         #[cfg(feature = "stats")]
         {
             self.statistics.move_generation_calls += 1;
@@ -585,38 +586,23 @@ impl<'a> Searcher<'a> {
                 VALUE_DRAW
             };
         }
-        let _ordering_statistics = ordering::order(
-            position,
-            &mut moves,
-            None,
-            self.killers[ply],
-            &self.history,
-            position.side_to_move(),
-        );
+        let moving_color = position.side_to_move();
+        let mut picker =
+            ordering::MovePicker::quiescence(moves, in_check, self.killers[ply], moving_color);
         #[cfg(feature = "stats")]
-        self.record_ordering_statistics(_ordering_statistics);
-
-        let first_bad_capture = moves
-            .len()
-            .saturating_sub(_ordering_statistics.bad_capture_count);
-        for (move_index, &mv) in moves.iter().enumerate() {
-            if !in_check && move_index >= first_bad_capture {
-                #[cfg(feature = "stats")]
-                {
-                    self.statistics.see_prunes += (moves.len() - move_index) as u64;
-                }
-                break;
-            }
-            if !in_check && !mv.is_capture() && !mv.is_promotion() {
-                continue;
-            }
+        let mut exhausted = true;
+        while let Some(mv) = picker.next_move(position, &self.history) {
             #[cfg(feature = "stats")]
             {
                 self.statistics.moves_searched += 1;
-                self.statistics.scored_moves_searched += 1;
+                if picker.last_move_was_scored() {
+                    self.statistics.scored_moves_searched += 1;
+                }
                 if mv.is_capture() || mv.is_promotion() {
                     self.statistics.tactical_moves_searched += 1;
-                    self.statistics.see_scored_moves_searched += 1;
+                    if picker.last_move_was_scored() {
+                        self.statistics.see_scored_moves_searched += 1;
+                    }
                 }
             }
             let undo = position.make_move(mv);
@@ -626,15 +612,28 @@ impl<'a> Searcher<'a> {
             position.unmake_move(mv, undo);
 
             if self.stopped {
+                #[cfg(feature = "stats")]
+                self.record_ordering_statistics(picker.statistics());
                 return VALUE_DRAW;
             }
             if score > alpha {
                 alpha = score;
                 self.update_pv(ply, mv);
                 if alpha >= beta {
+                    #[cfg(feature = "stats")]
+                    {
+                        exhausted = false;
+                    }
                     break;
                 }
             }
+        }
+        #[cfg(feature = "stats")]
+        {
+            if !in_check && exhausted {
+                self.statistics.see_prunes += picker.bad_tactical_count() as u64;
+            }
+            self.record_ordering_statistics(picker.statistics());
         }
         alpha
     }
@@ -663,6 +662,11 @@ impl<'a> Searcher<'a> {
         self.statistics.see_calls += statistics.see_calls;
         self.statistics.good_captures += statistics.good_captures;
         self.statistics.bad_captures += statistics.bad_captures;
+        self.statistics.picker_tt_stage_visits += statistics.tt_stage_visits;
+        self.statistics.picker_good_tactical_stage_visits += statistics.good_tactical_stage_visits;
+        self.statistics.picker_killer_stage_visits += statistics.killer_stage_visits;
+        self.statistics.picker_quiet_stage_visits += statistics.quiet_stage_visits;
+        self.statistics.picker_bad_tactical_stage_visits += statistics.bad_tactical_stage_visits;
     }
 
     fn pv_line(&self, ply: usize) -> Vec<Move> {

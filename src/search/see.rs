@@ -42,6 +42,15 @@ pub fn see(position: &Position, mv: Move) -> i32 {
     immediate - recapture_gain(color.opposite(), mv.to(), target_kind, pieces, occupancy)
 }
 
+/// Return whether the static exchange result reaches `threshold`.
+///
+/// The first implementation deliberately shares the exact SEE result. Once
+/// capture ordering is proven useful, this boundary can be specialized with
+/// threshold cutoffs without changing callers.
+pub fn see_ge(position: &Position, mv: Move, threshold: i32) -> bool {
+    see(position, mv) >= threshold
+}
+
 fn recapture_gain(
     color: Color,
     target: Square,
@@ -50,28 +59,21 @@ fn recapture_gain(
     occupancy: u64,
 ) -> i32 {
     let attackers = attackers_to(target, occupancy, &pieces) & color_occupancy(color, &pieces);
-    let Some((attacker_kind, from)) = least_valuable_attacker(color, attackers, &pieces) else {
+    let Some((attacker_kind, from)) =
+        least_valuable_attacker(color, target, target_kind, attackers, &pieces, occupancy)
+    else {
         return 0;
     };
 
-    let mut next_pieces = pieces;
-    next_pieces[color.opposite().index()][target_kind.index()] &= !target.bit();
-    next_pieces[color.index()][attacker_kind.index()] &= !from.bit();
-    let promoted_kind = if attacker_kind == PieceType::Pawn && matches!(target.rank(), 0 | 7) {
-        PieceType::Queen
-    } else {
-        attacker_kind
-    };
-    next_pieces[color.index()][promoted_kind.index()] |= target.bit();
-    let next_occupancy = occupancy & !from.bit();
-
-    if attacker_kind == PieceType::King
-        && attackers_to(target, next_occupancy, &next_pieces)
-            & color_occupancy(color.opposite(), &next_pieces)
-            != 0
-    {
-        return 0;
-    }
+    let (next_pieces, next_occupancy, promoted_kind) = recapture_state(
+        color,
+        target,
+        target_kind,
+        attacker_kind,
+        from,
+        pieces,
+        occupancy,
+    );
 
     let promotion_gain = if promoted_kind != attacker_kind {
         VALUE[promoted_kind.index()] - VALUE[attacker_kind.index()]
@@ -113,18 +115,56 @@ fn attackers_to(target: Square, occupancy: u64, pieces: &[[u64; 6]; 2]) -> u64 {
 
 fn least_valuable_attacker(
     color: Color,
+    target: Square,
+    target_kind: PieceType,
     attackers: u64,
     pieces: &[[u64; 6]; 2],
+    occupancy: u64,
 ) -> Option<(PieceType, Square)> {
     for kind in PieceType::ALL {
-        let candidates = attackers & pieces[color.index()][kind.index()];
-        if candidates != 0 {
-            let square = Square::from_index(candidates.trailing_zeros() as u8)
+        let mut candidates = attackers & pieces[color.index()][kind.index()];
+        while candidates != 0 {
+            let from = Square::from_index(candidates.trailing_zeros() as u8)
                 .expect("attacker bit is a valid square");
-            return Some((kind, square));
+            candidates &= candidates - 1;
+            let (next_pieces, next_occupancy, _) =
+                recapture_state(color, target, target_kind, kind, from, *pieces, occupancy);
+            if king_is_safe(color, &next_pieces, next_occupancy) {
+                return Some((kind, from));
+            }
         }
     }
     None
+}
+
+fn recapture_state(
+    color: Color,
+    target: Square,
+    target_kind: PieceType,
+    attacker_kind: PieceType,
+    from: Square,
+    mut pieces: [[u64; 6]; 2],
+    occupancy: u64,
+) -> ([[u64; 6]; 2], u64, PieceType) {
+    pieces[color.opposite().index()][target_kind.index()] &= !target.bit();
+    pieces[color.index()][attacker_kind.index()] &= !from.bit();
+    let promoted_kind = if attacker_kind == PieceType::Pawn && matches!(target.rank(), 0 | 7) {
+        PieceType::Queen
+    } else {
+        attacker_kind
+    };
+    pieces[color.index()][promoted_kind.index()] |= target.bit();
+    (pieces, occupancy & !from.bit(), promoted_kind)
+}
+
+fn king_is_safe(color: Color, pieces: &[[u64; 6]; 2], occupancy: u64) -> bool {
+    let king = pieces[color.index()][PieceType::King.index()];
+    if king.count_ones() != 1 {
+        return false;
+    }
+    let king_square =
+        Square::from_index(king.trailing_zeros() as u8).expect("a king bit is a valid square");
+    attackers_to(king_square, occupancy, pieces) & color_occupancy(color.opposite(), pieces) == 0
 }
 
 fn color_occupancy(color: Color, pieces: &[[u64; 6]; 2]) -> u64 {

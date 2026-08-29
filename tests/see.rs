@@ -1,18 +1,128 @@
-use neyrang::{chess::Position, search::see};
+use neyrang::{
+    chess::{Move, PieceType, Position, Square},
+    search::{see, see_ge},
+};
+
+const VALUE: [i32; 6] = [100, 320, 330, 500, 900, 20_000];
+
+fn legal_move(position: &mut Position, notation: &str) -> Move {
+    position
+        .find_legal_move(notation)
+        .unwrap_or_else(|| panic!("{notation} must be legal in {}", position.to_fen()))
+}
+
+fn immediate_gain(position: &Position, mv: Move) -> i32 {
+    let capture_square = if mv.is_en_passant() {
+        Square::from_coords(mv.to().file(), mv.from().rank())
+            .expect("an en-passant capture square is on the board")
+    } else {
+        mv.to()
+    };
+    let captured = position
+        .piece_at(capture_square)
+        .map_or(0, |(_, kind)| VALUE[kind.index()]);
+    let promotion = mv.promotion().map_or(0, |kind| {
+        VALUE[kind.index()] - VALUE[PieceType::Pawn.index()]
+    });
+    captured + promotion
+}
+
+fn reference_recaptures(position: &mut Position, target: Square) -> i32 {
+    let moves = position.legal_moves();
+    let mut best = 0;
+    for &mv in moves.iter() {
+        if mv.to() != target || !mv.is_capture() {
+            continue;
+        }
+        let gain = immediate_gain(position, mv);
+        let undo = position.make_move(mv);
+        let score = gain - reference_recaptures(position, target);
+        position.unmake_move(mv, undo);
+        best = best.max(score);
+    }
+    best
+}
+
+fn reference_see(position: &Position, mv: Move) -> i32 {
+    let immediate = immediate_gain(position, mv);
+    let mut child = position.clone();
+    child.make_move(mv);
+    immediate - reference_recaptures(&mut child, mv.to())
+}
+
+fn assert_matches_reference(fen: &str, notation: &str) -> i32 {
+    let mut position = Position::from_fen(fen).expect("SEE fixture must be valid");
+    let mv = legal_move(&mut position, notation);
+    let expected = reference_see(&position, mv);
+    let actual = see(&position, mv);
+    assert_eq!(actual, expected, "SEE mismatch for {notation} in {fen}");
+    assert!(see_ge(&position, mv, expected));
+    assert!(!see_ge(&position, mv, expected + 1));
+    actual
+}
 
 #[test]
-fn see_distinguishes_winning_and_losing_captures() {
-    let mut winning = Position::from_fen("4k3/8/2p5/3q4/4P3/8/8/4K3 w - - 0 1")
-        .expect("winning capture fixture is valid");
-    let pawn_takes_queen = winning
-        .find_legal_move("e4d5")
-        .expect("pawn capture is legal");
-    assert!(see(&winning, pawn_takes_queen) > 700);
+fn see_values_an_undefended_pawn_capture() {
+    let score = assert_matches_reference("4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1", "e4d5");
+    assert_eq!(score, 100);
+}
 
-    let mut losing = Position::from_fen("4k3/8/2p5/3p4/4Q3/8/8/4K3 w - - 0 1")
-        .expect("losing capture fixture is valid");
-    let queen_takes_pawn = losing
-        .find_legal_move("e4d5")
-        .expect("queen capture is legal");
-    assert!(see(&losing, queen_takes_pawn) < -700);
+#[test]
+fn see_values_a_defended_pawn_as_an_equal_exchange() {
+    let score = assert_matches_reference("4k3/8/2p5/3p4/4P3/8/8/4K3 w - - 0 1", "e4d5");
+    assert_eq!(score, 0);
+}
+
+#[test]
+fn see_distinguishes_winning_and_losing_queen_captures() {
+    let winning = assert_matches_reference("4k3/8/2p5/3q4/4P3/8/8/4K3 w - - 0 1", "e4d5");
+    let losing = assert_matches_reference("4k3/8/2p5/3p4/4Q3/8/8/4K3 w - - 0 1", "e4d5");
+    assert_eq!(winning, 800);
+    assert_eq!(losing, -800);
+}
+
+#[test]
+fn see_reveals_a_rook_xray_attacker() {
+    let score = assert_matches_reference("3rk3/8/8/3p4/3R4/8/8/3RK3 w - - 0 1", "d4d5");
+    assert_eq!(score, 100);
+}
+
+#[test]
+fn see_reveals_bishop_and_queen_xray_attackers() {
+    let bishop_score = assert_matches_reference("4k1b1/8/8/3p4/2B5/8/B7/4K3 w - - 0 1", "c4d5");
+    let queen_score = assert_matches_reference("4k1b1/8/8/3p4/2B5/8/Q7/4K3 w - - 0 1", "c4d5");
+    assert_eq!(bishop_score, 100);
+    assert_eq!(queen_score, 100);
+}
+
+#[test]
+fn see_accounts_for_capture_promotions_and_underpromotions() {
+    let queen_score = assert_matches_reference("4k2r/6P1/8/8/8/8/8/4K3 w - - 0 1", "g7h8q");
+    let knight_score = assert_matches_reference("4k2r/6P1/8/8/8/8/8/4K3 w - - 0 1", "g7h8n");
+    assert_eq!(queen_score, 1_300);
+    assert_eq!(knight_score, 720);
+}
+
+#[test]
+fn see_removes_the_en_passant_pawn_before_finding_xrays() {
+    let score = assert_matches_reference("4k3/4b3/8/3pP3/8/8/8/3RK3 w - d6 0 1", "e5d6");
+    assert_eq!(score, 100);
+}
+
+#[test]
+fn see_rejects_an_illegal_king_recapture() {
+    let score = assert_matches_reference("8/4k3/4p3/3Q4/8/8/8/4R1K1 w - - 0 1", "d5e6");
+    assert_eq!(score, 100);
+}
+
+#[test]
+fn see_ignores_an_absolutely_pinned_attacker() {
+    let score = assert_matches_reference("5k2/8/5n2/3p4/4Q3/8/8/5RK1 w - - 0 1", "e4d5");
+    assert_eq!(score, 100);
+}
+
+#[test]
+fn see_handles_multiple_attackers_and_defenders() {
+    let score = assert_matches_reference("4k3/8/2p2n2/3p4/4PN2/8/8/4K3 w - - 0 1", "e4d5");
+    assert_eq!(score, 0);
 }

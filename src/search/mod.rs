@@ -14,4 +14,4 @@ pub use driver::{
     VALUE_MATE,
 };
 pub use limits::SearchLimits;
-pub use see::see;
+pub use see::{see, see_ge};

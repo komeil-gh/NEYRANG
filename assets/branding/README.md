@@ -16,5 +16,10 @@ The warm amber and midnight-navy palette is designed for strong contrast in dark
 - `neyrang-logo-v2-bw.png`: refined black-and-white master based on the geometric star concept
 - `neyrang-logo-v2-bw-512.png`: general-use black-and-white artwork
 - `neyrang-logo-v2-bw-60.png`: black-and-white En Croissant icon
+- `neyrang-logo-v3-horse-bw.png`: simplified black-and-white horse master with a small star accent
+- `neyrang-logo-v3-horse-bw-512.png`: general-use simplified horse artwork
+- `neyrang-logo-v3-horse-bw-60.png`: simplified horse icon for En Croissant
 
 Keep clear space around the outer star points. Do not stretch, rotate, add shadows, or place the mark over a similarly colored background.
+
+For the v3 mark, keep clear space around the horse silhouette and preserve the small star as a secondary accent. Do not enlarge the star relative to the horse.

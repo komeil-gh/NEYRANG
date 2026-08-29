@@ -80,6 +80,21 @@ Two additional paired-color games used `go movetime 20` with a 2 ms move-overhea
 
 The paired games are retained as an importable PGN at `examples/neyrang-vs-stockfish-smoke.pgn`. The reproducible harness and En Croissant workflow are documented in [the integration guide](en-croissant.md).
 
+## External timing regression
+
+Use the standard-library timing harness to measure UCI deadlines from outside the engine process:
+
+```bash
+scripts/timing-audit.py \
+  --engine builds/neyrang-v0.2.0 \
+  --openings testing/books/8mvs_+90_+99.epd \
+  --samples-per-limit 100 \
+  --output-json testing/timing-0.3/direct-movetime.json \
+  --output-csv testing/timing-0.3/direct-movetime.csv
+```
+
+The default schedule runs 100 deterministic, non-repeating positions for each of `go movetime 5`, `10`, `20`, `50`, and `100`, with Hash 64 MB, Threads 1, the default 10 ms `Move Overhead`, and seed `20260829`. It records the last engine-reported `info time`, monotonic wall-clock time through `bestmove`, external latency, and signed overshoot, then reports median, p95, p99, and maximum. Small wall-clock outliers can be scheduler noise; use the raw samples and strict fastchess timing stress to distinguish an isolated delay from a reproducible engine defect.
+
 ## Strength testing
 
 Run `scripts/test-match-config.sh` before comparative testing. Use `scripts/regression.sh` for paired parent-versus-candidate games, `scripts/match.sh` for fixed-size or node-limited comparisons, and `scripts/sprt.sh` for longer patch decisions. The runners expose a fixed opening seed and record binary/Git/opening/fastchess checksums, complete PGN telemetry, logs, and metadata beside the requested PGN.

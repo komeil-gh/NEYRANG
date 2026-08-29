@@ -64,7 +64,7 @@ Options:
 
 - `Hash` (default 64 MB)
 - `Threads` (accepted; current implementation uses one search thread)
-- `Move Overhead` (default 10 ms)
+- `Move Overhead` (default 30 ms; configurable)
 
 ## En Croissant
 
@@ -143,8 +143,9 @@ The bundled opening file is intentionally small; replace `OPENINGS_FILE` with a 
 - [0.2.0 frozen baseline](docs/development/0.2.0-baseline.md)
 - [Search experiment ledger](docs/development/experiments.md)
 - [0.3 retrospective game campaign](docs/development/0.3.0-game-campaign.md)
+- [0.3 timing audit and BASE_0_3](docs/development/0.3.0-timing-audit.md)
 - [0.3.0 search plan](docs/development/0.3.0-plan.md)
 
 ## Roadmap
 
-The 0.3 search order is evidence-driven. A completed 4,000-game retrospective found direct positive evidence for SEE ordering and qsearch pruning, an inconclusive isolated LMR result, and `+90.97 +/-18.38 Elo` for cumulative v0.2.0 against v0.1.0. Timing hardening for five millisecond-scale historical-parent forfeits is the remaining gate before development recovers SEE/ordering throughput with lazy threshold tests and/or a staged MovePicker, adds Capture History, and adds Continuation History. Guarded null-move pruning may be reconsidered only after those ordering experiments establish a new baseline. Pawn hashing is deliberately lower priority while the current search still has substantial ordering headroom. Each candidate remains an isolated commit and must earn retention through correctness gates, benchmarks, paired games, and SPRT when warranted.
+The 0.3 search order is evidence-driven. A completed 4,000-game retrospective found direct positive evidence for SEE ordering and qsearch pruning, an inconclusive isolated LMR result, and `+90.97 +/-18.38 Elo` for cumulative v0.2.0 against v0.1.0. A separate audit then reproduced the strict zero-margin timing edge, retained an isolated hardening patch, and completed a clean 1,000-game stress; `BASE_0_3` is engine commit `303711a`. Development now proceeds with staged MovePicker first, lazy `see_ge` second, Capture History third, and 1-ply Continuation History fourth. Guarded null-move pruning may be reconsidered only after those ordering experiments establish a new baseline. Pawn hashing is deliberately lower priority while the current search still has substantial ordering headroom. Each candidate remains an isolated commit and must earn retention through correctness gates, benchmarks, paired games, and SPRT when warranted.

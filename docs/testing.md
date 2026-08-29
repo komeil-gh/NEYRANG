@@ -93,7 +93,9 @@ scripts/timing-audit.py \
   --output-csv testing/timing-0.3/direct-movetime.csv
 ```
 
-The default schedule runs 100 deterministic, non-repeating positions for each of `go movetime 5`, `10`, `20`, `50`, and `100`, with Hash 64 MB, Threads 1, the default 10 ms `Move Overhead`, and seed `20260829`. It records the last engine-reported `info time`, monotonic wall-clock time through `bestmove`, external latency, and signed overshoot, then reports median, p95, p99, and maximum. Small wall-clock outliers can be scheduler noise; use the raw samples and strict fastchess timing stress to distinguish an isolated delay from a reproducible engine defect.
+The default schedule runs 100 deterministic, non-repeating positions for each of `go movetime 5`, `10`, `20`, `50`, and `100`, with Hash 64 MB, Threads 1, and seed `20260829`. Pass `--move-overhead 30` for the current `BASE_0_3` default or an explicit historical value when reproducing an older engine. It records the last engine-reported completed `info time`, monotonic wall-clock time through `bestmove`, their gap, and signed overshoot, then reports median, p95, p99, and maximum. The reported direct-harness “latency” is not pure IPC latency: it can include work in an unfinished iteration after the last emitted info line. Use raw samples and strict fastchess PGN latency/time-left telemetry to distinguish search overshoot from scheduler or runner delay.
+
+The [0.3 timing audit](development/0.3.0-timing-audit.md) records the exact architecture, v0.2.0 failures, standalone hardening, final 500 direct samples, and the clean 1,000-game zero-margin stress that defines `BASE_0_3`.
 
 ## Strength testing
 
@@ -131,4 +133,4 @@ The accepted hypothesis says the candidate clears the configured +5 Elo threshol
 
 Before new 0.3 search work, four fixed 1,000-game matches re-tested every retained 0.2 step with the preserved binaries and the same opening sequence. SEE ordering measured `+29.25 +/-17.09 Elo`, qsearch SEE pruning measured `+66.46 +/-18.72 Elo`, isolated LMR was inconclusive at `+6.25 +/-12.52 Elo`, and cumulative v0.2.0 measured `+90.97 +/-18.38 Elo` against v0.1.0.
 
-All 4,000 games completed with no crash, illegal move, disconnect, or unfinished game. Five 2-11 ms clock forfeits occurred only in historical parent binaries; final LMR/v0.2 recorded none in their 1,000-game appearances. The complete configuration, termination audit, decisions, and artifact checksums are in the [0.3 retrospective campaign](development/0.3.0-game-campaign.md). Timing hardening remains a separate prerequisite before the first 0.3 feature experiment.
+All 4,000 games completed with no crash, illegal move, disconnect, or unfinished game. Five 2-11 ms clock forfeits occurred only in historical parent binaries; final LMR/v0.2 recorded none in their 1,000-game appearances. The complete configuration, termination audit, decisions, and artifact checksums are in the [0.3 retrospective campaign](development/0.3.0-game-campaign.md). The separate timing audit subsequently reproduced a current zero-margin edge, hardened it, and passed a fresh 1,000-game stress before the first 0.3 feature experiment.

@@ -22,7 +22,7 @@ At non-root, non-PV nodes, sufficiently late quiet moves may be reduced by one p
 
 The search checks the 50-move counter and counts matching hashes within the reversible history window for threefold repetition. Maximum ply is 128. At the boundary it returns static evaluation rather than indexing past fixed search storage.
 
-The UCI thread can set an atomic stop flag while search is active. Node limits are checked every node. Hard time is sampled every 1,024 nodes, while soft time is evaluated after completed iterations so NEYRANG always retains a legal move from the last stable iteration.
+The UCI thread can set an atomic stop flag while search is active. Node limits are checked every node. Hard time is sampled at the first node, every node for budgets of at most 5 ms, and every 1,024 nodes otherwise. Soft time is evaluated after completed iterations. A legal root fallback is retained even when the usable budget is zero, and an interrupted iteration never replaces the last stable result. The default configurable `Move Overhead` is 30 ms after the [0.3 timing audit](development/0.3.0-timing-audit.md) measured the external macOS/runner latency tail.
 
 ## Measured development changes
 
@@ -46,7 +46,7 @@ The final row is the median of five runs; the preceding rows are single-run deve
 
 Guarded null-move pruning reduced this benchmark to 182,768 nodes but did not accept H1 in a capped 1,000-game SPRT against the LMR parent, so it was reverted. Reverse futility pruning was not attempted in 0.2.0.
 
-The [0.3 retrospective campaign](development/0.3.0-game-campaign.md) completed 4,000 fixed games across the preserved 0.1/SEE/qsearch/LMR/0.2 binaries. SEE ordering measured `+29.25 +/-17.09 Elo`, qsearch SEE pruning measured `+66.46 +/-18.72 Elo`, isolated LMR remained inconclusive at `+6.25 +/-12.52 Elo`, and cumulative v0.2.0 measured `+90.97 +/-18.38 Elo` against v0.1.0. Five 2-11 ms time forfeits in historical parents require a separate timing-hardening gate before new search work. NEYRANG does not learn merely by playing these games; improvements still require an explicit, tested patch.
+The [0.3 retrospective campaign](development/0.3.0-game-campaign.md) completed 4,000 fixed games across the preserved 0.1/SEE/qsearch/LMR/0.2 binaries. SEE ordering measured `+29.25 +/-17.09 Elo`, qsearch SEE pruning measured `+66.46 +/-18.72 Elo`, isolated LMR remained inconclusive at `+6.25 +/-12.52 Elo`, and cumulative v0.2.0 measured `+90.97 +/-18.38 Elo` against v0.1.0. Five 2-11 ms time forfeits in historical parents triggered a separate timing audit. Exact v0.2.0 reproduced strict zero-margin losses; isolated hardening closed with a clean 1,000-game timing stress and defines `BASE_0_3` at `303711a`. NEYRANG does not learn merely by playing these games; improvements still require an explicit, tested patch.
 
 Next candidates should be isolated and measured in this order:
 

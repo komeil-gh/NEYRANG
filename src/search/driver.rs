@@ -89,6 +89,8 @@ pub struct SearchStatistics {
     #[cfg(feature = "stats")]
     pub moves_searched: u64,
     #[cfg(feature = "stats")]
+    pub scored_moves_searched: u64,
+    #[cfg(feature = "stats")]
     pub tactical_moves_searched: u64,
     #[cfg(feature = "stats")]
     pub see_scored_moves_searched: u64,
@@ -107,7 +109,7 @@ pub struct SearchStatistics {
 #[cfg(feature = "stats")]
 impl SearchStatistics {
     pub fn moves_scored_unused(self) -> u64 {
-        self.moves_scored.saturating_sub(self.moves_searched)
+        self.moves_scored.saturating_sub(self.scored_moves_searched)
     }
 
     pub fn see_scored_moves_unused(self) -> u64 {
@@ -140,6 +142,7 @@ impl SearchStatistics {
         self.moves_scored += other.moves_scored;
         self.full_sorts += other.full_sorts;
         self.moves_searched += other.moves_searched;
+        self.scored_moves_searched += other.scored_moves_searched;
         self.tactical_moves_searched += other.tactical_moves_searched;
         self.see_scored_moves_searched += other.see_scored_moves_searched;
         self.picker_tt_stage_visits += other.picker_tt_stage_visits;
@@ -435,6 +438,7 @@ impl<'a> Searcher<'a> {
             #[cfg(feature = "stats")]
             {
                 self.statistics.moves_searched += 1;
+                self.statistics.scored_moves_searched += 1;
                 if mv.is_capture() || mv.is_promotion() {
                     self.statistics.tactical_moves_searched += 1;
                     if ordering_preferred != Some(mv) {
@@ -609,6 +613,7 @@ impl<'a> Searcher<'a> {
             #[cfg(feature = "stats")]
             {
                 self.statistics.moves_searched += 1;
+                self.statistics.scored_moves_searched += 1;
                 if mv.is_capture() || mv.is_promotion() {
                     self.statistics.tactical_moves_searched += 1;
                     self.statistics.see_scored_moves_searched += 1;

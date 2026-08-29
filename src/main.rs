@@ -89,6 +89,10 @@ fn print_benchmark_statistics(statistics: neyrang::search::SearchStatistics) {
     println!("stats.full_sorts: {}", statistics.full_sorts);
     println!("stats.moves_searched: {}", statistics.moves_searched);
     println!(
+        "stats.scored_moves_searched: {}",
+        statistics.scored_moves_searched
+    );
+    println!(
         "stats.moves_scored_unused: {}",
         statistics.moves_scored_unused()
     );

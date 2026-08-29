@@ -124,6 +124,10 @@ fn capture_ordering_reports_see_and_cutoff_statistics() {
         result.statistics.full_sorts
     );
     assert!(result.statistics.moves_scored >= result.statistics.moves_searched);
+    assert_eq!(
+        result.statistics.scored_moves_searched,
+        result.statistics.moves_searched
+    );
     assert!(result.statistics.moves_scored_unused() > 0);
     assert!(result.statistics.see_calls >= result.statistics.see_scored_moves_searched);
     assert!(result.statistics.see_scored_moves_unused() > 0);

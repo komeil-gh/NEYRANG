@@ -12,10 +12,21 @@ engine_b_name="${ENGINE_B_NAME:-NEYRANG-reference}"
 games="${GAMES:-200}"
 concurrency="${CONCURRENCY:-1}"
 time_control="${TC:-10+0.1}"
+nodes="${NODES:-}"
 hash_mb="${HASH_MB:-64}"
 threads="${THREADS:-1}"
 openings_file="${OPENINGS_FILE:-$script_dir/openings.epd}"
+opening_order="${OPENING_ORDER:-random}"
+opening_seed="${OPENING_SEED:-20260829}"
 pgn_out="${PGN_OUT:-$repo_root/results/match.pgn}"
+meta_out="${META_OUT:-${pgn_out%.pgn}.meta.txt}"
+log_out="${LOG_OUT:-${pgn_out%.pgn}.log}"
+config_out="${CONFIG_OUT:-${pgn_out%.pgn}.config.json}"
+engine_a_git_sha="${ENGINE_A_GIT_SHA:-}"
+engine_b_git_sha="${ENGINE_B_GIT_SHA:-unknown}"
+openings_source="${OPENINGS_SOURCE:-local}"
+openings_license="${OPENINGS_LICENSE:-unknown}"
+dry_run="${DRY_RUN:-0}"
 
 if [[ -z "$engine_b" ]]; then
     echo "ENGINE_B must point to the reference UCI engine" >&2
@@ -25,23 +36,115 @@ if (( games < 2 || games % 2 != 0 )); then
     echo "GAMES must be a positive even number for paired openings" >&2
     exit 2
 fi
+if [[ -n "$nodes" ]] && (( nodes < 1 )); then
+    echo "NODES must be a positive integer when set" >&2
+    exit 2
+fi
+if [[ "$opening_order" != "random" && "$opening_order" != "sequential" ]]; then
+    echo "OPENING_ORDER must be random or sequential" >&2
+    exit 2
+fi
 if [[ ! -x "$engine_a" || ! -x "$engine_b" ]]; then
     echo "Both ENGINE_A and ENGINE_B must be executable" >&2
     exit 2
 fi
-if ! command -v "$fastchess_bin" >/dev/null 2>&1; then
+if [[ "$fastchess_bin" == */* ]]; then
+    fastchess_path="$fastchess_bin"
+else
+    fastchess_path="$(type -P "$fastchess_bin" || true)"
+fi
+if [[ -z "$fastchess_path" || ! -x "$fastchess_path" ]]; then
     echo "fastchess executable not found: $fastchess_bin" >&2
     exit 2
 fi
 
-mkdir -p "$(dirname -- "$pgn_out")"
+if [[ -z "$engine_a_git_sha" ]]; then
+    engine_a_git_sha="$(git -C "$repo_root" rev-parse HEAD 2>/dev/null || printf 'unknown')"
+fi
 
-"$fastchess_bin" \
-    -engine "cmd=$engine_a" "name=$engine_a_name" \
-    -engine "cmd=$engine_b" "name=$engine_b_name" \
-    -each "tc=$time_control" "option.Hash=$hash_mb" "option.Threads=$threads" \
-    -openings "file=$openings_file" format=epd order=sequential \
-    -rounds "$((games / 2))" -repeat \
-    -concurrency "$concurrency" \
-    -pgnout "file=$pgn_out" notation=san append=false nodes=true \
-    -ratinginterval 10 -recover
+mkdir -p \
+    "$(dirname -- "$pgn_out")" \
+    "$(dirname -- "$meta_out")" \
+    "$(dirname -- "$log_out")" \
+    "$(dirname -- "$config_out")"
+
+sha256_file() {
+    shasum -a 256 "$1" | awk '{print $1}'
+}
+
+fastchess_version="$("$fastchess_path" --version 2>/dev/null || true)"
+fastchess_version="${fastchess_version:-unknown}"
+engine_a_sha256="$(sha256_file "$engine_a")"
+engine_b_sha256="$(sha256_file "$engine_b")"
+openings_sha256="$(sha256_file "$openings_file")"
+fastchess_sha256="$(sha256_file "$fastchess_path")"
+
+search_limit=("tc=$time_control")
+limit_mode="time"
+if [[ -n "$nodes" ]]; then
+    search_limit=("nodes=$nodes")
+    limit_mode="nodes"
+fi
+
+command=(
+    "$fastchess_path"
+    -engine "cmd=$engine_a" "name=$engine_a_name"
+    -engine "cmd=$engine_b" "name=$engine_b_name"
+    -each "${search_limit[@]}" "option.Hash=$hash_mb" "option.Threads=$threads"
+    -openings "file=$openings_file" format=epd "order=$opening_order"
+    -srand "$opening_seed"
+    -rounds "$((games / 2))" -repeat
+    -concurrency "$concurrency"
+    -pgnout "file=$pgn_out" notation=san append=false nodes=true seldepth=true nps=true hashfull=true pv=true timeleft=true
+    -report penta=true
+    -ratinginterval 10
+    -config "outname=$config_out"
+    -recover
+)
+
+{
+    echo "format=neyrang-match-v1"
+    echo "created_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "engine_a=$engine_a"
+    echo "engine_a_name=$engine_a_name"
+    echo "engine_a_git_sha=$engine_a_git_sha"
+    echo "engine_a_sha256=$engine_a_sha256"
+    echo "engine_b=$engine_b"
+    echo "engine_b_name=$engine_b_name"
+    echo "engine_b_git_sha=$engine_b_git_sha"
+    echo "engine_b_sha256=$engine_b_sha256"
+    echo "fastchess=$fastchess_path"
+    echo "fastchess_version=$fastchess_version"
+    echo "fastchess_sha256=$fastchess_sha256"
+    echo "openings_file=$openings_file"
+    echo "openings_sha256=$openings_sha256"
+    echo "openings_source=$openings_source"
+    echo "openings_license=$openings_license"
+    echo "opening_order=$opening_order"
+    echo "opening_seed=$opening_seed"
+    echo "games=$games"
+    echo "pairs=$((games / 2))"
+    echo "limit_mode=$limit_mode"
+    echo "time_control=$time_control"
+    echo "nodes=$nodes"
+    echo "threads=$threads"
+    echo "hash_mb=$hash_mb"
+    echo "concurrency=$concurrency"
+    echo "adjudication=fastchess-default"
+    echo "pgn_out=$pgn_out"
+    echo "log_out=$log_out"
+    echo "config_out=$config_out"
+} >"$meta_out"
+
+if [[ "$dry_run" == "1" ]]; then
+    printf 'metadata=%s\n' "$meta_out"
+    printf '%q ' "${command[@]}"
+    printf '\n'
+    exit 0
+fi
+
+"${command[@]}" 2>&1 | tee "$log_out"
+{
+    echo "completed_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "status=completed"
+} >>"$meta_out"

@@ -114,6 +114,7 @@ cargo fmt --check
 cargo clippy --all-targets --all-features
 cargo test
 cargo test --features stats
+scripts/test-match-config.sh
 ```
 
 For paired fastchess testing:
@@ -124,6 +125,8 @@ ENGINE_A=target/release/neyrang ENGINE_B=/path/to/opponent scripts/match.sh
 ENGINE_B=/path/to/parent/neyrang scripts/sprt.sh
 ```
 
+`OPENING_SEED`, `OPENING_ORDER`, `TC`, `HASH_MB`, `THREADS`, and `CONCURRENCY` are explicit inputs. Set `NODES` on `match.sh` for a node-limited comparison; omit it for a time-controlled match. Each run writes PGN telemetry plus adjacent `.log` and `.meta.txt` files containing engine, Git, binary, opening, and fastchess identities. Pass `ENGINE_A_GIT_SHA`, `ENGINE_B_GIT_SHA`, `OPENINGS_SOURCE`, and `OPENINGS_LICENSE` for an auditable experiment.
+
 The bundled opening file is intentionally small; replace `OPENINGS_FILE` with a larger audited balanced suite for strength testing. Do not infer Elo from Perft, NPS, tactical puzzles, or a small game sample.
 
 ## Architecture
@@ -133,6 +136,8 @@ The bundled opening file is intentionally small; replace `OPENINGS_FILE` with a 
 - [Evaluation](docs/evaluation.md)
 - [Testing and benchmarks](docs/testing.md)
 - [En Croissant integration](docs/en-croissant.md)
+- [0.2.0 frozen baseline](docs/development/0.2.0-baseline.md)
+- [Search experiment ledger](docs/development/experiments.md)
 
 ## Roadmap
 

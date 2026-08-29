@@ -76,6 +76,78 @@ pub struct SearchStatistics {
     pub null_move_cutoffs: u64,
     pub lmr_reductions: u64,
     pub lmr_researches: u64,
+    #[cfg(feature = "stats")]
+    pub move_generation_calls: u64,
+    #[cfg(feature = "stats")]
+    pub moves_generated: u64,
+    #[cfg(feature = "stats")]
+    pub ordering_calls: u64,
+    #[cfg(feature = "stats")]
+    pub moves_scored: u64,
+    #[cfg(feature = "stats")]
+    pub full_sorts: u64,
+    #[cfg(feature = "stats")]
+    pub moves_searched: u64,
+    #[cfg(feature = "stats")]
+    pub tactical_moves_searched: u64,
+    #[cfg(feature = "stats")]
+    pub see_scored_moves_searched: u64,
+    #[cfg(feature = "stats")]
+    pub picker_tt_stage_visits: u64,
+    #[cfg(feature = "stats")]
+    pub picker_good_tactical_stage_visits: u64,
+    #[cfg(feature = "stats")]
+    pub picker_killer_stage_visits: u64,
+    #[cfg(feature = "stats")]
+    pub picker_quiet_stage_visits: u64,
+    #[cfg(feature = "stats")]
+    pub picker_bad_tactical_stage_visits: u64,
+}
+
+#[cfg(feature = "stats")]
+impl SearchStatistics {
+    pub fn moves_scored_unused(self) -> u64 {
+        self.moves_scored.saturating_sub(self.moves_searched)
+    }
+
+    pub fn see_scored_moves_unused(self) -> u64 {
+        self.see_calls
+            .saturating_sub(self.see_scored_moves_searched)
+    }
+
+    pub(crate) fn accumulate(&mut self, other: Self) {
+        self.tt_hits += other.tt_hits;
+        self.tt_cutoffs += other.tt_cutoffs;
+        self.beta_cutoffs += other.beta_cutoffs;
+        self.first_move_beta_cutoffs += other.first_move_beta_cutoffs;
+        self.capture_beta_cutoffs += other.capture_beta_cutoffs;
+        self.quiet_beta_cutoffs += other.quiet_beta_cutoffs;
+        self.tt_move_searches += other.tt_move_searches;
+        self.see_calls += other.see_calls;
+        self.good_captures += other.good_captures;
+        self.bad_captures += other.bad_captures;
+        self.pvs_zero_window_searches += other.pvs_zero_window_searches;
+        self.pvs_researches += other.pvs_researches;
+        self.aspiration_searches += other.aspiration_searches;
+        self.see_prunes += other.see_prunes;
+        self.futility_prunes += other.futility_prunes;
+        self.null_move_cutoffs += other.null_move_cutoffs;
+        self.lmr_reductions += other.lmr_reductions;
+        self.lmr_researches += other.lmr_researches;
+        self.move_generation_calls += other.move_generation_calls;
+        self.moves_generated += other.moves_generated;
+        self.ordering_calls += other.ordering_calls;
+        self.moves_scored += other.moves_scored;
+        self.full_sorts += other.full_sorts;
+        self.moves_searched += other.moves_searched;
+        self.tactical_moves_searched += other.tactical_moves_searched;
+        self.see_scored_moves_searched += other.see_scored_moves_searched;
+        self.picker_tt_stage_visits += other.picker_tt_stage_visits;
+        self.picker_good_tactical_stage_visits += other.picker_good_tactical_stage_visits;
+        self.picker_killer_stage_visits += other.picker_killer_stage_visits;
+        self.picker_quiet_stage_visits += other.picker_quiet_stage_visits;
+        self.picker_bad_tactical_stage_visits += other.picker_bad_tactical_stage_visits;
+    }
 }
 
 pub struct Searcher<'a> {
@@ -331,6 +403,11 @@ impl<'a> Searcher<'a> {
 
         let in_check = position.is_in_check(position.side_to_move());
         let mut moves = position.legal_moves();
+        #[cfg(feature = "stats")]
+        {
+            self.statistics.move_generation_calls += 1;
+            self.statistics.moves_generated += moves.len() as u64;
+        }
         if moves.is_empty() {
             return if in_check {
                 -VALUE_MATE + ply as i32
@@ -340,10 +417,11 @@ impl<'a> Searcher<'a> {
         }
         let moving_color = position.side_to_move();
         let tt_move = tt_data.map(|data| data.best_move);
+        let ordering_preferred = tt_move.or(preferred);
         let _ordering_statistics = ordering::order(
             position,
             &mut moves,
-            tt_move.or(preferred),
+            ordering_preferred,
             self.killers[ply],
             &self.history,
             moving_color,
@@ -354,6 +432,16 @@ impl<'a> Searcher<'a> {
         let mut best = -VALUE_INFINITE;
         let mut best_move = Move::NONE;
         for (move_index, &mv) in moves.iter().enumerate() {
+            #[cfg(feature = "stats")]
+            {
+                self.statistics.moves_searched += 1;
+                if mv.is_capture() || mv.is_promotion() {
+                    self.statistics.tactical_moves_searched += 1;
+                    if ordering_preferred != Some(mv) {
+                        self.statistics.see_scored_moves_searched += 1;
+                    }
+                }
+            }
             #[cfg(feature = "stats")]
             if tt_move == Some(mv) {
                 self.statistics.tt_move_searches += 1;
@@ -481,6 +569,11 @@ impl<'a> Searcher<'a> {
         }
 
         let mut moves = position.legal_moves();
+        #[cfg(feature = "stats")]
+        {
+            self.statistics.move_generation_calls += 1;
+            self.statistics.moves_generated += moves.len() as u64;
+        }
         if moves.is_empty() {
             return if in_check {
                 -VALUE_MATE + ply as i32
@@ -512,6 +605,14 @@ impl<'a> Searcher<'a> {
             }
             if !in_check && !mv.is_capture() && !mv.is_promotion() {
                 continue;
+            }
+            #[cfg(feature = "stats")]
+            {
+                self.statistics.moves_searched += 1;
+                if mv.is_capture() || mv.is_promotion() {
+                    self.statistics.tactical_moves_searched += 1;
+                    self.statistics.see_scored_moves_searched += 1;
+                }
             }
             let undo = position.make_move(mv);
             self.hashes.push(position.hash());
@@ -551,6 +652,9 @@ impl<'a> Searcher<'a> {
 
     #[cfg(feature = "stats")]
     fn record_ordering_statistics(&mut self, statistics: ordering::OrderingStatistics) {
+        self.statistics.ordering_calls += 1;
+        self.statistics.moves_scored += statistics.moves_scored;
+        self.statistics.full_sorts += statistics.full_sorts;
         self.statistics.see_calls += statistics.see_calls;
         self.statistics.good_captures += statistics.good_captures;
         self.statistics.bad_captures += statistics.bad_captures;

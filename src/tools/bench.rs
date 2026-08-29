@@ -3,6 +3,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[cfg(feature = "stats")]
+use crate::search::SearchStatistics;
 use crate::{
     chess::Position,
     search::{SearchLimits, Searcher, tt::TranspositionTable},
@@ -22,6 +24,8 @@ pub struct BenchmarkResult {
     pub nodes: u64,
     pub elapsed: Duration,
     pub checksum: u64,
+    #[cfg(feature = "stats")]
+    pub statistics: SearchStatistics,
 }
 
 impl BenchmarkResult {
@@ -36,6 +40,8 @@ pub fn run(depth: u8) -> Result<BenchmarkResult, String> {
     let started = Instant::now();
     let mut nodes = 0_u64;
     let mut checksum = 0xCBF2_9CE4_8422_2325_u64;
+    #[cfg(feature = "stats")]
+    let mut statistics = SearchStatistics::default();
     for fen in POSITIONS {
         let mut position = Position::from_fen(fen).map_err(|error| error.to_string())?;
         let hashes = [position.hash()];
@@ -49,6 +55,8 @@ pub fn run(depth: u8) -> Result<BenchmarkResult, String> {
         checksum ^=
             result.nodes ^ best.rotate_left(17) ^ (result.score as i64 as u64).rotate_left(31);
         checksum = checksum.wrapping_mul(0x0000_0100_0000_01B3);
+        #[cfg(feature = "stats")]
+        statistics.accumulate(result.statistics);
         table = searcher.into_table();
     }
     Ok(BenchmarkResult {
@@ -56,5 +64,7 @@ pub fn run(depth: u8) -> Result<BenchmarkResult, String> {
         nodes,
         elapsed: started.elapsed(),
         checksum,
+        #[cfg(feature = "stats")]
+        statistics,
     })
 }

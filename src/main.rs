@@ -66,6 +66,8 @@ fn run() -> Result<(), String> {
             println!("time: {} ms", result.elapsed.as_millis());
             println!("nps: {}", result.nps());
             println!("checksum: {:016x}", result.checksum);
+            #[cfg(feature = "stats")]
+            print_benchmark_statistics(result.statistics);
             let _ = started;
         }
         "--version" | "-V" => println!("{ENGINE_NAME} {ENGINE_VERSION}"),
@@ -73,6 +75,57 @@ fn run() -> Result<(), String> {
         _ => return Err(format!("unknown command '{command}' (try --help)")),
     }
     Ok(())
+}
+
+#[cfg(feature = "stats")]
+fn print_benchmark_statistics(statistics: neyrang::search::SearchStatistics) {
+    println!(
+        "stats.move_generation_calls: {}",
+        statistics.move_generation_calls
+    );
+    println!("stats.moves_generated: {}", statistics.moves_generated);
+    println!("stats.ordering_calls: {}", statistics.ordering_calls);
+    println!("stats.moves_scored: {}", statistics.moves_scored);
+    println!("stats.full_sorts: {}", statistics.full_sorts);
+    println!("stats.moves_searched: {}", statistics.moves_searched);
+    println!(
+        "stats.moves_scored_unused: {}",
+        statistics.moves_scored_unused()
+    );
+    println!("stats.see_calls: {}", statistics.see_calls);
+    println!(
+        "stats.see_scored_moves_searched: {}",
+        statistics.see_scored_moves_searched
+    );
+    println!(
+        "stats.see_scored_moves_unused: {}",
+        statistics.see_scored_moves_unused()
+    );
+    println!("stats.beta_cutoffs: {}", statistics.beta_cutoffs);
+    println!(
+        "stats.first_move_beta_cutoffs: {}",
+        statistics.first_move_beta_cutoffs
+    );
+    println!(
+        "stats.picker_tt_stage_visits: {}",
+        statistics.picker_tt_stage_visits
+    );
+    println!(
+        "stats.picker_good_tactical_stage_visits: {}",
+        statistics.picker_good_tactical_stage_visits
+    );
+    println!(
+        "stats.picker_killer_stage_visits: {}",
+        statistics.picker_killer_stage_visits
+    );
+    println!(
+        "stats.picker_quiet_stage_visits: {}",
+        statistics.picker_quiet_stage_visits
+    );
+    println!(
+        "stats.picker_bad_tactical_stage_visits: {}",
+        statistics.picker_bad_tactical_stage_visits
+    );
 }
 
 fn parse_depth(value: Option<&String>) -> Result<u8, String> {

@@ -17,6 +17,10 @@ struct ScoredMove {
 pub(crate) struct OrderingStatistics {
     pub bad_capture_count: usize,
     #[cfg(feature = "stats")]
+    pub moves_scored: u64,
+    #[cfg(feature = "stats")]
+    pub full_sorts: u64,
+    #[cfg(feature = "stats")]
     pub see_calls: u64,
     #[cfg(feature = "stats")]
     pub good_captures: u64,
@@ -38,6 +42,11 @@ pub(crate) fn order(
         score: i32::MIN,
     }; MoveList::CAPACITY];
     let move_count = moves.len();
+    #[cfg(feature = "stats")]
+    {
+        statistics.moves_scored = move_count as u64;
+        statistics.full_sorts = 1;
+    }
     for (index, &mv) in moves.iter().enumerate() {
         scored[index] = ScoredMove {
             mv,

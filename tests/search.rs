@@ -117,6 +117,16 @@ fn capture_ordering_reports_see_and_cutoff_statistics() {
     assert!(result.statistics.good_captures > 0);
     assert!(result.statistics.bad_captures > 0);
     assert!(result.statistics.tt_move_searches > 0);
+    assert!(result.statistics.move_generation_calls > 0);
+    assert!(result.statistics.moves_generated >= result.statistics.moves_scored);
+    assert_eq!(
+        result.statistics.ordering_calls,
+        result.statistics.full_sorts
+    );
+    assert!(result.statistics.moves_scored >= result.statistics.moves_searched);
+    assert!(result.statistics.moves_scored_unused() > 0);
+    assert!(result.statistics.see_calls >= result.statistics.see_scored_moves_searched);
+    assert!(result.statistics.see_scored_moves_unused() > 0);
     assert!(
         result.statistics.capture_beta_cutoffs + result.statistics.quiet_beta_cutoffs
             <= result.statistics.beta_cutoffs

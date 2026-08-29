@@ -362,7 +362,7 @@ mod tests {
         search::see,
     };
 
-    use super::{HistoryTable, MovePicker};
+    use super::{HistoryTable, MovePicker, OrderingStatistics, quiet_score, tactical_score};
 
     fn collect(picker: &mut MovePicker, position: &Position, history: &HistoryTable) -> Vec<Move> {
         let mut picked = Vec::new();
@@ -542,6 +542,25 @@ mod tests {
 
             assert_eq!(picked.len(), legal.len(), "sample {sample}");
             assert_eq!(picked[0], preferred, "sample {sample}");
+            let mut score_statistics = OrderingStatistics::default();
+            let ordered_scores = picked
+                .iter()
+                .map(|&mv| {
+                    if mv == preferred {
+                        1_000_000
+                    } else if mv.is_capture() || mv.is_promotion() {
+                        tactical_score(&position, mv, &mut score_statistics).0
+                    } else {
+                        quiet_score(mv, killers, &history, position.side_to_move())
+                    }
+                })
+                .collect::<Vec<_>>();
+            assert!(
+                ordered_scores
+                    .windows(2)
+                    .all(|scores| scores[0] >= scores[1]),
+                "legacy score inversion at sample {sample}: {ordered_scores:?}"
+            );
             for &mv in legal.iter() {
                 assert_eq!(
                     picked.iter().filter(|&&candidate| candidate == mv).count(),

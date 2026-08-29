@@ -48,8 +48,9 @@ Guarded null-move pruning reduced this benchmark to 182,768 nodes but did not ac
 
 Next candidates should be isolated and measured in this order:
 
-- reduce SEE/ordering overhead without weakening the legal SEE oracle
-- add capture history, then continuation history, behind separate counters and matches
-- measure a pawn hash together with incremental classical pawn-structure terms
+- recover SEE/ordering throughput with a lazy threshold query and/or a staged MovePicker, without weakening the legal SEE oracle
+- add Capture History as a separate experiment so tactical ordering learns from prior cutoffs in addition to material exchange safety
+- add Continuation History as a separate experiment so quiet ordering gains previous-move context and gives LMR a better late-move distribution
+- revisit guarded null-move pruning only against the resulting stronger ordering baseline
 
-Any renewed null move, reverse futility, LMP, ProbCut, or singular-extension work must be added one at a time rather than as a bundled selective-search rewrite.
+Pawn hashing remains useful but is deferred below these search-ordering experiments. Any renewed null move, reverse futility, LMP, ProbCut, or singular-extension work must be added one at a time rather than as a bundled selective-search rewrite. The detailed acceptance sequence is frozen in the [0.3.0 search plan](development/0.3.0-plan.md).

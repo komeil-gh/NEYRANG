@@ -142,7 +142,8 @@ The bundled opening file is intentionally small; replace `OPENINGS_FILE` with a 
 - [En Croissant integration](docs/en-croissant.md)
 - [0.2.0 frozen baseline](docs/development/0.2.0-baseline.md)
 - [Search experiment ledger](docs/development/experiments.md)
+- [0.3.0 search plan](docs/development/0.3.0-plan.md)
 
 ## Roadmap
 
-The next strength work should remain empirical: reduce SEE/ordering cost, add capture and continuation history as isolated experiments, and improve evaluation with a measured pawn hash. SMP, NNUE, and Syzygy remain later milestones after the single-thread testing pipeline matures.
+The 0.3 search order is evidence-driven: first recover SEE/ordering throughput with lazy threshold tests and/or a staged MovePicker, then add Capture History, then Continuation History. Guarded null-move pruning may be reconsidered only after those ordering experiments establish a new baseline. Pawn hashing is deliberately lower priority while the current search still has substantial ordering headroom. Each candidate remains an isolated commit and must earn retention through correctness gates, benchmarks, paired games, and SPRT when warranted.

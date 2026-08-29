@@ -46,7 +46,7 @@ The final row is the median of five runs; the preceding rows are single-run deve
 
 Guarded null-move pruning reduced this benchmark to 182,768 nodes but did not accept H1 in a capped 1,000-game SPRT against the LMR parent, so it was reverted. Reverse futility pruning was not attempted in 0.2.0.
 
-Before changing search again, the [0.3 retrospective campaign](development/0.3.0-game-campaign.md) runs 4,000 fixed games across the preserved 0.1/SEE/qsearch/LMR/0.2 binaries. Its purpose is to replace the smaller isolated screens with deeper direct evidence and expose protocol or time-management anomalies. NEYRANG does not learn merely by playing these games; improvements still require an explicit, tested patch.
+The [0.3 retrospective campaign](development/0.3.0-game-campaign.md) completed 4,000 fixed games across the preserved 0.1/SEE/qsearch/LMR/0.2 binaries. SEE ordering measured `+29.25 +/-17.09 Elo`, qsearch SEE pruning measured `+66.46 +/-18.72 Elo`, isolated LMR remained inconclusive at `+6.25 +/-12.52 Elo`, and cumulative v0.2.0 measured `+90.97 +/-18.38 Elo` against v0.1.0. Five 2-11 ms time forfeits in historical parents require a separate timing-hardening gate before new search work. NEYRANG does not learn merely by playing these games; improvements still require an explicit, tested patch.
 
 Next candidates should be isolated and measured in this order:
 

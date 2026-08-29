@@ -142,8 +142,9 @@ The bundled opening file is intentionally small; replace `OPENINGS_FILE` with a 
 - [En Croissant integration](docs/en-croissant.md)
 - [0.2.0 frozen baseline](docs/development/0.2.0-baseline.md)
 - [Search experiment ledger](docs/development/experiments.md)
+- [0.3 retrospective game campaign](docs/development/0.3.0-game-campaign.md)
 - [0.3.0 search plan](docs/development/0.3.0-plan.md)
 
 ## Roadmap
 
-The 0.3 search order is evidence-driven. Before any new feature, a fixed 4,000-game retrospective campaign rechecks each retained 0.2 search step and the cumulative release. Development then recovers SEE/ordering throughput with lazy threshold tests and/or a staged MovePicker, adds Capture History, and adds Continuation History. Guarded null-move pruning may be reconsidered only after those ordering experiments establish a new baseline. Pawn hashing is deliberately lower priority while the current search still has substantial ordering headroom. Each candidate remains an isolated commit and must earn retention through correctness gates, benchmarks, paired games, and SPRT when warranted.
+The 0.3 search order is evidence-driven. A completed 4,000-game retrospective found direct positive evidence for SEE ordering and qsearch pruning, an inconclusive isolated LMR result, and `+90.97 +/-18.38 Elo` for cumulative v0.2.0 against v0.1.0. Timing hardening for five millisecond-scale historical-parent forfeits is the remaining gate before development recovers SEE/ordering throughput with lazy threshold tests and/or a staged MovePicker, adds Capture History, and adds Continuation History. Guarded null-move pruning may be reconsidered only after those ordering experiments establish a new baseline. Pawn hashing is deliberately lower priority while the current search still has substantial ordering headroom. Each candidate remains an isolated commit and must earn retention through correctness gates, benchmarks, paired games, and SPRT when warranted.

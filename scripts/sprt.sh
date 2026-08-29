@@ -14,6 +14,7 @@ concurrency="${CONCURRENCY:-1}"
 time_control="${TC:-10+0.1}"
 hash_mb="${HASH_MB:-64}"
 threads="${THREADS:-1}"
+move_overhead_ms="${MOVE_OVERHEAD_MS:-}"
 time_margin_ms="${TIME_MARGIN_MS:-}"
 strict="${STRICT:-0}"
 show_latency="${SHOW_LATENCY:-0}"
@@ -60,6 +61,10 @@ if [[ -n "$time_margin_ms" ]] && ! [[ "$time_margin_ms" =~ ^[0-9]+$ ]]; then
     echo "TIME_MARGIN_MS must be a non-negative integer when set" >&2
     exit 2
 fi
+if [[ -n "$move_overhead_ms" ]] && ! [[ "$move_overhead_ms" =~ ^[0-9]+$ ]]; then
+    echo "MOVE_OVERHEAD_MS must be a non-negative integer when set" >&2
+    exit 2
+fi
 if [[ "$strict" != "0" && "$strict" != "1" ]]; then
     echo "STRICT must be 0 or 1" >&2
     exit 2
@@ -95,15 +100,19 @@ openings_sha256="$(sha256_file "$openings_file")"
 fastchess_sha256="$(sha256_file "$fastchess_path")"
 
 time_options=("tc=$time_control")
+engine_options=("option.Hash=$hash_mb" "option.Threads=$threads")
 if [[ -n "$time_margin_ms" ]]; then
     time_options+=("timemargin=$time_margin_ms")
+fi
+if [[ -n "$move_overhead_ms" ]]; then
+    engine_options+=("option.Move Overhead=$move_overhead_ms")
 fi
 
 command=(
     "$fastchess_path"
     -engine "cmd=$candidate" "name=$candidate_name"
     -engine "cmd=$baseline" "name=$baseline_name"
-    -each "${time_options[@]}" "option.Hash=$hash_mb" "option.Threads=$threads"
+    -each "${time_options[@]}" "${engine_options[@]}"
     -openings "file=$openings_file" format=epd "order=$opening_order"
     -srand "$opening_seed"
     -sprt "elo0=$elo0" "elo1=$elo1" "alpha=$alpha" "beta=$beta" "model=$sprt_model"
@@ -147,6 +156,7 @@ fi
     echo "time_control=$time_control"
     echo "threads=$threads"
     echo "hash_mb=$hash_mb"
+    echo "move_overhead_ms=$move_overhead_ms"
     echo "concurrency=$concurrency"
     echo "time_margin_ms=$time_margin_ms"
     echo "show_latency=$show_latency"

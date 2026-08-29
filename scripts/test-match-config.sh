@@ -19,6 +19,7 @@ output="$(
     OPENINGS_FILE="$repo_root/scripts/openings.epd" \
     OPENING_SEED=20260829 \
     TIME_MARGIN_MS=0 \
+    MOVE_OVERHEAD_MS=30 \
     SHOW_LATENCY=1 \
     STRICT=1 \
     GAMES=10 \
@@ -45,6 +46,7 @@ require_output "pv=true"
 require_output "timeleft=true"
 require_output "latency=true"
 require_output "timemargin=0"
+require_output "option.Move\\ Overhead=30"
 require_output "-show-latency"
 require_output "-strict"
 require_output "outname=$scratch/smoke.config.json"
@@ -60,6 +62,7 @@ for expected in \
     "opening_seed=20260829" \
     "nodes=5000" \
     "time_margin_ms=0" \
+    "move_overhead_ms=30" \
     "show_latency=1" \
     "strict=1" \
     "games=10" \
@@ -83,6 +86,7 @@ sprt_output="$(
     OPENINGS_FILE="$repo_root/scripts/openings.epd" \
     OPENING_SEED=20260829 \
     TIME_MARGIN_MS=0 \
+    MOVE_OVERHEAD_MS=30 \
     SHOW_LATENCY=1 \
     STRICT=1 \
     ROUNDS=20 \
@@ -100,6 +104,7 @@ for expected in \
     "timeleft=true" \
     "latency=true" \
     "timemargin=0" \
+    "option.Move\\ Overhead=30" \
     "-show-latency" \
     "-strict" \
     "outname=$scratch/sprt.config.json"; do
@@ -121,6 +126,7 @@ for expected in \
     "sprt_model=normalized" \
     "rounds=20" \
     "time_margin_ms=0" \
+    "move_overhead_ms=30" \
     "show_latency=1" \
     "strict=1" \
     "config_out=$scratch/sprt.config.json"; do

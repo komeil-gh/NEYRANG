@@ -15,6 +15,7 @@ time_control="${TC:-10+0.1}"
 nodes="${NODES:-}"
 hash_mb="${HASH_MB:-64}"
 threads="${THREADS:-1}"
+move_overhead_ms="${MOVE_OVERHEAD_MS:-}"
 time_margin_ms="${TIME_MARGIN_MS:-}"
 strict="${STRICT:-0}"
 show_latency="${SHOW_LATENCY:-0}"
@@ -45,6 +46,10 @@ if [[ -n "$nodes" ]] && (( nodes < 1 )); then
 fi
 if [[ -n "$time_margin_ms" ]] && ! [[ "$time_margin_ms" =~ ^[0-9]+$ ]]; then
     echo "TIME_MARGIN_MS must be a non-negative integer when set" >&2
+    exit 2
+fi
+if [[ -n "$move_overhead_ms" ]] && ! [[ "$move_overhead_ms" =~ ^[0-9]+$ ]]; then
+    echo "MOVE_OVERHEAD_MS must be a non-negative integer when set" >&2
     exit 2
 fi
 if [[ "$strict" != "0" && "$strict" != "1" ]]; then
@@ -95,6 +100,7 @@ openings_sha256="$(sha256_file "$openings_file")"
 fastchess_sha256="$(sha256_file "$fastchess_path")"
 
 search_limit=("tc=$time_control")
+engine_options=("option.Hash=$hash_mb" "option.Threads=$threads")
 limit_mode="time"
 if [[ -n "$nodes" ]]; then
     search_limit=("nodes=$nodes")
@@ -103,12 +109,15 @@ fi
 if [[ -n "$time_margin_ms" ]]; then
     search_limit+=("timemargin=$time_margin_ms")
 fi
+if [[ -n "$move_overhead_ms" ]]; then
+    engine_options+=("option.Move Overhead=$move_overhead_ms")
+fi
 
 command=(
     "$fastchess_path"
     -engine "cmd=$engine_a" "name=$engine_a_name"
     -engine "cmd=$engine_b" "name=$engine_b_name"
-    -each "${search_limit[@]}" "option.Hash=$hash_mb" "option.Threads=$threads"
+    -each "${search_limit[@]}" "${engine_options[@]}"
     -openings "file=$openings_file" format=epd "order=$opening_order"
     -srand "$opening_seed"
     -rounds "$((games / 2))" -repeat
@@ -153,6 +162,7 @@ fi
     echo "nodes=$nodes"
     echo "threads=$threads"
     echo "hash_mb=$hash_mb"
+    echo "move_overhead_ms=$move_overhead_ms"
     echo "concurrency=$concurrency"
     echo "time_margin_ms=$time_margin_ms"
     echo "show_latency=$show_latency"

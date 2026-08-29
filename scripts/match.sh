@@ -19,6 +19,7 @@ move_overhead_ms="${MOVE_OVERHEAD_MS:-}"
 time_margin_ms="${TIME_MARGIN_MS:-}"
 strict="${STRICT:-0}"
 show_latency="${SHOW_LATENCY:-0}"
+autosave_interval="${AUTOSAVE_INTERVAL:-20}"
 openings_file="${OPENINGS_FILE:-$script_dir/openings.epd}"
 opening_order="${OPENING_ORDER:-random}"
 opening_seed="${OPENING_SEED:-20260829}"
@@ -58,6 +59,10 @@ if [[ "$strict" != "0" && "$strict" != "1" ]]; then
 fi
 if [[ "$show_latency" != "0" && "$show_latency" != "1" ]]; then
     echo "SHOW_LATENCY must be 0 or 1" >&2
+    exit 2
+fi
+if ! [[ "$autosave_interval" =~ ^[0-9]+$ ]]; then
+    echo "AUTOSAVE_INTERVAL must be a non-negative integer" >&2
     exit 2
 fi
 if [[ "$opening_order" != "random" && "$opening_order" != "sequential" ]]; then
@@ -125,6 +130,7 @@ command=(
     -pgnout "file=$pgn_out" notation=san append=false nodes=true seldepth=true nps=true hashfull=true pv=true timeleft=true latency=true
     -report penta=true
     -ratinginterval 10
+    -autosaveinterval "$autosave_interval"
     -config "outname=$config_out"
     -recover
 )
@@ -167,6 +173,7 @@ fi
     echo "time_margin_ms=$time_margin_ms"
     echo "show_latency=$show_latency"
     echo "strict=$strict"
+    echo "autosave_interval=$autosave_interval"
     echo "adjudication=fastchess-default"
     echo "pgn_out=$pgn_out"
     echo "log_out=$log_out"

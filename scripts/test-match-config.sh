@@ -22,6 +22,7 @@ output="$(
     MOVE_OVERHEAD_MS=30 \
     SHOW_LATENCY=1 \
     STRICT=1 \
+    AUTOSAVE_INTERVAL=2 \
     GAMES=10 \
     NODES=5000 \
     PGN_OUT="$pgn_out" \
@@ -49,6 +50,7 @@ require_output "timemargin=0"
 require_output "option.Move\\ Overhead=30"
 require_output "-show-latency"
 require_output "-strict"
+require_output "-autosaveinterval 2"
 require_output "outname=$scratch/smoke.config.json"
 
 if [[ ! -f "$meta_out" ]]; then
@@ -65,6 +67,7 @@ for expected in \
     "move_overhead_ms=30" \
     "show_latency=1" \
     "strict=1" \
+    "autosave_interval=2" \
     "games=10" \
     "config_out=$scratch/smoke.config.json"; do
     if ! grep -Fqx "$expected" "$meta_out"; then
@@ -89,6 +92,7 @@ sprt_output="$(
     MOVE_OVERHEAD_MS=30 \
     SHOW_LATENCY=1 \
     STRICT=1 \
+    AUTOSAVE_INTERVAL=2 \
     ROUNDS=20 \
     SPRT_MODEL=normalized \
     META_OUT="$sprt_meta_out" \
@@ -107,6 +111,7 @@ for expected in \
     "option.Move\\ Overhead=30" \
     "-show-latency" \
     "-strict" \
+    "-autosaveinterval 2" \
     "outname=$scratch/sprt.config.json"; do
     if [[ "$sprt_output" != *"$expected"* ]]; then
         echo "SPRT dry-run output is missing: $expected" >&2
@@ -129,6 +134,7 @@ for expected in \
     "move_overhead_ms=30" \
     "show_latency=1" \
     "strict=1" \
+    "autosave_interval=2" \
     "config_out=$scratch/sprt.config.json"; do
     if ! grep -Fqx "$expected" "$sprt_meta_out"; then
         echo "SPRT metadata is missing: $expected" >&2

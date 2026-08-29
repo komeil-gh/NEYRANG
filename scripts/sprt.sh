@@ -18,6 +18,7 @@ move_overhead_ms="${MOVE_OVERHEAD_MS:-}"
 time_margin_ms="${TIME_MARGIN_MS:-}"
 strict="${STRICT:-0}"
 show_latency="${SHOW_LATENCY:-0}"
+autosave_interval="${AUTOSAVE_INTERVAL:-20}"
 elo0="${ELO0:-0}"
 elo1="${ELO1:-5}"
 alpha="${ALPHA:-0.05}"
@@ -73,6 +74,10 @@ if [[ "$show_latency" != "0" && "$show_latency" != "1" ]]; then
     echo "SHOW_LATENCY must be 0 or 1" >&2
     exit 2
 fi
+if ! [[ "$autosave_interval" =~ ^[0-9]+$ ]]; then
+    echo "AUTOSAVE_INTERVAL must be a non-negative integer" >&2
+    exit 2
+fi
 if [[ "$opening_order" != "random" && "$opening_order" != "sequential" ]]; then
     echo "OPENING_ORDER must be random or sequential" >&2
     exit 2
@@ -121,6 +126,7 @@ command=(
     -pgnout "file=$pgn_out" notation=san append=false nodes=true seldepth=true nps=true hashfull=true pv=true timeleft=true latency=true
     -report penta=true
     -ratinginterval 10
+    -autosaveinterval "$autosave_interval"
     -config "outname=$config_out"
     -recover
 )
@@ -161,6 +167,7 @@ fi
     echo "time_margin_ms=$time_margin_ms"
     echo "show_latency=$show_latency"
     echo "strict=$strict"
+    echo "autosave_interval=$autosave_interval"
     echo "sprt_elo0=$elo0"
     echo "sprt_elo1=$elo1"
     echo "sprt_alpha=$alpha"

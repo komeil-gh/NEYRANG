@@ -81,3 +81,24 @@ fn pvs_uses_zero_window_searches_after_the_first_move() {
     assert!(result.statistics.pvs_zero_window_searches > 0);
     assert!(result.statistics.aspiration_searches > 0);
 }
+
+#[cfg(feature = "stats")]
+#[test]
+fn capture_ordering_reports_see_and_cutoff_statistics() {
+    let mut position = Position::from_fen("6k1/8/5p2/3qp3/2P1Q3/8/8/6K1 w - - 0 1")
+        .expect("ordering statistics fixture is valid");
+    let hashes = [position.hash()];
+    let stop = AtomicBool::new(false);
+    let mut searcher = Searcher::new(&stop);
+
+    let result = searcher.search(&mut position, &SearchLimits::depth(4), &hashes, |_| {});
+
+    assert!(result.statistics.see_calls > 0);
+    assert!(result.statistics.good_captures > 0);
+    assert!(result.statistics.bad_captures > 0);
+    assert!(result.statistics.tt_move_searches > 0);
+    assert!(
+        result.statistics.capture_beta_cutoffs + result.statistics.quiet_beta_cutoffs
+            <= result.statistics.beta_cutoffs
+    );
+}

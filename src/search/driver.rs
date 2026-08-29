@@ -62,6 +62,12 @@ pub struct SearchStatistics {
     pub tt_cutoffs: u64,
     pub beta_cutoffs: u64,
     pub first_move_beta_cutoffs: u64,
+    pub capture_beta_cutoffs: u64,
+    pub quiet_beta_cutoffs: u64,
+    pub tt_move_searches: u64,
+    pub see_calls: u64,
+    pub good_captures: u64,
+    pub bad_captures: u64,
     pub pvs_zero_window_searches: u64,
     pub pvs_researches: u64,
     pub aspiration_searches: u64,
@@ -331,18 +337,25 @@ impl<'a> Searcher<'a> {
             };
         }
         let moving_color = position.side_to_move();
-        ordering::order(
+        let tt_move = tt_data.map(|data| data.best_move);
+        let _ordering_statistics = ordering::order(
             position,
             &mut moves,
-            tt_data.map(|data| data.best_move).or(preferred),
+            tt_move.or(preferred),
             self.killers[ply],
             &self.history,
             moving_color,
         );
+        #[cfg(feature = "stats")]
+        self.record_ordering_statistics(_ordering_statistics);
 
         let mut best = -VALUE_INFINITE;
         let mut best_move = Move::NONE;
         for (move_index, &mv) in moves.iter().enumerate() {
+            #[cfg(feature = "stats")]
+            if tt_move == Some(mv) {
+                self.statistics.tt_move_searches += 1;
+            }
             let undo = position.make_move(mv);
             self.hashes.push(position.hash());
             let mut score;
@@ -382,6 +395,11 @@ impl<'a> Searcher<'a> {
                     self.statistics.beta_cutoffs += 1;
                     if move_index == 0 {
                         self.statistics.first_move_beta_cutoffs += 1;
+                    }
+                    if mv.is_capture() || mv.is_promotion() {
+                        self.statistics.capture_beta_cutoffs += 1;
+                    } else {
+                        self.statistics.quiet_beta_cutoffs += 1;
                     }
                 }
                 if !mv.is_capture() && !mv.is_promotion() {
@@ -440,7 +458,7 @@ impl<'a> Searcher<'a> {
                 VALUE_DRAW
             };
         }
-        ordering::order(
+        let _ordering_statistics = ordering::order(
             position,
             &mut moves,
             None,
@@ -448,6 +466,8 @@ impl<'a> Searcher<'a> {
             &self.history,
             position.side_to_move(),
         );
+        #[cfg(feature = "stats")]
+        self.record_ordering_statistics(_ordering_statistics);
 
         for &mv in moves.iter() {
             if !in_check && !mv.is_capture() && !mv.is_promotion() {
@@ -487,6 +507,13 @@ impl<'a> Searcher<'a> {
             self.killers[ply][1] = self.killers[ply][0];
             self.killers[ply][0] = mv;
         }
+    }
+
+    #[cfg(feature = "stats")]
+    fn record_ordering_statistics(&mut self, statistics: ordering::OrderingStatistics) {
+        self.statistics.see_calls += statistics.see_calls;
+        self.statistics.good_captures += statistics.good_captures;
+        self.statistics.bad_captures += statistics.bad_captures;
     }
 
     fn pv_line(&self, ply: usize) -> Vec<Move> {

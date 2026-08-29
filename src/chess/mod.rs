@@ -20,5 +20,5 @@ pub use perft::{divide, perft};
 pub use piece::Piece;
 pub use position::{CastlingRights, Position};
 pub use square::Square;
-pub use state::UndoState;
+pub use state::{NullUndoState, UndoState};
 pub use types::{Color, PieceType};

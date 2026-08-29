@@ -1,6 +1,6 @@
 use super::{
-    Bitboard, Color, FenError, Move, MoveFlag, MoveList, Piece, PieceType, Square, UndoState,
-    zobrist,
+    Bitboard, Color, FenError, Move, MoveFlag, MoveList, NullUndoState, Piece, PieceType, Square,
+    UndoState, zobrist,
 };
 
 /// Castling flags stored as KQkq bits.
@@ -328,6 +328,29 @@ impl Position {
         self.halfmove_clock = undo.halfmove_clock();
         self.fullmove_number = undo.fullmove_number();
         self.hash = undo.hash();
+        debug_assert_eq!(self.hash, zobrist::recompute(self));
+    }
+
+    /// Pass the turn for a search-only null-move probe. No chess move is
+    /// created and the game clocks, castling rights, and pieces are untouched.
+    pub fn make_null_move(&mut self) -> NullUndoState {
+        let undo = NullUndoState::new(self.en_passant, self.hash);
+        if let Some(square) = self.en_passant {
+            self.hash ^= zobrist::en_passant_key(square.file());
+        }
+        self.en_passant = None;
+        self.side_to_move = self.side_to_move.opposite();
+        self.hash ^= zobrist::side_key();
+
+        debug_assert_eq!(self.hash, zobrist::recompute(self));
+        undo
+    }
+
+    pub fn unmake_null_move(&mut self, undo: NullUndoState) {
+        self.side_to_move = self.side_to_move.opposite();
+        self.en_passant = undo.en_passant();
+        self.hash = undo.hash();
+
         debug_assert_eq!(self.hash, zobrist::recompute(self));
     }
 

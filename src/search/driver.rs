@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::{
-    chess::{Move, Position},
+    chess::{Move, PieceType, Position},
     eval,
 };
 
@@ -21,6 +21,41 @@ pub const MAX_PLY: usize = 128;
 pub const VALUE_DRAW: i32 = 0;
 pub const VALUE_MATE: i32 = 30_000;
 pub const VALUE_INFINITE: i32 = 32_000;
+const NULL_MOVE_MIN_DEPTH: i32 = 4;
+const NULL_MOVE_REDUCTION: i32 = 2;
+
+#[derive(Clone, Copy)]
+struct SearchContext {
+    preferred: Option<Move>,
+    null_allowed: bool,
+    contains_null: bool,
+}
+
+impl SearchContext {
+    const fn normal(preferred: Option<Move>) -> Self {
+        Self {
+            preferred,
+            null_allowed: true,
+            contains_null: false,
+        }
+    }
+
+    const fn after_move(self) -> Self {
+        Self {
+            preferred: None,
+            null_allowed: true,
+            contains_null: self.contains_null,
+        }
+    }
+
+    const fn after_null(self) -> Self {
+        Self {
+            preferred: None,
+            null_allowed: false,
+            contains_null: true,
+        }
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct SearchInfo {
@@ -73,7 +108,10 @@ pub struct SearchStatistics {
     pub aspiration_searches: u64,
     pub see_prunes: u64,
     pub futility_prunes: u64,
+    pub null_move_attempts: u64,
+    pub null_move_fail_highs: u64,
     pub null_move_cutoffs: u64,
+    pub null_move_verifications: u64,
     pub lmr_reductions: u64,
     pub lmr_researches: u64,
 }
@@ -168,7 +206,14 @@ impl<'a> Searcher<'a> {
                 if depth >= 4 {
                     self.statistics.aspiration_searches += 1;
                 }
-                let score = self.negamax(position, depth as i32, 0, alpha, beta, Some(best_move));
+                let score = self.negamax(
+                    position,
+                    depth as i32,
+                    0,
+                    alpha,
+                    beta,
+                    SearchContext::normal(Some(best_move)),
+                );
                 if self.stopped || depth < 4 {
                     break score;
                 }
@@ -273,7 +318,7 @@ impl<'a> Searcher<'a> {
         ply: usize,
         mut alpha: i32,
         beta: i32,
-        preferred: Option<Move>,
+        context: SearchContext,
     ) -> i32 {
         if ply >= MAX_PLY - 1 {
             return eval::evaluate(position);
@@ -284,11 +329,11 @@ impl<'a> Searcher<'a> {
         if self.should_stop() {
             return VALUE_DRAW;
         }
-        if self.is_draw(position) {
+        if !context.contains_null && self.is_draw(position) {
             return VALUE_DRAW;
         }
         if depth <= 0 {
-            return self.qsearch(position, ply, alpha, beta);
+            return self.qsearch(position, ply, alpha, beta, context);
         }
 
         let key = position.hash();
@@ -330,6 +375,45 @@ impl<'a> Searcher<'a> {
         }
 
         let in_check = position.is_in_check(position.side_to_move());
+        let mate_bound = VALUE_MATE - MAX_PLY as i32;
+        if ply != 0
+            && !is_pv_node
+            && context.null_allowed
+            && !context.contains_null
+            && !in_check
+            && depth >= NULL_MOVE_MIN_DEPTH
+            && beta > -mate_bound
+            && beta < mate_bound
+            && has_non_pawn_material(position)
+            && eval::evaluate(position) >= beta
+        {
+            #[cfg(feature = "stats")]
+            {
+                self.statistics.null_move_attempts += 1;
+            }
+            let undo = position.make_null_move();
+            let score = -self.negamax(
+                position,
+                depth - 1 - NULL_MOVE_REDUCTION,
+                ply + 1,
+                -beta,
+                -beta + 1,
+                context.after_null(),
+            );
+            position.unmake_null_move(undo);
+            if self.stopped {
+                return VALUE_DRAW;
+            }
+            if score >= beta {
+                #[cfg(feature = "stats")]
+                {
+                    self.statistics.null_move_fail_highs += 1;
+                    self.statistics.null_move_cutoffs += 1;
+                }
+                return beta;
+            }
+        }
+
         let mut moves = position.legal_moves();
         if moves.is_empty() {
             return if in_check {
@@ -343,7 +427,7 @@ impl<'a> Searcher<'a> {
         let _ordering_statistics = ordering::order(
             position,
             &mut moves,
-            tt_move.or(preferred),
+            tt_move.or(context.preferred),
             self.killers[ply],
             &self.history,
             moving_color,
@@ -370,10 +454,19 @@ impl<'a> Searcher<'a> {
                 && self.history.score(moving_color, mv) < HistoryTable::MAX_SCORE / 4;
             let undo = position.make_move(mv);
             let gives_check = can_reduce && position.is_in_check(position.side_to_move());
-            self.hashes.push(position.hash());
+            if !context.contains_null {
+                self.hashes.push(position.hash());
+            }
             let mut score;
             if move_index == 0 {
-                score = -self.negamax(position, depth - 1, ply + 1, -beta, -alpha, None);
+                score = -self.negamax(
+                    position,
+                    depth - 1,
+                    ply + 1,
+                    -beta,
+                    -alpha,
+                    context.after_move(),
+                );
             } else {
                 #[cfg(feature = "stats")]
                 {
@@ -384,28 +477,57 @@ impl<'a> Searcher<'a> {
                     {
                         self.statistics.lmr_reductions += 1;
                     }
-                    score = -self.negamax(position, depth - 2, ply + 1, -alpha - 1, -alpha, None);
+                    score = -self.negamax(
+                        position,
+                        depth - 2,
+                        ply + 1,
+                        -alpha - 1,
+                        -alpha,
+                        context.after_move(),
+                    );
                     if score > alpha {
                         #[cfg(feature = "stats")]
                         {
                             self.statistics.lmr_researches += 1;
                             self.statistics.pvs_zero_window_searches += 1;
                         }
-                        score =
-                            -self.negamax(position, depth - 1, ply + 1, -alpha - 1, -alpha, None);
+                        score = -self.negamax(
+                            position,
+                            depth - 1,
+                            ply + 1,
+                            -alpha - 1,
+                            -alpha,
+                            context.after_move(),
+                        );
                     }
                 } else {
-                    score = -self.negamax(position, depth - 1, ply + 1, -alpha - 1, -alpha, None);
+                    score = -self.negamax(
+                        position,
+                        depth - 1,
+                        ply + 1,
+                        -alpha - 1,
+                        -alpha,
+                        context.after_move(),
+                    );
                 }
                 if score > alpha && score < beta {
                     #[cfg(feature = "stats")]
                     {
                         self.statistics.pvs_researches += 1;
                     }
-                    score = -self.negamax(position, depth - 1, ply + 1, -beta, -alpha, None);
+                    score = -self.negamax(
+                        position,
+                        depth - 1,
+                        ply + 1,
+                        -beta,
+                        -alpha,
+                        context.after_move(),
+                    );
                 }
             }
-            self.hashes.pop();
+            if !context.contains_null {
+                self.hashes.pop();
+            }
             position.unmake_move(mv, undo);
 
             if self.stopped {
@@ -456,7 +578,14 @@ impl<'a> Searcher<'a> {
         best
     }
 
-    fn qsearch(&mut self, position: &mut Position, ply: usize, mut alpha: i32, beta: i32) -> i32 {
+    fn qsearch(
+        &mut self,
+        position: &mut Position,
+        ply: usize,
+        mut alpha: i32,
+        beta: i32,
+        context: SearchContext,
+    ) -> i32 {
         if ply >= MAX_PLY - 1 {
             return eval::evaluate(position);
         }
@@ -467,7 +596,7 @@ impl<'a> Searcher<'a> {
         if self.should_stop() {
             return VALUE_DRAW;
         }
-        if self.is_draw(position) {
+        if !context.contains_null && self.is_draw(position) {
             return VALUE_DRAW;
         }
 
@@ -514,9 +643,13 @@ impl<'a> Searcher<'a> {
                 continue;
             }
             let undo = position.make_move(mv);
-            self.hashes.push(position.hash());
-            let score = -self.qsearch(position, ply + 1, -beta, -alpha);
-            self.hashes.pop();
+            if !context.contains_null {
+                self.hashes.push(position.hash());
+            }
+            let score = -self.qsearch(position, ply + 1, -beta, -alpha, context.after_move());
+            if !context.contains_null {
+                self.hashes.pop();
+            }
             position.unmake_move(mv, undo);
 
             if self.stopped {
@@ -607,10 +740,20 @@ impl<'a> Searcher<'a> {
     }
 }
 
+fn has_non_pawn_material(position: &Position) -> bool {
+    let color = position.side_to_move();
+    position.pieces(color, PieceType::Knight)
+        | position.pieces(color, PieceType::Bishop)
+        | position.pieces(color, PieceType::Rook)
+        | position.pieces(color, PieceType::Queen)
+        != 0
+}
+
 #[cfg(all(test, feature = "stats"))]
 mod tests {
     use std::sync::atomic::AtomicBool;
 
+    use super::SearchContext;
     use crate::{
         chess::Position,
         search::{SearchLimits, Searcher, VALUE_INFINITE},
@@ -630,9 +773,57 @@ mod tests {
         let hashes = [position.hash()];
         searcher.reset(&position, &SearchLimits::depth(1), &hashes);
 
-        let _ = searcher.qsearch(&mut position, 0, -VALUE_INFINITE, VALUE_INFINITE);
+        let _ = searcher.qsearch(
+            &mut position,
+            0,
+            -VALUE_INFINITE,
+            VALUE_INFINITE,
+            SearchContext::normal(None),
+        );
 
         assert!(searcher.statistics.bad_captures > 0);
         assert_eq!(searcher.statistics.see_prunes, 0);
+    }
+
+    #[test]
+    fn null_move_pruning_never_runs_while_in_check() {
+        let mut position = Position::from_fen("k5r1/8/8/8/8/7q/4Q1r1/6K1 w - - 0 1")
+            .expect("in-check NMP fixture must be valid");
+        assert!(position.is_in_check(position.side_to_move()));
+        let stop = AtomicBool::new(false);
+        let mut searcher = Searcher::new(&stop);
+        let hashes = [position.hash()];
+        searcher.reset(&position, &SearchLimits::depth(4), &hashes);
+
+        let _ = searcher.negamax(
+            &mut position,
+            4,
+            1,
+            -1_000,
+            -999,
+            SearchContext::normal(None),
+        );
+
+        assert_eq!(searcher.statistics.null_move_attempts, 0);
+    }
+
+    #[test]
+    fn null_move_pruning_never_nests_inside_a_null_search() {
+        let mut position = Position::startpos();
+        let stop = AtomicBool::new(false);
+        let mut searcher = Searcher::new(&stop);
+        let hashes = [position.hash()];
+        searcher.reset(&position, &SearchLimits::depth(4), &hashes);
+
+        let _ = searcher.negamax(
+            &mut position,
+            4,
+            1,
+            -1_000,
+            -999,
+            SearchContext::normal(None).after_null(),
+        );
+
+        assert_eq!(searcher.statistics.null_move_attempts, 0);
     }
 }

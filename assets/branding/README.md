@@ -13,5 +13,8 @@ The warm amber and midnight-navy palette is designed for strong contrast in dark
 - `neyrang-logo.png`: 1254 px transparent master
 - `neyrang-logo-512.png`: general application and repository artwork
 - `neyrang-logo-60.png`: En Croissant engine-list icon
+- `neyrang-logo-v2-bw.png`: refined black-and-white master based on the geometric star concept
+- `neyrang-logo-v2-bw-512.png`: general-use black-and-white artwork
+- `neyrang-logo-v2-bw-60.png`: black-and-white En Croissant icon
 
 Keep clear space around the outer star points. Do not stretch, rotate, add shadows, or place the mark over a similarly colored background.

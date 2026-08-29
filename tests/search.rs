@@ -153,8 +153,6 @@ fn capture_ordering_reports_see_and_cutoff_statistics() {
     let result = searcher.search(&mut position, &SearchLimits::depth(4), &hashes, |_| {});
 
     assert!(result.statistics.see_calls > 0);
-    assert!(result.statistics.see_ge_calls > 0);
-    assert!(result.statistics.total_see_exchange_steps() > 0);
     assert!(result.statistics.good_captures > 0);
     assert!(result.statistics.bad_captures > 0);
     assert!(result.statistics.tt_move_searches > 0);
@@ -165,12 +163,8 @@ fn capture_ordering_reports_see_and_cutoff_statistics() {
     assert!(result.statistics.moves_scored >= result.statistics.scored_moves_searched);
     assert!(result.statistics.scored_moves_searched <= result.statistics.moves_searched);
     assert!(result.statistics.moves_scored_unused() > 0);
-    assert!(
-        result.statistics.see_calls + result.statistics.see_ge_calls
-            >= result.statistics.see_scored_moves_searched
-    );
+    assert!(result.statistics.see_calls >= result.statistics.see_scored_moves_searched);
     assert!(result.statistics.see_scored_moves_unused() > 0);
-    assert!(result.statistics.tactical_candidates_untested > 0);
     assert!(result.statistics.picker_tt_stage_visits > 0);
     assert!(result.statistics.picker_good_tactical_stage_visits > 0);
     assert!(

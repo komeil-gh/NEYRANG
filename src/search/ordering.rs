@@ -1,10 +1,6 @@
 use crate::chess::{Color, Move, MoveList, PieceType, Position};
 
-use super::history::HistoryTable;
-#[cfg(not(feature = "stats"))]
-use super::see::{see, see_ge};
-#[cfg(feature = "stats")]
-use super::see::{see_ge_with_work, see_with_work};
+use super::{history::HistoryTable, see::see};
 
 const PIECE_VALUE: [i32; 6] = [100, 320, 330, 500, 900, 20_000];
 const GOOD_TACTICAL_SCORE: i32 = 200_000;
@@ -13,7 +9,6 @@ const BAD_CAPTURE_SCORE: i32 = -100_000;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum MoveClass {
     Unclassified,
-    TacticalCandidate,
     GoodTactical,
     Killer,
     Quiet,
@@ -41,16 +36,6 @@ pub(crate) struct OrderingStatistics {
     #[cfg(feature = "stats")]
     pub see_calls: u64,
     #[cfg(feature = "stats")]
-    pub see_exchange_steps: u64,
-    #[cfg(feature = "stats")]
-    pub see_ge_calls: u64,
-    #[cfg(feature = "stats")]
-    pub see_ge_early_exits: u64,
-    #[cfg(feature = "stats")]
-    pub see_ge_exchange_steps: u64,
-    #[cfg(feature = "stats")]
-    pub tactical_candidates_untested: u64,
-    #[cfg(feature = "stats")]
     pub good_captures: u64,
     #[cfg(feature = "stats")]
     pub bad_captures: u64,
@@ -76,12 +61,9 @@ pub(crate) struct MovePicker {
     killers: [Move; 2],
     color: Color,
     tactical_only: bool,
-    lazy_tacticals: bool,
     stage: Stage,
     stage_initialized: bool,
     last_move_was_scored: bool,
-    #[cfg(any(feature = "stats", test))]
-    last_move_was_see_tested: bool,
     statistics: OrderingStatistics,
 }
 
@@ -92,7 +74,7 @@ impl MovePicker {
         killers: [Move; 2],
         color: Color,
     ) -> Self {
-        Self::new(moves, preferred, killers, color, false, true)
+        Self::new(moves, preferred, killers, color, false)
     }
 
     pub(crate) fn quiescence(
@@ -101,7 +83,7 @@ impl MovePicker {
         killers: [Move; 2],
         color: Color,
     ) -> Self {
-        Self::new(moves, None, killers, color, !in_check, false)
+        Self::new(moves, None, killers, color, !in_check)
     }
 
     fn new(
@@ -110,7 +92,6 @@ impl MovePicker {
         killers: [Move; 2],
         color: Color,
         tactical_only: bool,
-        lazy_tacticals: bool,
     ) -> Self {
         Self {
             moves,
@@ -120,12 +101,9 @@ impl MovePicker {
             killers,
             color,
             tactical_only,
-            lazy_tacticals,
             stage: Stage::Preferred,
             stage_initialized: false,
             last_move_was_scored: false,
-            #[cfg(any(feature = "stats", test))]
-            last_move_was_see_tested: false,
             statistics: OrderingStatistics::default(),
         }
     }
@@ -136,10 +114,6 @@ impl MovePicker {
         history: &HistoryTable,
     ) -> Option<Move> {
         self.last_move_was_scored = false;
-        #[cfg(any(feature = "stats", test))]
-        {
-            self.last_move_was_see_tested = false;
-        }
         loop {
             match self.stage {
                 Stage::Preferred => {
@@ -165,25 +139,11 @@ impl MovePicker {
                         {
                             self.statistics.good_tactical_stage_visits += 1;
                         }
-                        if self.lazy_tacticals {
-                            self.classify_tactical_candidates(position);
-                        } else {
-                            self.classify_tacticals_exact(position);
-                        }
+                        self.classify_tacticals(position);
                         self.stage_initialized = true;
                     }
-                    let picked = if self.lazy_tacticals {
-                        self.pick_next_good_tactical(position)
-                    } else {
-                        self.pick_best(MoveClass::GoodTactical)
-                    };
-                    if let Some(mv) = picked {
+                    if let Some(mv) = self.pick_best(MoveClass::GoodTactical) {
                         self.last_move_was_scored = true;
-                        #[cfg(any(feature = "stats", test))]
-                        {
-                            self.last_move_was_see_tested =
-                                !self.lazy_tacticals || !mv.is_promotion();
-                        }
                         return Some(mv);
                     }
                     self.advance(if self.tactical_only {
@@ -232,10 +192,6 @@ impl MovePicker {
                     }
                     if let Some(mv) = self.pick_best(MoveClass::BadTactical) {
                         self.last_move_was_scored = true;
-                        #[cfg(any(feature = "stats", test))]
-                        {
-                            self.last_move_was_see_tested = true;
-                        }
                         return Some(mv);
                     }
                     self.advance(Stage::Done);
@@ -253,36 +209,14 @@ impl MovePicker {
 
     #[inline]
     #[cfg(any(feature = "stats", test))]
-    pub(crate) const fn last_move_was_see_tested(&self) -> bool {
-        self.last_move_was_see_tested
-    }
-
-    #[inline]
-    #[cfg(any(feature = "stats", test))]
     pub(crate) const fn bad_tactical_count(&self) -> usize {
         self.statistics.bad_capture_count
     }
 
     #[inline]
     #[cfg(any(feature = "stats", test))]
-    pub(crate) fn statistics(&self) -> OrderingStatistics {
-        let mut statistics = self.statistics;
-        #[cfg(feature = "stats")]
-        if self.lazy_tacticals {
-            statistics.tactical_candidates_untested = self
-                .moves
-                .iter()
-                .enumerate()
-                .filter(|&(index, mv)| {
-                    (mv.is_capture() || mv.is_promotion())
-                        && matches!(
-                            self.classes[index],
-                            MoveClass::Unclassified | MoveClass::TacticalCandidate
-                        )
-                })
-                .count() as u64;
-        }
-        statistics
+    pub(crate) const fn statistics(&self) -> OrderingStatistics {
+        self.statistics
     }
 
     fn advance(&mut self, stage: Stage) {
@@ -298,14 +232,14 @@ impl MovePicker {
             .map(|(index, _)| index)
     }
 
-    fn classify_tacticals_exact(&mut self, position: &Position) {
+    fn classify_tacticals(&mut self, position: &Position) {
         for (index, &mv) in self.moves.iter().enumerate() {
             if self.classes[index] != MoveClass::Unclassified
                 || (!mv.is_capture() && !mv.is_promotion())
             {
                 continue;
             }
-            let (score, is_good) = tactical_score_exact(position, mv, &mut self.statistics);
+            let (score, is_good) = tactical_score(position, mv, &mut self.statistics);
             self.scores[index] = score;
             self.classes[index] = if is_good {
                 MoveClass::GoodTactical
@@ -313,40 +247,6 @@ impl MovePicker {
                 self.statistics.bad_capture_count += 1;
                 MoveClass::BadTactical
             };
-        }
-    }
-
-    fn classify_tactical_candidates(&mut self, position: &Position) {
-        for (index, &mv) in self.moves.iter().enumerate() {
-            if self.classes[index] != MoveClass::Unclassified
-                || (!mv.is_capture() && !mv.is_promotion())
-            {
-                continue;
-            }
-            self.scores[index] = tactical_score_cheap(position, mv, &mut self.statistics);
-            self.classes[index] = MoveClass::TacticalCandidate;
-        }
-    }
-
-    fn pick_next_good_tactical(&mut self, position: &Position) -> Option<Move> {
-        loop {
-            let index = self.best_index(MoveClass::TacticalCandidate)?;
-            let mv = self.moves.as_slice()[index];
-            if mv.is_promotion() || threshold_see(position, mv, 0, &mut self.statistics) {
-                self.classes[index] = MoveClass::Taken;
-                #[cfg(feature = "stats")]
-                if mv.is_capture() {
-                    self.statistics.good_captures += 1;
-                }
-                return Some(mv);
-            }
-
-            self.classes[index] = MoveClass::BadTactical;
-            self.statistics.bad_capture_count += 1;
-            #[cfg(feature = "stats")]
-            {
-                self.statistics.bad_captures += 1;
-            }
         }
     }
 
@@ -379,12 +279,6 @@ impl MovePicker {
     }
 
     fn pick_best(&mut self, class: MoveClass) -> Option<Move> {
-        let index = self.best_index(class)?;
-        self.classes[index] = MoveClass::Taken;
-        Some(self.moves.as_slice()[index])
-    }
-
-    fn best_index(&self, class: MoveClass) -> Option<usize> {
         let mut best_index = None;
         let mut best_score = i32::MIN;
         for index in 0..self.moves.len() {
@@ -395,11 +289,13 @@ impl MovePicker {
                 best_score = self.scores[index];
             }
         }
-        best_index
+        let index = best_index?;
+        self.classes[index] = MoveClass::Taken;
+        Some(self.moves.as_slice()[index])
     }
 }
 
-fn tactical_score_exact(
+fn tactical_score(
     position: &Position,
     mv: Move,
     _statistics: &mut OrderingStatistics,
@@ -409,43 +305,7 @@ fn tactical_score_exact(
         _statistics.moves_scored += 1;
         _statistics.see_calls += 1;
     }
-    #[cfg(feature = "stats")]
-    let exchange = {
-        let (exchange, work) = see_with_work(position, mv);
-        _statistics.see_exchange_steps += work.exchange_steps;
-        exchange
-    };
-    #[cfg(not(feature = "stats"))]
     let exchange = see(position, mv);
-    let cheap_score = tactical_score_components(position, mv);
-    if mv.is_promotion() || exchange >= 0 {
-        #[cfg(feature = "stats")]
-        if mv.is_capture() {
-            _statistics.good_captures += 1;
-        }
-        (GOOD_TACTICAL_SCORE + cheap_score + exchange, true)
-    } else {
-        #[cfg(feature = "stats")]
-        {
-            _statistics.bad_captures += 1;
-        }
-        (BAD_CAPTURE_SCORE + cheap_score + exchange, false)
-    }
-}
-
-fn tactical_score_cheap(
-    position: &Position,
-    mv: Move,
-    _statistics: &mut OrderingStatistics,
-) -> i32 {
-    #[cfg(feature = "stats")]
-    {
-        _statistics.moves_scored += 1;
-    }
-    tactical_score_components(position, mv)
-}
-
-fn tactical_score_components(position: &Position, mv: Move) -> i32 {
     let promotion_bonus = mv
         .promotion()
         .map_or(0, |promotion| PIECE_VALUE[promotion.index()] * 16);
@@ -464,26 +324,21 @@ fn tactical_score_components(position: &Position, mv: Move) -> i32 {
     } else {
         0
     };
-    promotion_bonus + mvv_lva
-}
-
-fn threshold_see(
-    position: &Position,
-    mv: Move,
-    threshold: i32,
-    _statistics: &mut OrderingStatistics,
-) -> bool {
-    #[cfg(feature = "stats")]
-    {
-        _statistics.see_ge_calls += 1;
-        let (passes, work) = see_ge_with_work(position, mv, threshold);
-        _statistics.see_ge_exchange_steps += work.exchange_steps;
-        _statistics.see_ge_early_exits += u64::from(work.early_exit);
-        passes
-    }
-    #[cfg(not(feature = "stats"))]
-    {
-        see_ge(position, mv, threshold)
+    if mv.is_promotion() || exchange >= 0 {
+        #[cfg(feature = "stats")]
+        if mv.is_capture() {
+            _statistics.good_captures += 1;
+        }
+        (
+            GOOD_TACTICAL_SCORE + promotion_bonus + mvv_lva + exchange,
+            true,
+        )
+    } else {
+        #[cfg(feature = "stats")]
+        {
+            _statistics.bad_captures += 1;
+        }
+        (BAD_CAPTURE_SCORE + mvv_lva + exchange, false)
     }
 }
 
@@ -507,10 +362,7 @@ mod tests {
         search::see,
     };
 
-    use super::{
-        HistoryTable, MovePicker, OrderingStatistics, quiet_score, tactical_score_cheap,
-        tactical_score_exact,
-    };
+    use super::{HistoryTable, MovePicker, OrderingStatistics, quiet_score, tactical_score};
 
     fn collect(picker: &mut MovePicker, position: &Position, history: &HistoryTable) -> Vec<Move> {
         let mut picked = Vec::new();
@@ -568,8 +420,7 @@ mod tests {
         }
         #[cfg(feature = "stats")]
         {
-            assert_eq!(picker.statistics().see_calls, 0);
-            assert_eq!(picker.statistics().see_ge_calls, 3);
+            assert_eq!(picker.statistics().see_calls, 3);
             assert_eq!(picker.statistics().good_captures, 2);
             assert_eq!(picker.statistics().bad_captures, 1);
             assert_eq!(picker.statistics().full_sorts, 0);
@@ -598,8 +449,6 @@ mod tests {
             let statistics = picker.statistics();
             assert_eq!(statistics.moves_scored, 0);
             assert_eq!(statistics.see_calls, 0);
-            assert_eq!(statistics.see_ge_calls, 0);
-            assert!(statistics.tactical_candidates_untested > 0);
             assert_eq!(statistics.tt_stage_visits, 1);
             assert_eq!(statistics.good_tactical_stage_visits, 0);
         }
@@ -607,32 +456,7 @@ mod tests {
         let rest = collect(&mut picker, &position, &history);
         assert!(!rest.contains(&preferred));
         #[cfg(feature = "stats")]
-        assert!(picker.statistics().see_ge_calls > 0);
-    }
-
-    #[cfg(feature = "stats")]
-    #[test]
-    fn lazy_main_picker_tests_only_the_candidate_it_is_about_to_return() {
-        let mut position = Position::from_fen("6k1/8/5p2/3qp3/2P1Q3/8/8/6K1 w - - 0 1")
-            .expect("lazy ordering fixture must be valid");
-        let history = HistoryTable::default();
-        let mut picker = MovePicker::main(
-            position.legal_moves(),
-            None,
-            [Move::NONE; 2],
-            position.side_to_move(),
-        );
-
-        let first = picker
-            .next_move(&position, &history)
-            .expect("fixture has a good tactical move");
-        let statistics = picker.statistics();
-
-        assert!(first.is_capture() || first.is_promotion());
-        assert!(picker.last_move_was_see_tested());
-        assert_eq!(statistics.see_calls, 0);
-        assert_eq!(statistics.see_ge_calls, 1);
-        assert!(statistics.tactical_candidates_untested > 0);
+        assert!(picker.statistics().see_calls > 0);
     }
 
     #[test]
@@ -643,38 +467,20 @@ mod tests {
             .find_legal_move("e4e5")
             .expect("losing capture must be legal");
         let history = HistoryTable::default();
-        let legal = position.legal_moves();
-        let mut expected_statistics = OrderingStatistics::default();
-        let mut expected = legal
-            .iter()
-            .copied()
-            .filter(|&mv| {
-                (mv.is_capture() || mv.is_promotion())
-                    && (mv.is_promotion() || see(&position, mv) >= 0)
-            })
-            .map(|mv| {
-                let score = tactical_score_exact(&position, mv, &mut expected_statistics).0;
-                (mv, score)
-            })
-            .collect::<Vec<_>>();
-        expected.sort_by_key(|&(_, score)| std::cmp::Reverse(score));
-        let expected = expected.into_iter().map(|(mv, _)| mv).collect::<Vec<_>>();
-        let mut picker =
-            MovePicker::quiescence(legal, false, [Move::NONE; 2], position.side_to_move());
+        let mut picker = MovePicker::quiescence(
+            position.legal_moves(),
+            false,
+            [Move::NONE; 2],
+            position.side_to_move(),
+        );
 
         let picked = collect(&mut picker, &position, &history);
 
         assert!(!picked.contains(&bad_capture));
-        assert_eq!(picked, expected);
         assert_eq!(picker.bad_tactical_count(), 1);
         assert!(picked.iter().all(|&mv| {
             (mv.is_capture() || mv.is_promotion()) && (mv.is_promotion() || see(&position, mv) >= 0)
         }));
-        #[cfg(feature = "stats")]
-        {
-            assert!(picker.statistics().see_calls > 0);
-            assert_eq!(picker.statistics().see_ge_calls, 0);
-        }
     }
 
     #[test]
@@ -736,53 +542,25 @@ mod tests {
 
             assert_eq!(picked.len(), legal.len(), "sample {sample}");
             assert_eq!(picked[0], preferred, "sample {sample}");
-            let stage_rank = |mv: Move| {
-                if mv == preferred {
-                    5
-                } else if mv.is_capture() || mv.is_promotion() {
-                    if mv.is_promotion() || see(&position, mv) >= 0 {
-                        4
+            let mut score_statistics = OrderingStatistics::default();
+            let ordered_scores = picked
+                .iter()
+                .map(|&mv| {
+                    if mv == preferred {
+                        1_000_000
+                    } else if mv.is_capture() || mv.is_promotion() {
+                        tactical_score(&position, mv, &mut score_statistics).0
                     } else {
-                        1
+                        quiet_score(mv, killers, &history, position.side_to_move())
                     }
-                } else if killers.contains(&mv) {
-                    3
-                } else {
-                    2
-                }
-            };
-            let ranks = picked.iter().copied().map(stage_rank).collect::<Vec<_>>();
+                })
+                .collect::<Vec<_>>();
             assert!(
-                ranks.windows(2).all(|ranks| ranks[0] >= ranks[1]),
-                "stage inversion at sample {sample}: {ranks:?}"
+                ordered_scores
+                    .windows(2)
+                    .all(|scores| scores[0] >= scores[1]),
+                "legacy score inversion at sample {sample}: {ordered_scores:?}"
             );
-            for rank in [4, 1] {
-                let mut score_statistics = OrderingStatistics::default();
-                let tactical_scores = picked
-                    .iter()
-                    .copied()
-                    .filter(|&mv| stage_rank(mv) == rank)
-                    .map(|mv| tactical_score_cheap(&position, mv, &mut score_statistics))
-                    .collect::<Vec<_>>();
-                assert!(
-                    tactical_scores
-                        .windows(2)
-                        .all(|scores| scores[0] >= scores[1]),
-                    "cheap tactical score inversion at sample {sample}: {tactical_scores:?}"
-                );
-            }
-            for rank in [3, 2] {
-                let quiet_scores = picked
-                    .iter()
-                    .copied()
-                    .filter(|&mv| stage_rank(mv) == rank)
-                    .map(|mv| quiet_score(mv, killers, &history, position.side_to_move()))
-                    .collect::<Vec<_>>();
-                assert!(
-                    quiet_scores.windows(2).all(|scores| scores[0] >= scores[1]),
-                    "quiet score inversion at sample {sample}: {quiet_scores:?}"
-                );
-            }
             for &mv in legal.iter() {
                 assert_eq!(
                     picked.iter().filter(|&&candidate| candidate == mv).count(),

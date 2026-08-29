@@ -111,42 +111,6 @@ fn print_benchmark_statistics(statistics: neyrang::search::SearchStatistics) {
         statistics.first_move_beta_cutoffs
     );
     println!(
-        "stats.beta_cutoff_searched_moves: {}",
-        statistics.beta_cutoff_searched_moves
-    );
-    println!(
-        "stats.capture_beta_cutoffs: {}",
-        statistics.capture_beta_cutoffs
-    );
-    println!(
-        "stats.capture_history_probes: {}",
-        statistics.capture_history_probes
-    );
-    println!(
-        "stats.capture_history_nonzero_probes: {}",
-        statistics.capture_history_nonzero_probes
-    );
-    println!(
-        "stats.capture_history_reorderings: {}",
-        statistics.capture_history_reorderings
-    );
-    println!(
-        "stats.capture_history_reward_updates: {}",
-        statistics.capture_history_reward_updates
-    );
-    println!(
-        "stats.capture_history_malus_updates: {}",
-        statistics.capture_history_malus_updates
-    );
-    println!(
-        "stats.capture_history_distribution: {:?}",
-        statistics.capture_history_distribution
-    );
-    println!(
-        "stats.capture_history_saturated: {}",
-        statistics.capture_history_saturated
-    );
-    println!(
         "stats.picker_tt_stage_visits: {}",
         statistics.picker_tt_stage_visits
     );

@@ -1,6 +1,10 @@
 use crate::chess::{Color, Move, MoveList, PieceType, Position};
 
-use super::{history::HistoryTable, see::see};
+use super::{
+    continuation_history::{ContinuationContext, ContinuationHistory},
+    history::HistoryTable,
+    see::see,
+};
 
 const PIECE_VALUE: [i32; 6] = [100, 320, 330, 500, 900, 20_000];
 const GOOD_TACTICAL_SCORE: i32 = 200_000;
@@ -49,6 +53,12 @@ pub(crate) struct OrderingStatistics {
     pub quiet_stage_visits: u64,
     #[cfg(feature = "stats")]
     pub bad_tactical_stage_visits: u64,
+    #[cfg(feature = "stats")]
+    pub continuation_probes: u64,
+    #[cfg(feature = "stats")]
+    pub continuation_nonzero_probes: u64,
+    #[cfg(feature = "stats")]
+    pub continuation_reorderings: u64,
 }
 
 /// Fixed-storage staged move delivery. Tactical moves retain NEYRANG's exact SEE
@@ -60,6 +70,7 @@ pub(crate) struct MovePicker {
     preferred: Option<Move>,
     killers: [Move; 2],
     color: Color,
+    previous_context: Option<ContinuationContext>,
     tactical_only: bool,
     stage: Stage,
     stage_initialized: bool,
@@ -73,8 +84,9 @@ impl MovePicker {
         preferred: Option<Move>,
         killers: [Move; 2],
         color: Color,
+        previous_context: Option<ContinuationContext>,
     ) -> Self {
-        Self::new(moves, preferred, killers, color, false)
+        Self::new(moves, preferred, killers, color, previous_context, false)
     }
 
     pub(crate) fn quiescence(
@@ -83,7 +95,7 @@ impl MovePicker {
         killers: [Move; 2],
         color: Color,
     ) -> Self {
-        Self::new(moves, None, killers, color, !in_check)
+        Self::new(moves, None, killers, color, None, !in_check)
     }
 
     fn new(
@@ -91,6 +103,7 @@ impl MovePicker {
         preferred: Option<Move>,
         killers: [Move; 2],
         color: Color,
+        previous_context: Option<ContinuationContext>,
         tactical_only: bool,
     ) -> Self {
         Self {
@@ -100,6 +113,7 @@ impl MovePicker {
             preferred,
             killers,
             color,
+            previous_context,
             tactical_only,
             stage: Stage::Preferred,
             stage_initialized: false,
@@ -112,6 +126,7 @@ impl MovePicker {
         &mut self,
         position: &Position,
         history: &HistoryTable,
+        continuation_history: &ContinuationHistory,
     ) -> Option<Move> {
         self.last_move_was_scored = false;
         loop {
@@ -158,7 +173,7 @@ impl MovePicker {
                         {
                             self.statistics.killer_stage_visits += 1;
                         }
-                        self.classify_killers(history);
+                        self.classify_killers(position, history, continuation_history);
                         self.stage_initialized = true;
                     }
                     if let Some(mv) = self.pick_best(MoveClass::Killer) {
@@ -173,7 +188,7 @@ impl MovePicker {
                         {
                             self.statistics.quiet_stage_visits += 1;
                         }
-                        self.classify_quiets(history);
+                        self.classify_quiets(position, history, continuation_history);
                         self.stage_initialized = true;
                     }
                     if let Some(mv) = self.pick_best(MoveClass::Quiet) {
@@ -250,32 +265,105 @@ impl MovePicker {
         }
     }
 
-    fn classify_killers(&mut self, history: &HistoryTable) {
+    fn classify_killers(
+        &mut self,
+        position: &Position,
+        history: &HistoryTable,
+        continuation_history: &ContinuationHistory,
+    ) {
+        #[cfg(feature = "stats")]
+        let mut parent_scores = [i32::MIN; MoveList::CAPACITY];
+        let previous_context = self.previous_context;
         for (index, &mv) in self.moves.iter().enumerate() {
             if self.classes[index] != MoveClass::Unclassified || !self.killers.contains(&mv) {
                 continue;
             }
-            self.scores[index] = quiet_score(mv, self.killers, history, self.color);
+            #[cfg(feature = "stats")]
+            let parent_score = quiet_score(mv, self.killers, history, self.color, 0);
+            let continuation_score = continuation_score(
+                previous_context,
+                position,
+                mv,
+                continuation_history,
+                &mut self.statistics,
+            );
+            self.scores[index] =
+                quiet_score(mv, self.killers, history, self.color, continuation_score);
             self.classes[index] = MoveClass::Killer;
             #[cfg(feature = "stats")]
             {
+                parent_scores[index] = parent_score;
                 self.statistics.moves_scored += 1;
             }
         }
+        #[cfg(feature = "stats")]
+        {
+            self.statistics.continuation_reorderings +=
+                self.pairwise_reorderings(MoveClass::Killer, &parent_scores);
+        }
     }
 
-    fn classify_quiets(&mut self, history: &HistoryTable) {
+    fn classify_quiets(
+        &mut self,
+        position: &Position,
+        history: &HistoryTable,
+        continuation_history: &ContinuationHistory,
+    ) {
+        #[cfg(feature = "stats")]
+        let mut parent_scores = [i32::MIN; MoveList::CAPACITY];
+        let previous_context = self.previous_context;
         for (index, &mv) in self.moves.iter().enumerate() {
             if self.classes[index] != MoveClass::Unclassified {
                 continue;
             }
-            self.scores[index] = quiet_score(mv, self.killers, history, self.color);
+            #[cfg(feature = "stats")]
+            let parent_score = quiet_score(mv, self.killers, history, self.color, 0);
+            let continuation_score = continuation_score(
+                previous_context,
+                position,
+                mv,
+                continuation_history,
+                &mut self.statistics,
+            );
+            self.scores[index] =
+                quiet_score(mv, self.killers, history, self.color, continuation_score);
             self.classes[index] = MoveClass::Quiet;
             #[cfg(feature = "stats")]
             {
+                parent_scores[index] = parent_score;
                 self.statistics.moves_scored += 1;
             }
         }
+        #[cfg(feature = "stats")]
+        {
+            self.statistics.continuation_reorderings +=
+                self.pairwise_reorderings(MoveClass::Quiet, &parent_scores);
+        }
+    }
+
+    #[cfg(feature = "stats")]
+    fn pairwise_reorderings(
+        &self,
+        class: MoveClass,
+        parent_scores: &[i32; MoveList::CAPACITY],
+    ) -> u64 {
+        let mut reorderings = 0_u64;
+        for first in 0..self.moves.len() {
+            if self.classes[first] != class {
+                continue;
+            }
+            for second in first + 1..self.moves.len() {
+                if self.classes[second] != class {
+                    continue;
+                }
+                let parent_prefers_first = parent_scores[first] >= parent_scores[second];
+                let candidate_prefers_first = self.scores[first] >= self.scores[second];
+                if parent_prefers_first != candidate_prefers_first {
+                    reorderings += 1;
+                }
+            }
+        }
+        reorderings
     }
 
     fn pick_best(&mut self, class: MoveClass) -> Option<Move> {
@@ -342,7 +430,13 @@ fn tactical_score(
     }
 }
 
-fn quiet_score(mv: Move, killers: [Move; 2], history: &HistoryTable, color: Color) -> i32 {
+fn quiet_score(
+    mv: Move,
+    killers: [Move; 2],
+    history: &HistoryTable,
+    color: Color,
+    continuation_score: i32,
+) -> i32 {
     let mut score = 0;
     if mv.is_castle() {
         score += 500;
@@ -352,21 +446,51 @@ fn quiet_score(mv: Move, killers: [Move; 2], history: &HistoryTable, color: Colo
     } else if killers[1] == mv {
         score += 80_000;
     }
-    score + history.score(color, mv)
+    score + history.score(color, mv) + continuation_score / 2
+}
+
+fn continuation_score(
+    previous: Option<ContinuationContext>,
+    position: &Position,
+    mv: Move,
+    continuation_history: &ContinuationHistory,
+    _statistics: &mut OrderingStatistics,
+) -> i32 {
+    let Some(previous) = previous else {
+        return 0;
+    };
+    let current = ContinuationContext::from_move(position, mv);
+    let score = continuation_history.score(Some(previous), current);
+    #[cfg(feature = "stats")]
+    {
+        _statistics.continuation_probes += 1;
+        if score != 0 {
+            _statistics.continuation_nonzero_probes += 1;
+        }
+    }
+    score
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{
-        chess::{Move, Position},
-        search::see,
+        chess::{Color, Move, PieceType, Position, Square},
+        search::{
+            continuation_history::{ContinuationContext, ContinuationHistory},
+            see,
+        },
     };
 
     use super::{HistoryTable, MovePicker, OrderingStatistics, quiet_score, tactical_score};
 
-    fn collect(picker: &mut MovePicker, position: &Position, history: &HistoryTable) -> Vec<Move> {
+    fn collect(
+        picker: &mut MovePicker,
+        position: &Position,
+        history: &HistoryTable,
+        continuation_history: &ContinuationHistory,
+    ) -> Vec<Move> {
         let mut picked = Vec::new();
-        while let Some(mv) = picker.next_move(position, history) {
+        while let Some(mv) = picker.next_move(position, history, continuation_history) {
             picked.push(mv);
         }
         picked
@@ -400,14 +524,23 @@ mod tests {
             .expect("ordinary quiet move must be legal");
         let legal = position.legal_moves();
         let history = HistoryTable::default();
+        let previous = ContinuationContext::new(Color::Black, PieceType::Knight, Square::F6);
+        let mut continuation_history = ContinuationHistory::default();
+        let killer_context = ContinuationContext::from_move(&position, killer);
+        let quiet_context = ContinuationContext::from_move(&position, quiet);
+        for _ in 0..10_000 {
+            continuation_history.penalize(previous, killer_context, 16);
+            continuation_history.reward(previous, quiet_context, 16);
+        }
         let mut picker = MovePicker::main(
             legal.clone(),
             Some(preferred),
             [killer, Move::NONE],
             position.side_to_move(),
+            Some(previous),
         );
 
-        let picked = collect(&mut picker, &position, &history);
+        let picked = collect(&mut picker, &position, &history, &continuation_history);
 
         assert_eq!(picked.len(), legal.len());
         assert_eq!(picked[0], preferred);
@@ -435,14 +568,19 @@ mod tests {
             .find_legal_move("e4d3")
             .expect("preferred move must be legal");
         let history = HistoryTable::default();
+        let continuation_history = ContinuationHistory::default();
         let mut picker = MovePicker::main(
             position.legal_moves(),
             Some(preferred),
             [preferred, preferred],
             position.side_to_move(),
+            None,
         );
 
-        assert_eq!(picker.next_move(&position, &history), Some(preferred));
+        assert_eq!(
+            picker.next_move(&position, &history, &continuation_history),
+            Some(preferred)
+        );
         assert!(!picker.last_move_was_scored());
         #[cfg(feature = "stats")]
         {
@@ -453,10 +591,50 @@ mod tests {
             assert_eq!(statistics.good_tactical_stage_visits, 0);
         }
 
-        let rest = collect(&mut picker, &position, &history);
+        let rest = collect(&mut picker, &position, &history, &continuation_history);
         assert!(!rest.contains(&preferred));
         #[cfg(feature = "stats")]
         assert!(picker.statistics().see_calls > 0);
+    }
+
+    #[test]
+    fn continuation_reorders_moves_only_inside_the_quiet_stage() {
+        let mut position = Position::startpos();
+        let legal = position.legal_moves();
+        let quiets = legal
+            .iter()
+            .copied()
+            .filter(|mv| !mv.is_capture() && !mv.is_promotion())
+            .collect::<Vec<_>>();
+        let parent_first = quiets[0];
+        let boosted_reply = quiets[1];
+        let previous = ContinuationContext::new(Color::Black, PieceType::Knight, Square::F6);
+        let parent_first_context = ContinuationContext::from_move(&position, parent_first);
+        let boosted_context = ContinuationContext::from_move(&position, boosted_reply);
+        let mut continuation_history = ContinuationHistory::default();
+        for _ in 0..10_000 {
+            continuation_history.penalize(previous, parent_first_context, 16);
+            continuation_history.reward(previous, boosted_context, 16);
+        }
+        let history = HistoryTable::default();
+        let mut picker = MovePicker::main(
+            legal,
+            None,
+            [Move::NONE; 2],
+            position.side_to_move(),
+            Some(previous),
+        );
+
+        let picked = collect(&mut picker, &position, &history, &continuation_history);
+
+        assert!(index_of(&picked, boosted_reply) < index_of(&picked, parent_first));
+        #[cfg(feature = "stats")]
+        {
+            let statistics = picker.statistics();
+            assert!(statistics.continuation_probes > 0);
+            assert!(statistics.continuation_nonzero_probes >= 2);
+            assert!(statistics.continuation_reorderings > 0);
+        }
     }
 
     #[test]
@@ -467,6 +645,7 @@ mod tests {
             .find_legal_move("e4e5")
             .expect("losing capture must be legal");
         let history = HistoryTable::default();
+        let continuation_history = ContinuationHistory::default();
         let mut picker = MovePicker::quiescence(
             position.legal_moves(),
             false,
@@ -474,13 +653,15 @@ mod tests {
             position.side_to_move(),
         );
 
-        let picked = collect(&mut picker, &position, &history);
+        let picked = collect(&mut picker, &position, &history, &continuation_history);
 
         assert!(!picked.contains(&bad_capture));
         assert_eq!(picker.bad_tactical_count(), 1);
         assert!(picked.iter().all(|&mv| {
             (mv.is_capture() || mv.is_promotion()) && (mv.is_promotion() || see(&position, mv) >= 0)
         }));
+        #[cfg(feature = "stats")]
+        assert_eq!(picker.statistics().continuation_probes, 0);
     }
 
     #[test]
@@ -490,6 +671,7 @@ mod tests {
         assert!(position.is_in_check(position.side_to_move()));
         let legal = position.legal_moves();
         let history = HistoryTable::default();
+        let continuation_history = ContinuationHistory::default();
         let mut picker = MovePicker::quiescence(
             legal.clone(),
             true,
@@ -497,7 +679,7 @@ mod tests {
             position.side_to_move(),
         );
 
-        let picked = collect(&mut picker, &position, &history);
+        let picked = collect(&mut picker, &position, &history, &continuation_history);
 
         assert_eq!(picked.len(), legal.len());
         for &mv in legal.iter() {
@@ -506,12 +688,15 @@ mod tests {
                 1
             );
         }
+        #[cfg(feature = "stats")]
+        assert_eq!(picker.statistics().continuation_probes, 0);
     }
 
     #[test]
     fn main_picker_preserves_every_legal_move_across_deterministic_play() {
         let mut position = Position::startpos();
         let history = HistoryTable::default();
+        let continuation_history = ContinuationHistory::default();
         let mut state = 0xA3C5_9AC3_2026_0829_u64;
 
         for sample in 0..96 {
@@ -536,9 +721,10 @@ mod tests {
                 Some(preferred),
                 killers,
                 position.side_to_move(),
+                None,
             );
 
-            let picked = collect(&mut picker, &position, &history);
+            let picked = collect(&mut picker, &position, &history, &continuation_history);
 
             assert_eq!(picked.len(), legal.len(), "sample {sample}");
             assert_eq!(picked[0], preferred, "sample {sample}");
@@ -551,7 +737,7 @@ mod tests {
                     } else if mv.is_capture() || mv.is_promotion() {
                         tactical_score(&position, mv, &mut score_statistics).0
                     } else {
-                        quiet_score(mv, killers, &history, position.side_to_move())
+                        quiet_score(mv, killers, &history, position.side_to_move(), 0)
                     }
                 })
                 .collect::<Vec<_>>();

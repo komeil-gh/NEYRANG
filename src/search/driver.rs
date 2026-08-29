@@ -12,6 +12,7 @@ use crate::{
 
 use super::{
     SearchLimits,
+    continuation_history::{ContinuationContext, ContinuationHistory},
     history::HistoryTable,
     ordering,
     tt::{Bound, TranspositionTable},
@@ -104,6 +105,26 @@ pub struct SearchStatistics {
     pub picker_quiet_stage_visits: u64,
     #[cfg(feature = "stats")]
     pub picker_bad_tactical_stage_visits: u64,
+    #[cfg(feature = "stats")]
+    pub continuation_probes: u64,
+    #[cfg(feature = "stats")]
+    pub continuation_nonzero_probes: u64,
+    #[cfg(feature = "stats")]
+    pub continuation_reorderings: u64,
+    #[cfg(feature = "stats")]
+    pub continuation_rewards: u64,
+    #[cfg(feature = "stats")]
+    pub continuation_maluses: u64,
+    #[cfg(feature = "stats")]
+    pub continuation_quiet_cutoffs: u64,
+    #[cfg(feature = "stats")]
+    pub continuation_quiet_rank_sum: u64,
+    #[cfg(feature = "stats")]
+    pub continuation_distribution: [u64; 7],
+    #[cfg(feature = "stats")]
+    pub continuation_entries: u64,
+    #[cfg(feature = "stats")]
+    pub continuation_saturation: u64,
 }
 
 #[cfg(feature = "stats")]
@@ -150,6 +171,44 @@ impl SearchStatistics {
         self.picker_killer_stage_visits += other.picker_killer_stage_visits;
         self.picker_quiet_stage_visits += other.picker_quiet_stage_visits;
         self.picker_bad_tactical_stage_visits += other.picker_bad_tactical_stage_visits;
+        self.continuation_probes += other.continuation_probes;
+        self.continuation_nonzero_probes += other.continuation_nonzero_probes;
+        self.continuation_reorderings += other.continuation_reorderings;
+        self.continuation_rewards += other.continuation_rewards;
+        self.continuation_maluses += other.continuation_maluses;
+        self.continuation_quiet_cutoffs += other.continuation_quiet_cutoffs;
+        self.continuation_quiet_rank_sum += other.continuation_quiet_rank_sum;
+        for (total, value) in self
+            .continuation_distribution
+            .iter_mut()
+            .zip(other.continuation_distribution)
+        {
+            *total += value;
+        }
+        self.continuation_entries += other.continuation_entries;
+        self.continuation_saturation += other.continuation_saturation;
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct NodeContext {
+    preferred: Option<Move>,
+    previous: Option<ContinuationContext>,
+}
+
+impl NodeContext {
+    const fn root(preferred: Move) -> Self {
+        Self {
+            preferred: Some(preferred),
+            previous: None,
+        }
+    }
+
+    const fn after(previous: ContinuationContext) -> Self {
+        Self {
+            preferred: None,
+            previous: Some(previous),
+        }
     }
 }
 
@@ -167,6 +226,7 @@ pub struct Searcher<'a> {
     tt: TranspositionTable,
     killers: [[Move; 2]; MAX_PLY],
     history: HistoryTable,
+    continuation_history: ContinuationHistory,
     statistics: SearchStatistics,
 }
 
@@ -194,6 +254,7 @@ impl<'a> Searcher<'a> {
             tt,
             killers: [[Move::NONE; 2]; MAX_PLY],
             history: HistoryTable::default(),
+            continuation_history: ContinuationHistory::default(),
             statistics: SearchStatistics::default(),
         }
     }
@@ -243,7 +304,14 @@ impl<'a> Searcher<'a> {
                 if depth >= 4 {
                     self.statistics.aspiration_searches += 1;
                 }
-                let score = self.negamax(position, depth as i32, 0, alpha, beta, Some(best_move));
+                let score = self.negamax(
+                    position,
+                    depth as i32,
+                    0,
+                    alpha,
+                    beta,
+                    NodeContext::root(best_move),
+                );
                 if self.stopped || depth < 4 {
                     break score;
                 }
@@ -287,6 +355,9 @@ impl<'a> Searcher<'a> {
             }
         }
 
+        #[cfg(feature = "stats")]
+        self.record_continuation_distribution();
+
         SearchResult {
             best_move: Some(best_move),
             score: best_score,
@@ -319,6 +390,7 @@ impl<'a> Searcher<'a> {
         self.pv_len.fill(0);
         self.tt.new_search();
         self.killers.fill([Move::NONE; 2]);
+        self.continuation_history.clear();
     }
 
     fn root_terminal(&self, position: &Position) -> SearchResult {
@@ -349,7 +421,7 @@ impl<'a> Searcher<'a> {
         ply: usize,
         mut alpha: i32,
         beta: i32,
-        preferred: Option<Move>,
+        context: NodeContext,
     ) -> i32 {
         if ply >= MAX_PLY - 1 {
             return eval::evaluate(position);
@@ -421,14 +493,21 @@ impl<'a> Searcher<'a> {
         }
         let moving_color = position.side_to_move();
         let tt_move = tt_data.map(|data| data.best_move);
-        let ordering_preferred = tt_move.or(preferred);
-        let mut picker =
-            ordering::MovePicker::main(moves, ordering_preferred, self.killers[ply], moving_color);
+        let ordering_preferred = tt_move.or(context.preferred);
+        let mut picker = ordering::MovePicker::main(
+            moves,
+            ordering_preferred,
+            self.killers[ply],
+            moving_color,
+            context.previous,
+        );
 
         let mut best = -VALUE_INFINITE;
         let mut best_move = Move::NONE;
         let mut searched_moves = MoveList::new();
-        while let Some(mv) = picker.next_move(position, &self.history) {
+        #[cfg(feature = "stats")]
+        let mut searched_quiets = 0_u64;
+        while let Some(mv) = picker.next_move(position, &self.history, &self.continuation_history) {
             let move_index = searched_moves.len();
             #[cfg(feature = "stats")]
             {
@@ -457,12 +536,20 @@ impl<'a> Searcher<'a> {
                 && tt_move != Some(mv)
                 && !self.killers[ply].contains(&mv)
                 && self.history.score(moving_color, mv) < HistoryTable::MAX_SCORE / 4;
+            let current_context = ContinuationContext::from_move(position, mv);
             let undo = position.make_move(mv);
             let gives_check = can_reduce && position.is_in_check(position.side_to_move());
             self.hashes.push(position.repetition_hash());
             let mut score;
             if move_index == 0 {
-                score = -self.negamax(position, depth - 1, ply + 1, -beta, -alpha, None);
+                score = -self.negamax(
+                    position,
+                    depth - 1,
+                    ply + 1,
+                    -beta,
+                    -alpha,
+                    NodeContext::after(current_context),
+                );
             } else {
                 #[cfg(feature = "stats")]
                 {
@@ -473,25 +560,52 @@ impl<'a> Searcher<'a> {
                     {
                         self.statistics.lmr_reductions += 1;
                     }
-                    score = -self.negamax(position, depth - 2, ply + 1, -alpha - 1, -alpha, None);
+                    score = -self.negamax(
+                        position,
+                        depth - 2,
+                        ply + 1,
+                        -alpha - 1,
+                        -alpha,
+                        NodeContext::after(current_context),
+                    );
                     if score > alpha {
                         #[cfg(feature = "stats")]
                         {
                             self.statistics.lmr_researches += 1;
                             self.statistics.pvs_zero_window_searches += 1;
                         }
-                        score =
-                            -self.negamax(position, depth - 1, ply + 1, -alpha - 1, -alpha, None);
+                        score = -self.negamax(
+                            position,
+                            depth - 1,
+                            ply + 1,
+                            -alpha - 1,
+                            -alpha,
+                            NodeContext::after(current_context),
+                        );
                     }
                 } else {
-                    score = -self.negamax(position, depth - 1, ply + 1, -alpha - 1, -alpha, None);
+                    score = -self.negamax(
+                        position,
+                        depth - 1,
+                        ply + 1,
+                        -alpha - 1,
+                        -alpha,
+                        NodeContext::after(current_context),
+                    );
                 }
                 if score > alpha && score < beta {
                     #[cfg(feature = "stats")]
                     {
                         self.statistics.pvs_researches += 1;
                     }
-                    score = -self.negamax(position, depth - 1, ply + 1, -beta, -alpha, None);
+                    score = -self.negamax(
+                        position,
+                        depth - 1,
+                        ply + 1,
+                        -beta,
+                        -alpha,
+                        NodeContext::after(current_context),
+                    );
                 }
             }
             self.hashes.pop();
@@ -521,6 +635,10 @@ impl<'a> Searcher<'a> {
                         self.statistics.capture_beta_cutoffs += 1;
                     } else {
                         self.statistics.quiet_beta_cutoffs += 1;
+                        if context.previous.is_some() {
+                            self.statistics.continuation_quiet_cutoffs += 1;
+                            self.statistics.continuation_quiet_rank_sum += searched_quiets + 1;
+                        }
                     }
                 }
                 if !mv.is_capture() && !mv.is_promotion() {
@@ -531,8 +649,35 @@ impl<'a> Searcher<'a> {
                             self.history.penalize(moving_color, failed, depth);
                         }
                     }
+                    if let Some(previous_context) = context.previous {
+                        self.continuation_history
+                            .reward(previous_context, current_context, depth);
+                        #[cfg(feature = "stats")]
+                        {
+                            self.statistics.continuation_rewards += 1;
+                        }
+                        for &failed in searched_moves.iter() {
+                            if !failed.is_capture() && !failed.is_promotion() {
+                                let failed_context =
+                                    ContinuationContext::from_move(position, failed);
+                                self.continuation_history.penalize(
+                                    previous_context,
+                                    failed_context,
+                                    depth,
+                                );
+                                #[cfg(feature = "stats")]
+                                {
+                                    self.statistics.continuation_maluses += 1;
+                                }
+                            }
+                        }
+                    }
                 }
                 break;
+            }
+            #[cfg(feature = "stats")]
+            if !mv.is_capture() && !mv.is_promotion() {
+                searched_quiets += 1;
             }
             searched_moves.push(mv);
         }
@@ -592,7 +737,7 @@ impl<'a> Searcher<'a> {
             ordering::MovePicker::quiescence(moves, in_check, self.killers[ply], moving_color);
         #[cfg(feature = "stats")]
         let mut exhausted = true;
-        while let Some(mv) = picker.next_move(position, &self.history) {
+        while let Some(mv) = picker.next_move(position, &self.history, &self.continuation_history) {
             #[cfg(feature = "stats")]
             {
                 self.statistics.moves_searched += 1;
@@ -668,6 +813,17 @@ impl<'a> Searcher<'a> {
         self.statistics.picker_killer_stage_visits += statistics.killer_stage_visits;
         self.statistics.picker_quiet_stage_visits += statistics.quiet_stage_visits;
         self.statistics.picker_bad_tactical_stage_visits += statistics.bad_tactical_stage_visits;
+        self.statistics.continuation_probes += statistics.continuation_probes;
+        self.statistics.continuation_nonzero_probes += statistics.continuation_nonzero_probes;
+        self.statistics.continuation_reorderings += statistics.continuation_reorderings;
+    }
+
+    #[cfg(feature = "stats")]
+    fn record_continuation_distribution(&mut self) {
+        let (distribution, saturation) = self.continuation_history.distribution();
+        self.statistics.continuation_distribution = distribution;
+        self.statistics.continuation_entries = ContinuationHistory::ENTRY_COUNT as u64;
+        self.statistics.continuation_saturation = saturation;
     }
 
     fn pv_line(&self, ply: usize) -> Vec<Move> {
@@ -733,8 +889,10 @@ mod tests {
     use std::sync::atomic::AtomicBool;
 
     use crate::{
-        chess::Position,
-        search::{SearchLimits, Searcher, VALUE_INFINITE},
+        chess::{Color, PieceType, Position, Square},
+        search::{
+            SearchLimits, Searcher, VALUE_INFINITE, continuation_history::ContinuationContext,
+        },
     };
 
     #[test]
@@ -755,5 +913,27 @@ mod tests {
 
         assert!(searcher.statistics.bad_captures > 0);
         assert_eq!(searcher.statistics.see_prunes, 0);
+        assert_eq!(searcher.statistics.continuation_probes, 0);
+        assert_eq!(searcher.statistics.continuation_rewards, 0);
+        assert_eq!(searcher.statistics.continuation_maluses, 0);
+    }
+
+    #[test]
+    fn public_search_reset_clears_continuation_values() {
+        let stop = AtomicBool::new(false);
+        let mut searcher = Searcher::new(&stop);
+        let previous = ContinuationContext::new(Color::Black, PieceType::Knight, Square::F6);
+        let current = ContinuationContext::new(Color::White, PieceType::Pawn, Square::E4);
+        searcher.continuation_history.reward(previous, current, 8);
+        assert!(searcher.continuation_history.score(Some(previous), current) > 0);
+
+        let mut position = Position::startpos();
+        let hashes = [position.hash()];
+        searcher.reset(&mut position, &SearchLimits::depth(1), &hashes);
+
+        assert_eq!(
+            searcher.continuation_history.score(Some(previous), current),
+            0
+        );
     }
 }

@@ -1,0 +1,139 @@
+# NEYRANG
+
+NEYRANG is an independent UCI chess engine written from scratch in stable Rust. Its current `0.1.0` baseline is a correct, single-threaded, classical engine intended for measurable iteration: Perft first, then deterministic search benchmarks, paired engine matches, and eventually SPRT.
+
+NEYRANG does not wrap an existing chess library or engine. The runtime chess core uses only the Rust standard library.
+
+## Current status
+
+Implemented:
+
+- 64-bit bitboards plus a synchronized mailbox (`a1 = 0`, `h8 = 63`)
+- FEN parse/serialize with recoverable validation errors
+- compile-time pawn, knight, and king attacks; portable ray-based sliders
+- complete legal move generation, including castling, en passant, and underpromotions
+- reversible make/unmake and deterministic incremental Zobrist hashing
+- fixed-capacity move lists with no per-node heap allocation
+- classical tapered evaluation
+- iterative deepening, alpha-beta, quiescence, PVS, aspiration windows
+- transposition table with mate-score normalization
+- TT/capture/killer/history move ordering and standalone SEE
+- 50-move, threefold repetition, checkmate, and stalemate detection
+- cooperative atomic stop plus soft/hard time limits
+- asynchronous UCI loop and deterministic benchmark command
+
+Not implemented yet: SMP, Syzygy, NNUE, null-move pruning, LMR/LMP, futility pruning, continuation history, or an optimized sliding-attack backend. `Threads` is accepted by UCI but search remains deliberately single-threaded.
+
+No project license has been selected yet.
+
+## Requirements and build
+
+NEYRANG pins the stable channel and requires Rust 1.98 or newer with Edition 2024.
+
+```bash
+xcode-select --install
+rustup update stable
+cargo build --release
+```
+
+Portable release binary:
+
+```text
+target/release/neyrang
+```
+
+Apple Silicon native tuning is optional and should not be used for portable artifacts:
+
+```bash
+RUSTFLAGS="-C target-cpu=native" cargo build --profile maxperf
+```
+
+## UCI usage
+
+Run `target/release/neyrang` without arguments and configure it as a UCI engine in a chess GUI. Supported commands include `uci`, `isready`, `ucinewgame`, `position`, `setoption`, `go`, `stop`, and `quit`.
+
+Smoke test:
+
+```bash
+printf "uci\nisready\nposition startpos\ngo depth 5\nquit\n" | target/release/neyrang
+```
+
+Options:
+
+- `Hash` (default 64 MB)
+- `Threads` (accepted; current implementation uses one search thread)
+- `Move Overhead` (default 10 ms)
+
+## En Croissant
+
+NEYRANG can be loaded directly as a local UCI engine in En Croissant. On macOS, build a stable versioned executable with:
+
+```bash
+scripts/en-croissant.sh prepare
+```
+
+Select the printed path from En Croissant's **Engines** page. A bundled PGN of the complete paired smoke games can then be opened with:
+
+```bash
+scripts/en-croissant.sh open
+```
+
+See [the En Croissant integration guide](docs/en-croissant.md) for engine registration, arbitrary PGNs, and reproducible game generation.
+
+## Perft
+
+```bash
+target/release/neyrang perft 5
+target/release/neyrang divide 4
+target/release/neyrang perft-fen "<FEN>" 4
+```
+
+Verified release results:
+
+| Position | Depth | Nodes |
+| --- | ---: | ---: |
+| Initial position | 5 | 4,865,609 |
+| Canonical Kiwipete | 4 | 4,085,603 |
+| Rook/pawn endgame | 5 | 674,624 |
+
+The similarly named FEN `r3k2r/p1ppqpb1/bn2pnp1/2pP4/1p2P3/2N2N2/PPQBBPPP/R3K2R w KQkq - 0 1` has 45 legal root moves, not 48. That result was independently cross-checked; the canonical 48-move Kiwipete fixture is kept separately in the tests.
+
+## Benchmark
+
+```bash
+target/release/neyrang bench
+RUNS=5 scripts/bench.sh
+```
+
+The benchmark searches five fixed positions at depth 5 and reports deterministic nodes and checksum plus machine-dependent time/NPS. See [testing documentation](docs/testing.md) for the recorded baseline and measurement caveats.
+
+## Tests and engine matches
+
+```bash
+cargo fmt --check
+cargo clippy --all-targets --all-features
+cargo test
+cargo test --features stats
+```
+
+For paired fastchess testing:
+
+```bash
+ENGINE_B=/path/to/parent/neyrang GAMES=400 scripts/regression.sh
+ENGINE_A=target/release/neyrang ENGINE_B=/path/to/opponent scripts/match.sh
+ENGINE_B=/path/to/parent/neyrang scripts/sprt.sh
+```
+
+The bundled opening file is intentionally small; replace `OPENINGS_FILE` with a larger audited balanced suite for strength testing. Do not infer Elo from Perft, NPS, tactical puzzles, or a small game sample.
+
+## Architecture
+
+- [Architecture](docs/architecture.md)
+- [Search](docs/search.md)
+- [Evaluation](docs/evaluation.md)
+- [Testing and benchmarks](docs/testing.md)
+- [En Croissant integration](docs/en-croissant.md)
+
+## Roadmap
+
+The next strength work should remain empirical: integrate SEE without comparator overhead, add carefully tested LMR, and improve evaluation/pawn caching. SMP, NNUE, and Syzygy remain later milestones after the single-thread testing pipeline matures.

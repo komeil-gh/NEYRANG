@@ -1,0 +1,212 @@
+[Event "NEYRANG UCI Protocol Smoke"]
+[Site "Local"]
+[Date "2026.08.29"]
+[Round "1"]
+[White "NEYRANG 0.1.0"]
+[Black "Stockfish 18"]
+[Result "1-0"]
+[FEN "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 1"]
+[SetUp "1"]
+[Termination "Checkmate"]
+[OpeningPair "1"]
+[NEYRANGDepth "3"]
+[StockfishDepth "1"]
+
+1. Nc3 Nf6 2. d4 exd4 3. Nxd4 Bb4 4. Bg5 O-O 5. a3 Bxc3+ 6. bxc3 Re8 7. Qf3 Ne5
+8. Qf4 Ng6 9. Qe3 Rxe4 10. Qxe4 d5 11. Bxf6 gxf6 12. Qf3 Qe7+ 13. Qe3 Qd7 14.
+Bb5 c6 15. Bd3 Kf8 16. h4 c5 17. Bf5 cxd4 18. Qh6+ Kg8 19. Bxd7 Bxd7 20. cxd4
+Re8+ 21. Kd2 Re2+ 22. Kxe2 Bg4+ 23. f3 Nf4+ 24. Qxf4 Bxf3+ 25. Qxf3 Kg7 26.
+Qxd5 a5 27. Qxa5 h5 28. Qxh5 f5 29. Qxf5 b5 30. h5 b4 31. axb4 Kf8 32. Ra7 f6
+33. Qc8# 1-0
+
+[Event "NEYRANG UCI Protocol Smoke"]
+[Site "Local"]
+[Date "2026.08.29"]
+[Round "2"]
+[White "Stockfish 18"]
+[Black "NEYRANG 0.1.0"]
+[Result "1/2-1/2"]
+[FEN "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 1"]
+[SetUp "1"]
+[Termination "Threefold Repetition"]
+[OpeningPair "1"]
+[NEYRANGDepth "3"]
+[StockfishDepth "1"]
+
+1. Nc3 Bc5 2. Bb5 Nge7 3. Na4 Bd6 4. O-O a6 5. Be2 b5 6. Nc3 b4 7. Nd5 Bc5 8.
+c3 bxc3 9. dxc3 Rb8 10. b4 Bd6 11. Bg5 h6 12. Bh4 g5 13. Bg3 Kf8 14. a4 g4 15.
+Nh4 h5 16. f3 Nxd5 17. exd5 Na7 18. Ng6+ fxg6 19. fxg4+ Kg8 20. gxh5 gxh5 21.
+Bxh5 Qg5 22. Bf7+ Kg7 23. Qe1 Bb7 24. h4 Qe7 25. Qe4 c5 26. Qg4+ Kf8 27. Bg6+
+Kg8 28. Bh5+ Qg7 29. Bf7+ Kh7 30. Bg6+ Qxg6 31. Qxd7+ Kh6 32. Rf7 Bxd5 33. Raf1
+cxb4 34. R7f6 Bc5+ 35. Kh1 Rbd8 36. Rxg6+ Kxg6 37. Qg4+ Kh7 38. Qf5+ Kh6 39.
+Qf6+ Kh7 40. Qf5+ Kh6 41. Qf6+ Kh7 1/2-1/2
+
+[Event "NEYRANG UCI Protocol Smoke"]
+[Site "Local"]
+[Date "2026.08.29"]
+[Round "3"]
+[White "NEYRANG 0.1.0"]
+[Black "Stockfish 18"]
+[Result "1/2-1/2"]
+[FEN "rnbqkbnr/ppp2ppp/4p3/3p4/2PP4/8/PP2PPPP/RNBQKBNR w KQkq - 0 1"]
+[SetUp "1"]
+[Termination "Threefold Repetition"]
+[OpeningPair "2"]
+[NEYRANGDepth "3"]
+[StockfishDepth "1"]
+
+1. c5 b6 2. Be3 bxc5 3. dxc5 Nf6 4. Nc3 c6 5. Nf3 Nbd7 6. Qa4 Qc7 7. Bf4 e5 8.
+Nxe5 Bxc5 9. Nxf7 Qb6 10. Nxh8 Bxf2+ 11. Kd1 Nc5 12. Qc2 d4 13. Na4 Nxa4 14.
+Qxa4 Nd5 15. Be5 Ne3+ 16. Kc1 Qc5+ 17. Kd2 Nc4+ 18. Kc1 Ne3+ 19. Kd2 Nc4+ 20.
+Kc1 1/2-1/2
+
+[Event "NEYRANG UCI Protocol Smoke"]
+[Site "Local"]
+[Date "2026.08.29"]
+[Round "4"]
+[White "Stockfish 18"]
+[Black "NEYRANG 0.1.0"]
+[Result "0-1"]
+[FEN "rnbqkbnr/ppp2ppp/4p3/3p4/2PP4/8/PP2PPPP/RNBQKBNR w KQkq - 0 1"]
+[SetUp "1"]
+[Termination "Checkmate"]
+[OpeningPair "2"]
+[NEYRANGDepth "3"]
+[StockfishDepth "1"]
+
+1. e3 Nc6 2. Nf3 Nf6 3. Nc3 Bb4 4. Bd3 Ne4 5. Qc2 f5 6. O-O O-O 7. Ne2 b6 8.
+cxd5 Qxd5 9. Nf4 Qd7 10. Bb5 Bb7 11. Qa4 Bd6 12. Bd2 Nxd2 13. Nxd2 g5 14. Nxe6
+Qxe6 15. Bxc6 Bxc6 16. Qxc6 Bxh2+ 17. Kh1 Qxc6 18. Rac1 Qh6 19. Ne4 Bd6+ 20.
+Kg1 Qh2# 0-1
+
+[Event "NEYRANG UCI Protocol Smoke"]
+[Site "Local"]
+[Date "2026.08.29"]
+[Round "5"]
+[White "NEYRANG 0.1.0"]
+[Black "Stockfish 18"]
+[Result "1/2-1/2"]
+[FEN "rnbqkb1r/pppp1ppp/5n2/4p3/2P5/2N5/PP1PPPPP/R1BQKBNR w KQkq - 0 1"]
+[SetUp "1"]
+[Termination "Threefold Repetition"]
+[OpeningPair "3"]
+[NEYRANGDepth "3"]
+[StockfishDepth "1"]
+
+1. Nf3 e4 2. Ng5 Qe7 3. Qc2 Nc6 4. Ngxe4 Nxe4 5. Qxe4 Qxe4 6. Nxe4 Nb4 7. Kd1
+d5 8. cxd5 Nxd5 9. d4 Bf5 10. f3 O-O-O 11. g4 Bg6 12. Bh3 Nf4 13. Bxf4 Rxd4+
+14. Bd2 Bxe4 15. g5+ Kb8 16. a3 Be7 17. fxe4 Bxg5 18. b4 Rxd2+ 19. Ke1 Rd4 20.
+e5 Bd2+ 21. Kf2 Rf4+ 22. Kg3 Re4 23. Raf1 Rxe5 24. Rxf7 Re3+ 25. Rf3 Rxe2 26.
+Bd7 Be1+ 27. Kf4 Bd2+ 28. Kg3 Be1+ 29. Kf4 Rf8+ 30. Bf5 Bd2+ 31. Kg4 g6 32. Bd3
+Rg2+ 33. Rg3 Rgf2 34. h4 a6 35. Kh3 R2f3 36. Be4 R3f4 37. Rg4 Rxg4 38. Kxg4
+Rf4+ 39. Kg3 Rxe4 40. Rf1 Be1+ 41. Kf3 Re8 42. Rh1 Bc3 43. Rd1 c6 44. Rd3 Bg7
+45. Rd7 Rf8+ 46. Ke2 Re8+ 47. Kd3 Ba1 48. Rxh7 Rd8+ 49. Ke4 Re8+ 50. Kd3 Rd8+
+51. Ke4 Ka8 52. Rh6 Ka7 53. Rxg6 Re8+ 54. Kd3 Rd8+ 55. Ke2 Re8+ 56. Kd3 Rd8+
+57. Ke2 Kb6 58. h5 Re8+ 59. Kd3 Rd8+ 60. Kc2 Rd5 61. h6 Rh5 62. a4 Rh2+ 63. Kd3
+Rh3+ 64. Kc4 Rh4+ 65. Kb3 Rh3+ 66. Kc4 Rh4+ 67. Kb3 Ka7 68. Re6 Rh3+ 69. Kc2
+Rh2+ 70. Kd3 Rh3+ 71. Kc2 Rh2+ 72. Kd3 a5 73. bxa5 Rh3+ 74. Kc4 Rh4+ 75. Kb3
+Rh3+ 76. Kc4 Rh4+ 77. Kb3 Bd4 78. Ka3 Rh3+ 79. Kb4 Bc3+ 80. Kc5 Rh5+ 81. Kc4
+Bxa5 82. Rd6 Ka6 83. Kb3 Rh3+ 84. Kc2 Rh2+ 85. Kb3 Rh3+ 86. Kc2 Rh2+ 87. Kb3
+1/2-1/2
+
+[Event "NEYRANG UCI Protocol Smoke"]
+[Site "Local"]
+[Date "2026.08.29"]
+[Round "6"]
+[White "Stockfish 18"]
+[Black "NEYRANG 0.1.0"]
+[Result "0-1"]
+[FEN "rnbqkb1r/pppp1ppp/5n2/4p3/2P5/2N5/PP1PPPPP/R1BQKBNR w KQkq - 0 1"]
+[SetUp "1"]
+[Termination "Checkmate"]
+[OpeningPair "3"]
+[NEYRANGDepth "3"]
+[StockfishDepth "1"]
+
+1. Nf3 Nc6 2. d4 e4 3. Nd2 Nxd4 4. Ndxe4 Nxe4 5. Nxe4 Bb4+ 6. Bd2 Qe7 7. Nc3 c5
+8. e3 d6 9. Qa4+ Bd7 10. Qd1 O-O 11. Nd5 Bxd2+ 12. Qxd2 Qe4 13. Bd3 Qxg2 14.
+O-O-O Nf3 15. Qc2 h5 16. Be4 f5 17. Nf4 Ne1 18. Rdxe1 Qxe4 19. Rhg1 Qxc2+ 20.
+Kxc2 h4 21. Rg6 Rad8 22. Reg1 Rf7 23. Rxd6 Ba4+ 24. b3 Bxb3+ 25. axb3 Rxd6 26.
+Rg5 a5 27. Ng6 h3 28. Nf4 Rfd7 29. Rxf5 Rd2+ 30. Kc3 Rxf2 31. Rxc5 Rxh2 32.
+Rc8+ Kh7 33. Ne6 Rd6 34. Ng5+ Kg6 35. c5 Rc6 36. Nf3 Rxc8 37. Nh4+ Kh5 38. Ng6
+Kxg6 39. Kd3 Rxc5 40. Kd4 Rhc2 41. Kd3 h2 42. b4 axb4 43. e4 h1=Q 44. e5 R5c3+
+45. Kd4 Rd2# 0-1
+
+[Event "NEYRANG UCI Protocol Smoke"]
+[Site "Local"]
+[Date "2026.08.29"]
+[Round "7"]
+[White "NEYRANG 0.1.0"]
+[Black "Stockfish 18"]
+[Result "1/2-1/2"]
+[FEN "rnbqkbnr/pp2pppp/8/2pp4/8/5NP1/PPPPPP1P/RNBQKB1R w KQkq - 0 1"]
+[SetUp "1"]
+[Termination "Threefold Repetition"]
+[OpeningPair "4"]
+[NEYRANGDepth "3"]
+[StockfishDepth "1"]
+
+1. d4 cxd4 2. Qxd4 Nc6 3. Qd3 e5 4. Bg5 Qa5+ 5. Nbd2 e4 6. Qe3 h6 7. Bh4 g5 8.
+Nxg5 hxg5 9. Bxg5 Be6 10. h4 f6 11. Bf4 Nh6 12. Qc3 Bb4 13. Qxf6 Kd7 14. Bxh6
+Raf8 15. Bxf8 Rxf8 16. Qg7+ Kc8 17. c3 Bc5 18. f4 Kb8 19. b4 Nxb4 20. Qe5+ Ka8
+21. cxb4 Bxb4 22. Qxe6 Bxd2+ 23. Kd1 Be3 24. Kc2 Qc7+ 25. Kb3 Qc4+ 26. Kb2 Qb4+
+27. Kc2 Qd2+ 28. Kb3 Bd4 29. Rb1 Qc3+ 30. Ka4 Qc4+ 31. Ka3 Rc8 32. h5 Rc5 33.
+Qe8+ Rc8 34. Qe6 Rc5 35. Qe8+ Rc8 1/2-1/2
+
+[Event "NEYRANG UCI Protocol Smoke"]
+[Site "Local"]
+[Date "2026.08.29"]
+[Round "8"]
+[White "Stockfish 18"]
+[Black "NEYRANG 0.1.0"]
+[Result "1/2-1/2"]
+[FEN "rnbqkbnr/pp2pppp/8/2pp4/8/5NP1/PPPPPP1P/RNBQKB1R w KQkq - 0 1"]
+[SetUp "1"]
+[Termination "Threefold Repetition"]
+[OpeningPair "4"]
+[NEYRANGDepth "3"]
+[StockfishDepth "1"]
+
+1. d4 cxd4 2. Qxd4 Nc6 3. Qa4 Nf6 4. c4 dxc4 5. Bg2 Qa5+ 6. Qxa5 Nxa5 7. Bd2
+Nc6 8. Na3 Be6 9. Ng5 c3 10. Bxc3 Bf5 11. Nb5 Rc8 12. O-O a6 13. Nd4 Nxd4 14.
+Bxd4 Rc4 15. Rfd1 h6 16. b3 Rxd4 17. Rxd4 hxg5 18. Bxb7 e5 19. Bc6+ Ke7 20. Ra4
+Bc8 21. Rc1 g6 22. Bg2 Kd8 23. Rd1+ Ke7 24. Rc4 Bg4 25. Rc7+ Ke6 26. Rc6+ Ke7
+27. Rc7+ Ke6 28. Rc6+ Ke7 1/2-1/2
+
+[Event "NEYRANG UCI Protocol Smoke"]
+[Site "Local"]
+[Date "2026.08.29"]
+[Round "9"]
+[White "NEYRANG 0.1.0"]
+[Black "Stockfish 18"]
+[Result "1-0"]
+[FEN "rnbqkbnr/pp2pppp/3p4/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 1"]
+[SetUp "1"]
+[Termination "Checkmate"]
+[OpeningPair "5"]
+[NEYRANGDepth "3"]
+[StockfishDepth "1"]
+
+1. Nc3 a6 2. d4 cxd4 3. Nxd4 Nf6 4. Bg5 e6 5. a4 h6 6. Be3 Be7 7. Bc4 Qc7 8. b3
+Qa5 9. Qd2 d5 10. exd5 Bb4 11. dxe6 Bxc3 12. exf7+ Kf8 13. g4 Bxd2+ 14. Bxd2
+Qe5+ 15. Kf1 Ne4 16. Bb4+ Nd6 17. Re1 Qf6 18. Re8# 1-0
+
+[Event "NEYRANG UCI Protocol Smoke"]
+[Site "Local"]
+[Date "2026.08.29"]
+[Round "10"]
+[White "Stockfish 18"]
+[Black "NEYRANG 0.1.0"]
+[Result "1-0"]
+[FEN "rnbqkbnr/pp2pppp/3p4/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 1"]
+[SetUp "1"]
+[Termination "Checkmate"]
+[OpeningPair "5"]
+[NEYRANGDepth "3"]
+[StockfishDepth "1"]
+
+1. Bb5+ Nc6 2. O-O Nf6 3. Re1 a6 4. Bxc6+ bxc6 5. e5 Nd5 6. exd6 Qxd6 7. c4 Nf4
+8. d4 g5 9. Nc3 cxd4 10. Ne4 Qb4 11. Nf6+ Kd8 12. Qxd4+ Qd6 13. Qb6+ Qc7 14.
+Qd4+ Qd6 15. Qb6+ Qc7 16. Rd1+ Nd5 17. Nxd5 cxd5 18. Rxd5+ Bd7 19. Qd4 f6 20.
+Nxg5 Kc8 21. Bf4 e5 22. Rxe5 fxe5 23. Bxe5 Qa5 24. Rd1 Ba4 25. b3 Rg8 26. Ne6
+Bc6 27. Bg3 Qxa2 28. Qb6 Bd6 29. Qxc6+ Kb8 30. Bxd6+ Ka7 31. Qc7# 1-0

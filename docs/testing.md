@@ -6,7 +6,7 @@ Every change should pass:
 
 ```bash
 cargo fmt --check
-cargo clippy --all-targets --all-features
+cargo clippy --all-targets --all-features -- -D warnings
 cargo test
 cargo test --features stats
 cargo build --release
@@ -52,6 +52,19 @@ NEYRANG 0.1.0 ARM64 release baseline on the development Apple Silicon host:
 
 All five runs produced the same node count and checksum. This is a deterministic regression baseline, not a cross-machine performance promise.
 
+NEYRANG 0.2.0 on the same workload and host:
+
+- positions: 5
+- depth: 5
+- nodes: 196,627
+- checksum: `4a4c31e290740db3`
+- five-run times: 166 / 166 / 166 / 167 / 168 ms
+- median time: 166 ms
+- median NPS: 1,177,583
+- ARM64 release size: 570,656 bytes
+
+The 0.2.0 tree is 56.1% smaller and its local median wall time is 40.7% lower. Median NPS is 26.3% lower, so the improvement comes from search selectivity rather than cheaper nodes. Timing remains machine- and load-dependent.
+
 ## Complete-game smoke evidence
 
 On 2026-08-29, the native ARM64 release was run through python-chess 1.11.2 against the official native ARM64 Stockfish 18 binary (SHA-256 `4d77c4aa3ad9bd1ea8111f2ac5a4620fe7ebf998d6893bf828d49ccd579c8cb0`). Five fixed openings were paired with colors reversed for ten games. NEYRANG used depth 3 and Stockfish depth 1.
@@ -72,3 +85,29 @@ The paired games are retained as an importable PGN at `examples/neyrang-vs-stock
 Run `scripts/test-match-config.sh` before comparative testing. Use `scripts/regression.sh` for paired parent-versus-candidate games, `scripts/match.sh` for fixed-size or node-limited comparisons, and `scripts/sprt.sh` for longer patch decisions. The runners expose a fixed opening seed and record binary/Git/opening/fastchess checksums, complete PGN telemetry, logs, and metadata beside the requested PGN.
 
 Keep engine settings equal, reverse colors, use an audited balanced opening suite, retain PGNs, and report games/W/D/L/score/Elo confidence intervals. The eight bundled openings are only a smoke/development set. The frozen 0.2.0 development configuration is recorded in [the baseline document](development/0.2.0-baseline.md), and feature outcomes belong in [the experiment ledger](development/experiments.md).
+
+## NEYRANG 0.2.0 release evidence
+
+Final versioned release gates:
+
+- `cargo fmt --check`: pass
+- Clippy across all targets/features with warnings denied: pass
+- normal tests: 47/47 pass; `stats` tests: 52/52 pass
+- tactical suite: 11/11 pass, including legal PV replay
+- Perft: 119,060,324 / 4,085,603 / 674,624 at the required fixture depths
+- fastchess UCI compliance: 40/40 steps pass
+- UCI identity/readiness smoke: `NEYRANG 0.2.0`, `uciok`, and `readyok`
+
+The selected SEE/qsearch/LMR candidate was compared with the immutable `v0.1.0` ARM64 binary under a normalized fastchess SPRT:
+
+- opening suite: `8mvs_+90_+99.epd`, SHA-256 `e4ccf9297520743bb44705908b510ae45f817a146418c7773aaf44bed2cf8428`
+- seed `20260829`; random order with paired colors
+- `0.2+0.002`, Threads 1, Hash 64 MB, concurrency 1
+- H0 0 Elo; H1 +5 Elo; alpha/beta 0.05; normalized model
+- 786 games / 393 pairs: 389 wins, 192 draws, 205 losses; score 61.70%
+- reported Elo +82.87 +/-20.64; nElo +101.38 +/-24.29
+- pentanomial `[22, 47, 140, 93, 91]`
+- final LLR 2.97 with bounds `[-2.94, +2.94]`: H1 accepted
+- no timeout, crash, disconnect, illegal move, or forfeit in the log
+
+The accepted hypothesis says the candidate clears the configured +5 Elo threshold against this exact baseline. It does not say the engine is exactly +5 Elo, nor does the reported estimate transfer automatically to another time control or opponent pool. Raw PGN, log, recovery configuration, and metadata are retained locally under `testing/final/` and summarized in the experiment ledger.

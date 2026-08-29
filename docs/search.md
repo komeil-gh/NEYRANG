@@ -4,16 +4,19 @@
 
 NEYRANG uses iterative deepening over negamax alpha-beta. Non-first moves use a zero-window PVS search and are re-searched only when they improve alpha without failing high. From depth four onward, aspiration windows start at ±50 centipawns and widen geometrically on fail-low/high.
 
-At depth zero, quiescence searches captures and promotions. Positions in check do not use stand pat and search every legal evasion. Mate scores encode root ply and are normalized when crossing the transposition-table boundary, so retrieval at a different ply preserves mate distance.
+At depth zero, quiescence searches promotions and captures whose legal static exchange evaluation is non-negative. Positions in check do not use stand pat or SEE pruning and search every legal evasion. Mate scores encode root ply and are normalized when crossing the transposition-table boundary, so retrieval at a different ply preserves mate distance.
 
 Move ordering is:
 
 1. TT/PV move
-2. promotions and MVV-LVA captures
+2. promotions and non-losing captures, scored once with SEE plus MVV-LVA
 3. killer moves
 4. quiet history
+5. losing captures
 
-SEE is independently implemented and tested, but a first attempt to call it inside the sort comparator was reverted: repeated SEE computation increased both nodes and wall time. A future integration should precompute a score once per move and be benchmarked again.
+SEE updates temporary bitboards, exposes slider x-rays, handles promotions and en passant, excludes absolutely pinned attackers, and rejects illegal king recaptures. It is computed once per tactical move before sorting rather than from the comparator.
+
+At non-root, non-PV nodes, sufficiently late quiet moves may be reduced by one ply. The reduction starts with the fifth searched move at depth three, excludes TT moves, killers, strong-history moves, captures, promotions, checks, and nodes already in check, and always performs a normal-depth zero-window re-search when the reduced result raises alpha. The ordinary PVS full-window re-search remains authoritative when needed.
 
 ## Draws and limits
 
@@ -33,13 +36,20 @@ Single release runs on the same Apple Silicon host, five positions, depth 5:
 | PVS | 447,006 | 286 ms | retained |
 | Aspiration ±25 | 477,104 | 317 ms | retuned |
 | Aspiration ±50 | 448,136 | 282 ms median | retained |
+| Precomputed SEE ordering | 528,816 | 464 ms median | retained after positive match screens |
+| Qsearch SEE pruning | 359,538 | 203 ms median | retained |
+| Conservative LMR | 196,627 | 166 ms median | retained and release-proven cumulatively |
 
 The final row is the median of five runs; the preceding rows are single-run development snapshots. These are engineering measurements, not Elo evidence. Search-tree changes make raw NPS comparisons insufficient; paired games and SPRT decide strength patches.
 
-## Next search work
+## Experiment outcome and next search work
 
-- precomputed SEE ordering/pruning with tactical regressions
-- conservative LMR behind tests and benchmark counters
-- continuation/capture history after the basic history table has match evidence
+Guarded null-move pruning reduced this benchmark to 182,768 nodes but did not accept H1 in a capped 1,000-game SPRT against the LMR parent, so it was reverted. Reverse futility pruning was not attempted in 0.2.0.
 
-Null move, futility, LMP, ProbCut, and singular extensions must be added one at a time rather than as a bundled selective-search rewrite.
+Next candidates should be isolated and measured in this order:
+
+- reduce SEE/ordering overhead without weakening the legal SEE oracle
+- add capture history, then continuation history, behind separate counters and matches
+- measure a pawn hash together with incremental classical pawn-structure terms
+
+Any renewed null move, reverse futility, LMP, ProbCut, or singular-extension work must be added one at a time rather than as a bundled selective-search rewrite.

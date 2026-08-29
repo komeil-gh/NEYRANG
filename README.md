@@ -1,6 +1,6 @@
 # NEYRANG
 
-NEYRANG is an independent UCI chess engine written from scratch in stable Rust. Its current `0.1.0` baseline is a correct, single-threaded, classical engine intended for measurable iteration: Perft first, then deterministic search benchmarks, paired engine matches, and eventually SPRT.
+NEYRANG is an independent UCI chess engine written from scratch in stable Rust. Version `0.2.0` is a correct, single-threaded, classical engine developed through isolated search experiments: Perft and tactical correctness first, then deterministic benchmarks, paired engine matches, and SPRT.
 
 NEYRANG does not wrap an existing chess library or engine. The runtime chess core uses only the Rust standard library.
 
@@ -17,12 +17,14 @@ Implemented:
 - classical tapered evaluation
 - iterative deepening, alpha-beta, quiescence, PVS, aspiration windows
 - transposition table with mate-score normalization
-- TT/capture/killer/history move ordering and standalone SEE
+- TT/SEE-capture/killer/history move ordering with losing captures deferred
+- legal static exchange evaluation and conservative qsearch SEE pruning
+- conservative one-ply late move reductions with mandatory full-depth re-search
 - 50-move, threefold repetition, checkmate, and stalemate detection
 - cooperative atomic stop plus soft/hard time limits
 - asynchronous UCI loop and deterministic benchmark command
 
-Not implemented yet: SMP, Syzygy, NNUE, null-move pruning, LMR/LMP, futility pruning, continuation history, or an optimized sliding-attack backend. `Threads` is accepted by UCI but search remains deliberately single-threaded.
+Not implemented yet: SMP, Syzygy, NNUE, null-move pruning, LMP, futility pruning, continuation/capture history, or an optimized sliding-attack backend. `Threads` is accepted by UCI but search remains deliberately single-threaded. A guarded null-move implementation was tested and deliberately reverted because its capped SPRT did not accept the positive hypothesis.
 
 No project license has been selected yet.
 
@@ -107,6 +109,8 @@ RUNS=5 scripts/bench.sh
 
 The benchmark searches five fixed positions at depth 5 and reports deterministic nodes and checksum plus machine-dependent time/NPS. See [testing documentation](docs/testing.md) for the recorded baseline and measurement caveats.
 
+The `0.2.0` search visits 196,627 nodes with checksum `4a4c31e290740db3` on this workload, down from 448,136 nodes in `0.1.0`. Its final normalized SPRT against the immutable `v0.1.0` binary accepted H1 after 786 games; the full configuration and the reported estimate are recorded in the [experiment ledger](docs/development/experiments.md). This controlled result is relative to that exact baseline and time control, not a universal Elo claim.
+
 ## Tests and engine matches
 
 ```bash
@@ -141,4 +145,4 @@ The bundled opening file is intentionally small; replace `OPENINGS_FILE` with a 
 
 ## Roadmap
 
-The next strength work should remain empirical: integrate SEE without comparator overhead, add carefully tested LMR, and improve evaluation/pawn caching. SMP, NNUE, and Syzygy remain later milestones after the single-thread testing pipeline matures.
+The next strength work should remain empirical: reduce SEE/ordering cost, add capture and continuation history as isolated experiments, and improve evaluation with a measured pawn hash. SMP, NNUE, and Syzygy remain later milestones after the single-thread testing pipeline matures.

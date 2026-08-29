@@ -59,7 +59,7 @@ fn uci_process_reports_identity_readiness_and_a_legal_bestmove() {
         "stderr: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(stdout.contains("id name NEYRANG 0.1.0"), "{stdout}");
+    assert!(stdout.contains("id name NEYRANG 0.2.0"), "{stdout}");
     assert!(stdout.contains("uciok"), "{stdout}");
     assert!(stdout.contains("readyok"), "{stdout}");
     let bestmove = stdout

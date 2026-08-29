@@ -1,0 +1,28 @@
+# Changelog
+
+All notable changes to NEYRANG are documented here.
+
+## [0.2.0] - 2026-08-29
+
+### Added
+
+- Legal static exchange evaluation coverage for pins, x-rays, promotions, en passant, and king recaptures.
+- Precomputed SEE capture classification with losing captures deferred behind killers and quiets.
+- Conservative qsearch pruning of proven losing captures outside check.
+- One-ply late move reductions for guarded late quiet moves, with mandatory full-depth re-search.
+- Deterministic tactical regression fixtures for mates, captures, promotions, stalemate avoidance, opposition, and quiet defense; every reported PV is replayed for legality.
+- Reproducible fixed-size, node-limited, and normalized-SPRT fastchess runners with binary, opening, tool, Git, configuration, PGN, and log identities.
+
+### Changed
+
+- The five-position depth-5 benchmark fell from 448,136 nodes (`a4b453e8ce750456`) to 196,627 nodes (`4a4c31e290740db3`).
+- The final candidate accepted the configured H1 in a 786-game normalized SPRT against the immutable `v0.1.0` binary, scoring 61.70% with no recorded protocol failure.
+- UCI identity is now `NEYRANG 0.2.0`.
+
+### Rejected
+
+- Guarded null-move pruning was reverted after its 1,000-game capped SPRT against the LMR parent remained inconclusive. Reverse futility pruning was not attempted in this release.
+
+## [0.1.0] - 2026-08-29
+
+- First stable UCI release with legal move generation, reversible state and hashing, classical evaluation, iterative alpha-beta/PVS search, quiescence, transposition table, time management, Perft fixtures, and deterministic benchmarking.

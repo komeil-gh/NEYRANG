@@ -12,6 +12,7 @@ use crate::{
 
 use super::{
     SearchLimits,
+    capture_history::CaptureHistoryTable,
     history::HistoryTable,
     ordering,
     tt::{Bound, TranspositionTable},
@@ -104,6 +105,22 @@ pub struct SearchStatistics {
     pub picker_quiet_stage_visits: u64,
     #[cfg(feature = "stats")]
     pub picker_bad_tactical_stage_visits: u64,
+    #[cfg(feature = "stats")]
+    pub beta_cutoff_searched_moves: u64,
+    #[cfg(feature = "stats")]
+    pub capture_history_probes: u64,
+    #[cfg(feature = "stats")]
+    pub capture_history_nonzero_probes: u64,
+    #[cfg(feature = "stats")]
+    pub capture_history_reorderings: u64,
+    #[cfg(feature = "stats")]
+    pub capture_history_reward_updates: u64,
+    #[cfg(feature = "stats")]
+    pub capture_history_malus_updates: u64,
+    #[cfg(feature = "stats")]
+    pub capture_history_distribution: [u64; 7],
+    #[cfg(feature = "stats")]
+    pub capture_history_saturated: u64,
 }
 
 #[cfg(feature = "stats")]
@@ -150,6 +167,20 @@ impl SearchStatistics {
         self.picker_killer_stage_visits += other.picker_killer_stage_visits;
         self.picker_quiet_stage_visits += other.picker_quiet_stage_visits;
         self.picker_bad_tactical_stage_visits += other.picker_bad_tactical_stage_visits;
+        self.beta_cutoff_searched_moves += other.beta_cutoff_searched_moves;
+        self.capture_history_probes += other.capture_history_probes;
+        self.capture_history_nonzero_probes += other.capture_history_nonzero_probes;
+        self.capture_history_reorderings += other.capture_history_reorderings;
+        self.capture_history_reward_updates += other.capture_history_reward_updates;
+        self.capture_history_malus_updates += other.capture_history_malus_updates;
+        for (total, value) in self
+            .capture_history_distribution
+            .iter_mut()
+            .zip(other.capture_history_distribution)
+        {
+            *total += value;
+        }
+        self.capture_history_saturated += other.capture_history_saturated;
     }
 }
 
@@ -167,6 +198,7 @@ pub struct Searcher<'a> {
     tt: TranspositionTable,
     killers: [[Move; 2]; MAX_PLY],
     history: HistoryTable,
+    capture_history: CaptureHistoryTable,
     statistics: SearchStatistics,
 }
 
@@ -194,6 +226,7 @@ impl<'a> Searcher<'a> {
             tt,
             killers: [[Move::NONE; 2]; MAX_PLY],
             history: HistoryTable::default(),
+            capture_history: CaptureHistoryTable::default(),
             statistics: SearchStatistics::default(),
         }
     }
@@ -287,6 +320,8 @@ impl<'a> Searcher<'a> {
             }
         }
 
+        #[cfg(feature = "stats")]
+        self.record_capture_history_summary();
         SearchResult {
             best_move: Some(best_move),
             score: best_score,
@@ -428,7 +463,7 @@ impl<'a> Searcher<'a> {
         let mut best = -VALUE_INFINITE;
         let mut best_move = Move::NONE;
         let mut searched_moves = MoveList::new();
-        while let Some(mv) = picker.next_move(position, &self.history) {
+        while let Some(mv) = picker.next_move(position, &self.history, &self.capture_history) {
             let move_index = searched_moves.len();
             #[cfg(feature = "stats")]
             {
@@ -514,6 +549,7 @@ impl<'a> Searcher<'a> {
                 #[cfg(feature = "stats")]
                 {
                     self.statistics.beta_cutoffs += 1;
+                    self.statistics.beta_cutoff_searched_moves += (move_index + 1) as u64;
                     if move_index == 0 {
                         self.statistics.first_move_beta_cutoffs += 1;
                     }
@@ -521,6 +557,24 @@ impl<'a> Searcher<'a> {
                         self.statistics.capture_beta_cutoffs += 1;
                     } else {
                         self.statistics.quiet_beta_cutoffs += 1;
+                    }
+                }
+                if mv.is_capture() {
+                    if self.capture_history.reward(position, mv, depth) {
+                        #[cfg(feature = "stats")]
+                        {
+                            self.statistics.capture_history_reward_updates += 1;
+                        }
+                    }
+                    for &failed in searched_moves.iter() {
+                        if failed.is_capture()
+                            && self.capture_history.penalize(position, failed, depth)
+                        {
+                            #[cfg(feature = "stats")]
+                            {
+                                self.statistics.capture_history_malus_updates += 1;
+                            }
+                        }
                     }
                 }
                 if !mv.is_capture() && !mv.is_promotion() {
@@ -592,7 +646,7 @@ impl<'a> Searcher<'a> {
             ordering::MovePicker::quiescence(moves, in_check, self.killers[ply], moving_color);
         #[cfg(feature = "stats")]
         let mut exhausted = true;
-        while let Some(mv) = picker.next_move(position, &self.history) {
+        while let Some(mv) = picker.next_move(position, &self.history, &self.capture_history) {
             #[cfg(feature = "stats")]
             {
                 self.statistics.moves_searched += 1;
@@ -663,11 +717,21 @@ impl<'a> Searcher<'a> {
         self.statistics.see_calls += statistics.see_calls;
         self.statistics.good_captures += statistics.good_captures;
         self.statistics.bad_captures += statistics.bad_captures;
+        self.statistics.capture_history_probes += statistics.capture_history_probes;
+        self.statistics.capture_history_nonzero_probes += statistics.capture_history_nonzero_probes;
+        self.statistics.capture_history_reorderings += statistics.capture_history_reorderings;
         self.statistics.picker_tt_stage_visits += statistics.tt_stage_visits;
         self.statistics.picker_good_tactical_stage_visits += statistics.good_tactical_stage_visits;
         self.statistics.picker_killer_stage_visits += statistics.killer_stage_visits;
         self.statistics.picker_quiet_stage_visits += statistics.quiet_stage_visits;
         self.statistics.picker_bad_tactical_stage_visits += statistics.bad_tactical_stage_visits;
+    }
+
+    #[cfg(feature = "stats")]
+    fn record_capture_history_summary(&mut self) {
+        let summary = self.capture_history.summary();
+        self.statistics.capture_history_distribution = summary.buckets;
+        self.statistics.capture_history_saturated = summary.saturated;
     }
 
     fn pv_line(&self, ply: usize) -> Vec<Move> {

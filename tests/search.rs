@@ -167,10 +167,55 @@ fn capture_ordering_reports_see_and_cutoff_statistics() {
     assert!(result.statistics.see_scored_moves_unused() > 0);
     assert!(result.statistics.picker_tt_stage_visits > 0);
     assert!(result.statistics.picker_good_tactical_stage_visits > 0);
+    assert!(result.statistics.capture_history_probes > 0);
+    assert!(result.statistics.capture_history_reward_updates > 0);
+    assert!(result.statistics.capture_history_nonzero_probes > 0);
+    assert!(result.statistics.beta_cutoff_searched_moves >= result.statistics.beta_cutoffs);
+    assert_eq!(
+        result
+            .statistics
+            .capture_history_distribution
+            .iter()
+            .sum::<u64>(),
+        4_608
+    );
     assert!(
         result.statistics.capture_beta_cutoffs + result.statistics.quiet_beta_cutoffs
             <= result.statistics.beta_cutoffs
     );
+}
+
+#[cfg(feature = "stats")]
+#[test]
+fn main_search_rewards_cutoff_captures_and_penalizes_prior_failed_captures() {
+    let fixtures = [
+        Position::STARTPOS_FEN,
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+        "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
+        "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8",
+        "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10",
+    ];
+    let mut rewards = 0;
+    let mut maluses = 0;
+    let mut probes = 0;
+    let mut reorderings = 0;
+
+    for fen in fixtures {
+        let mut position = Position::from_fen(fen).expect("history fixture must be valid");
+        let hashes = [position.hash()];
+        let stop = AtomicBool::new(false);
+        let mut searcher = Searcher::new(&stop);
+        let result = searcher.search(&mut position, &SearchLimits::depth(5), &hashes, |_| {});
+        rewards += result.statistics.capture_history_reward_updates;
+        maluses += result.statistics.capture_history_malus_updates;
+        probes += result.statistics.capture_history_probes;
+        reorderings += result.statistics.capture_history_reorderings;
+    }
+
+    assert!(rewards > 0);
+    assert!(maluses > 0);
+    assert!(probes > 0);
+    assert!(reorderings > 0);
 }
 
 #[cfg(feature = "stats")]

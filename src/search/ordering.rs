@@ -1,6 +1,6 @@
 use crate::chess::{Color, Move, MoveList, PieceType, Position};
 
-use super::{history::HistoryTable, see::see};
+use super::{capture_history::CaptureHistoryTable, history::HistoryTable, see::see};
 
 const PIECE_VALUE: [i32; 6] = [100, 320, 330, 500, 900, 20_000];
 const GOOD_TACTICAL_SCORE: i32 = 200_000;
@@ -40,6 +40,12 @@ pub(crate) struct OrderingStatistics {
     #[cfg(feature = "stats")]
     pub bad_captures: u64,
     #[cfg(feature = "stats")]
+    pub capture_history_probes: u64,
+    #[cfg(feature = "stats")]
+    pub capture_history_nonzero_probes: u64,
+    #[cfg(feature = "stats")]
+    pub capture_history_reorderings: u64,
+    #[cfg(feature = "stats")]
     pub tt_stage_visits: u64,
     #[cfg(feature = "stats")]
     pub good_tactical_stage_visits: u64,
@@ -57,6 +63,8 @@ pub(crate) struct MovePicker {
     moves: MoveList,
     classes: [MoveClass; MoveList::CAPACITY],
     scores: [i32; MoveList::CAPACITY],
+    #[cfg(feature = "stats")]
+    base_scores: [i32; MoveList::CAPACITY],
     preferred: Option<Move>,
     killers: [Move; 2],
     color: Color,
@@ -97,6 +105,8 @@ impl MovePicker {
             moves,
             classes: [MoveClass::Unclassified; MoveList::CAPACITY],
             scores: [i32::MIN; MoveList::CAPACITY],
+            #[cfg(feature = "stats")]
+            base_scores: [i32::MIN; MoveList::CAPACITY],
             preferred,
             killers,
             color,
@@ -112,6 +122,7 @@ impl MovePicker {
         &mut self,
         position: &Position,
         history: &HistoryTable,
+        capture_history: &CaptureHistoryTable,
     ) -> Option<Move> {
         self.last_move_was_scored = false;
         loop {
@@ -139,7 +150,7 @@ impl MovePicker {
                         {
                             self.statistics.good_tactical_stage_visits += 1;
                         }
-                        self.classify_tacticals(position);
+                        self.classify_tacticals(position, capture_history);
                         self.stage_initialized = true;
                     }
                     if let Some(mv) = self.pick_best(MoveClass::GoodTactical) {
@@ -232,21 +243,50 @@ impl MovePicker {
             .map(|(index, _)| index)
     }
 
-    fn classify_tacticals(&mut self, position: &Position) {
+    fn classify_tacticals(&mut self, position: &Position, capture_history: &CaptureHistoryTable) {
         for (index, &mv) in self.moves.iter().enumerate() {
             if self.classes[index] != MoveClass::Unclassified
                 || (!mv.is_capture() && !mv.is_promotion())
             {
                 continue;
             }
-            let (score, is_good) = tactical_score(position, mv, &mut self.statistics);
+            let (score, _base_score, is_good) =
+                tactical_score(position, mv, capture_history, &mut self.statistics);
             self.scores[index] = score;
+            #[cfg(feature = "stats")]
+            {
+                self.base_scores[index] = _base_score;
+            }
             self.classes[index] = if is_good {
                 MoveClass::GoodTactical
             } else {
                 self.statistics.bad_capture_count += 1;
                 MoveClass::BadTactical
             };
+        }
+        #[cfg(feature = "stats")]
+        self.record_capture_history_reorderings();
+    }
+
+    #[cfg(feature = "stats")]
+    fn record_capture_history_reorderings(&mut self) {
+        for left in 0..self.moves.len() {
+            if !matches!(
+                self.classes[left],
+                MoveClass::GoodTactical | MoveClass::BadTactical
+            ) {
+                continue;
+            }
+            for right in left + 1..self.moves.len() {
+                if self.classes[left] != self.classes[right] {
+                    continue;
+                }
+                let static_left_first = self.base_scores[left] >= self.base_scores[right];
+                let history_left_first = self.scores[left] >= self.scores[right];
+                if static_left_first != history_left_first {
+                    self.statistics.capture_history_reorderings += 1;
+                }
+            }
         }
     }
 
@@ -298,8 +338,9 @@ impl MovePicker {
 fn tactical_score(
     position: &Position,
     mv: Move,
+    capture_history: &CaptureHistoryTable,
     _statistics: &mut OrderingStatistics,
-) -> (i32, bool) {
+) -> (i32, i32, bool) {
     #[cfg(feature = "stats")]
     {
         _statistics.moves_scored += 1;
@@ -324,21 +365,33 @@ fn tactical_score(
     } else {
         0
     };
+    let history_score = if mv.is_capture() {
+        let score = capture_history.score(position, mv);
+        #[cfg(feature = "stats")]
+        {
+            _statistics.capture_history_probes += 1;
+            if score != 0 {
+                _statistics.capture_history_nonzero_probes += 1;
+            }
+        }
+        score
+    } else {
+        0
+    };
     if mv.is_promotion() || exchange >= 0 {
         #[cfg(feature = "stats")]
         if mv.is_capture() {
             _statistics.good_captures += 1;
         }
-        (
-            GOOD_TACTICAL_SCORE + promotion_bonus + mvv_lva + exchange,
-            true,
-        )
+        let base_score = GOOD_TACTICAL_SCORE + promotion_bonus + mvv_lva + exchange;
+        (base_score + history_score, base_score, true)
     } else {
         #[cfg(feature = "stats")]
         {
             _statistics.bad_captures += 1;
         }
-        (BAD_CAPTURE_SCORE + mvv_lva + exchange, false)
+        let base_score = BAD_CAPTURE_SCORE + mvv_lva + exchange;
+        (base_score + history_score, base_score, false)
     }
 }
 
@@ -362,11 +415,19 @@ mod tests {
         search::see,
     };
 
-    use super::{HistoryTable, MovePicker, OrderingStatistics, quiet_score, tactical_score};
+    use super::{
+        CaptureHistoryTable, HistoryTable, MovePicker, OrderingStatistics, quiet_score,
+        tactical_score,
+    };
 
-    fn collect(picker: &mut MovePicker, position: &Position, history: &HistoryTable) -> Vec<Move> {
+    fn collect(
+        picker: &mut MovePicker,
+        position: &Position,
+        history: &HistoryTable,
+        capture_history: &CaptureHistoryTable,
+    ) -> Vec<Move> {
         let mut picked = Vec::new();
-        while let Some(mv) = picker.next_move(position, history) {
+        while let Some(mv) = picker.next_move(position, history, capture_history) {
             picked.push(mv);
         }
         picked
@@ -400,6 +461,7 @@ mod tests {
             .expect("ordinary quiet move must be legal");
         let legal = position.legal_moves();
         let history = HistoryTable::default();
+        let capture_history = CaptureHistoryTable::default();
         let mut picker = MovePicker::main(
             legal.clone(),
             Some(preferred),
@@ -407,7 +469,7 @@ mod tests {
             position.side_to_move(),
         );
 
-        let picked = collect(&mut picker, &position, &history);
+        let picked = collect(&mut picker, &position, &history, &capture_history);
 
         assert_eq!(picked.len(), legal.len());
         assert_eq!(picked[0], preferred);
@@ -435,6 +497,7 @@ mod tests {
             .find_legal_move("e4d3")
             .expect("preferred move must be legal");
         let history = HistoryTable::default();
+        let capture_history = CaptureHistoryTable::default();
         let mut picker = MovePicker::main(
             position.legal_moves(),
             Some(preferred),
@@ -442,7 +505,10 @@ mod tests {
             position.side_to_move(),
         );
 
-        assert_eq!(picker.next_move(&position, &history), Some(preferred));
+        assert_eq!(
+            picker.next_move(&position, &history, &capture_history),
+            Some(preferred)
+        );
         assert!(!picker.last_move_was_scored());
         #[cfg(feature = "stats")]
         {
@@ -453,7 +519,7 @@ mod tests {
             assert_eq!(statistics.good_tactical_stage_visits, 0);
         }
 
-        let rest = collect(&mut picker, &position, &history);
+        let rest = collect(&mut picker, &position, &history, &capture_history);
         assert!(!rest.contains(&preferred));
         #[cfg(feature = "stats")]
         assert!(picker.statistics().see_calls > 0);
@@ -467,6 +533,7 @@ mod tests {
             .find_legal_move("e4e5")
             .expect("losing capture must be legal");
         let history = HistoryTable::default();
+        let capture_history = CaptureHistoryTable::default();
         let mut picker = MovePicker::quiescence(
             position.legal_moves(),
             false,
@@ -474,7 +541,7 @@ mod tests {
             position.side_to_move(),
         );
 
-        let picked = collect(&mut picker, &position, &history);
+        let picked = collect(&mut picker, &position, &history, &capture_history);
 
         assert!(!picked.contains(&bad_capture));
         assert_eq!(picker.bad_tactical_count(), 1);
@@ -490,6 +557,7 @@ mod tests {
         assert!(position.is_in_check(position.side_to_move()));
         let legal = position.legal_moves();
         let history = HistoryTable::default();
+        let capture_history = CaptureHistoryTable::default();
         let mut picker = MovePicker::quiescence(
             legal.clone(),
             true,
@@ -497,7 +565,7 @@ mod tests {
             position.side_to_move(),
         );
 
-        let picked = collect(&mut picker, &position, &history);
+        let picked = collect(&mut picker, &position, &history, &capture_history);
 
         assert_eq!(picked.len(), legal.len());
         for &mv in legal.iter() {
@@ -509,9 +577,92 @@ mod tests {
     }
 
     #[test]
+    fn capture_history_reorders_only_inside_the_existing_see_stage() {
+        let mut position = Position::from_fen("7k/8/8/1p1p4/8/2N5/8/K7 w - - 0 1")
+            .expect("equal-capture fixture must be valid");
+        let left_capture = position
+            .find_legal_move("c3b5")
+            .expect("left capture must be legal");
+        let right_capture = position
+            .find_legal_move("c3d5")
+            .expect("right capture must be legal");
+        let history = HistoryTable::default();
+        let empty_capture_history = CaptureHistoryTable::default();
+        let mut baseline = MovePicker::main(
+            position.legal_moves(),
+            None,
+            [Move::NONE; 2],
+            position.side_to_move(),
+        );
+        let baseline_moves = collect(&mut baseline, &position, &history, &empty_capture_history);
+        let rewarded =
+            if index_of(&baseline_moves, left_capture) < index_of(&baseline_moves, right_capture) {
+                right_capture
+            } else {
+                left_capture
+            };
+        let other = if rewarded == left_capture {
+            right_capture
+        } else {
+            left_capture
+        };
+
+        let mut capture_history = CaptureHistoryTable::default();
+        for _ in 0..32 {
+            assert!(capture_history.reward(&position, rewarded, 8));
+        }
+        let mut reordered = MovePicker::main(
+            position.legal_moves(),
+            None,
+            [Move::NONE; 2],
+            position.side_to_move(),
+        );
+        let reordered_moves = collect(&mut reordered, &position, &history, &capture_history);
+
+        assert!(index_of(&reordered_moves, rewarded) < index_of(&reordered_moves, other));
+        assert!(reordered_moves.iter().take(2).all(|mv| mv.is_capture()));
+        #[cfg(feature = "stats")]
+        assert!(reordered.statistics().capture_history_reorderings > 0);
+    }
+
+    #[test]
+    fn capture_history_cannot_promote_a_bad_capture_above_a_good_capture() {
+        let mut position = Position::from_fen("6k1/8/5p2/3qp3/2P1Q3/8/8/6K1 w - - 0 1")
+            .expect("SEE-stage fixture must be valid");
+        let good_capture = position
+            .find_legal_move("c4d5")
+            .expect("winning capture must be legal");
+        let bad_capture = position
+            .find_legal_move("e4e5")
+            .expect("losing capture must be legal");
+        let history = HistoryTable::default();
+        let mut capture_history = CaptureHistoryTable::default();
+        for _ in 0..64 {
+            assert!(capture_history.reward(&position, bad_capture, 8));
+            assert!(capture_history.penalize(&position, good_capture, 8));
+        }
+        let mut picker = MovePicker::main(
+            position.legal_moves(),
+            None,
+            [Move::NONE; 2],
+            position.side_to_move(),
+        );
+
+        let picked = collect(&mut picker, &position, &history, &capture_history);
+
+        assert!(index_of(&picked, good_capture) < index_of(&picked, bad_capture));
+        assert!(
+            picked[index_of(&picked, bad_capture) + 1..]
+                .iter()
+                .all(|mv| mv.is_capture() || mv.is_promotion())
+        );
+    }
+
+    #[test]
     fn main_picker_preserves_every_legal_move_across_deterministic_play() {
         let mut position = Position::startpos();
         let history = HistoryTable::default();
+        let capture_history = CaptureHistoryTable::default();
         let mut state = 0xA3C5_9AC3_2026_0829_u64;
 
         for sample in 0..96 {
@@ -538,7 +689,7 @@ mod tests {
                 position.side_to_move(),
             );
 
-            let picked = collect(&mut picker, &position, &history);
+            let picked = collect(&mut picker, &position, &history, &capture_history);
 
             assert_eq!(picked.len(), legal.len(), "sample {sample}");
             assert_eq!(picked[0], preferred, "sample {sample}");
@@ -549,7 +700,7 @@ mod tests {
                     if mv == preferred {
                         1_000_000
                     } else if mv.is_capture() || mv.is_promotion() {
-                        tactical_score(&position, mv, &mut score_statistics).0
+                        tactical_score(&position, mv, &capture_history, &mut score_statistics).0
                     } else {
                         quiet_score(mv, killers, &history, position.side_to_move())
                     }

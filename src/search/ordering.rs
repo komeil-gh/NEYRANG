@@ -15,6 +15,7 @@ struct ScoredMove {
 
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct OrderingStatistics {
+    pub bad_capture_count: usize,
     #[cfg(feature = "stats")]
     pub see_calls: u64,
     #[cfg(feature = "stats")]
@@ -109,6 +110,7 @@ fn score(
         {
             _statistics.bad_captures += 1;
         }
+        _statistics.bad_capture_count += 1;
         return BAD_CAPTURE_SCORE + mvv_lva + exchange;
     }
     let mut score = 0;
@@ -168,6 +170,7 @@ mod tests {
         );
 
         let ordered = moves.as_slice();
+        assert_eq!(ordering_statistics.bad_capture_count, 1);
         assert_eq!(ordered[0], preferred);
         assert!(index_of(ordered, good_capture) < index_of(ordered, killer));
         assert!(index_of(ordered, killer) < index_of(ordered, quiet));

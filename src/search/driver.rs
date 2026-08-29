@@ -469,7 +469,17 @@ impl<'a> Searcher<'a> {
         #[cfg(feature = "stats")]
         self.record_ordering_statistics(_ordering_statistics);
 
-        for &mv in moves.iter() {
+        let first_bad_capture = moves
+            .len()
+            .saturating_sub(_ordering_statistics.bad_capture_count);
+        for (move_index, &mv) in moves.iter().enumerate() {
+            if !in_check && move_index >= first_bad_capture {
+                #[cfg(feature = "stats")]
+                {
+                    self.statistics.see_prunes += (moves.len() - move_index) as u64;
+                }
+                break;
+            }
             if !in_check && !mv.is_capture() && !mv.is_promotion() {
                 continue;
             }
@@ -564,5 +574,35 @@ impl<'a> Searcher<'a> {
                 .limits
                 .soft_time
                 .is_some_and(|limit| self.started.elapsed() >= limit)
+    }
+}
+
+#[cfg(all(test, feature = "stats"))]
+mod tests {
+    use std::sync::atomic::AtomicBool;
+
+    use crate::{
+        chess::Position,
+        search::{SearchLimits, Searcher, VALUE_INFINITE},
+    };
+
+    #[test]
+    fn qsearch_never_prunes_losing_capture_evasions() {
+        let mut position = Position::from_fen("k5r1/8/8/8/8/7q/4Q1r1/6K1 w - - 0 1")
+            .expect("check-evasion fixture must be valid");
+        assert!(position.is_in_check(position.side_to_move()));
+        position
+            .find_legal_move("e2g2")
+            .expect("the losing capture must be a legal check evasion");
+
+        let stop = AtomicBool::new(false);
+        let mut searcher = Searcher::new(&stop);
+        let hashes = [position.hash()];
+        searcher.reset(&position, &SearchLimits::depth(1), &hashes);
+
+        let _ = searcher.qsearch(&mut position, 0, -VALUE_INFINITE, VALUE_INFINITE);
+
+        assert!(searcher.statistics.bad_captures > 0);
+        assert_eq!(searcher.statistics.see_prunes, 0);
     }
 }

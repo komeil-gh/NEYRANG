@@ -102,3 +102,17 @@ fn capture_ordering_reports_see_and_cutoff_statistics() {
             <= result.statistics.beta_cutoffs
     );
 }
+
+#[cfg(feature = "stats")]
+#[test]
+fn quiescence_reports_pruned_losing_captures() {
+    let mut position = Position::from_fen("6k1/8/5p2/4p3/4Q3/8/8/6K1 w - - 0 1")
+        .expect("quiescence SEE fixture is valid");
+    let hashes = [position.hash()];
+    let stop = AtomicBool::new(false);
+    let mut searcher = Searcher::new(&stop);
+
+    let result = searcher.search(&mut position, &SearchLimits::depth(3), &hashes, |_| {});
+
+    assert!(result.statistics.see_prunes > 0);
+}

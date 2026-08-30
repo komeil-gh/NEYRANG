@@ -16,7 +16,7 @@ Main-search move ordering is delivered progressively by a fixed-capacity staged 
 
 Each stage is initialized only when search reaches it; a cutoff can therefore avoid scoring every later quiet or tactical move. The picker suppresses preferred/killer duplicates and returns every legal candidate at most once. Tactical classification still uses exact SEE. The oracle-equivalent `see_ge` primitive is retained and tested, but the experimental lazy main-search caller was reverted, so current production ordering does not silently substitute threshold classification for exact exchange scores.
 
-SEE updates temporary bitboards, exposes slider x-rays, handles promotions and en passant, excludes absolutely pinned attackers, and rejects illegal king recaptures. Qsearch retains exact SEE classification and its established losing-capture pruning.
+SEE builds one compact exchange board, computes attackers to the fixed target once, then carries piece/color occupancy and the attacker set through each recapture. Vacated sources reveal only the relevant diagonal or orthogonal slider x-rays, and the accepted legal least-valuable-attacker state is prepared once. Full king safety remains authoritative for every candidate; promotions, en passant, absolute pins, illegal king recaptures, piece-kind/Lsb LVA order, exact scores, and threshold answers retain their previous semantics. The complete pre-G1 algorithm remains a test-only oracle. Qsearch retains exact SEE classification and its established losing-capture pruning.
 
 At non-root, non-PV nodes, sufficiently late quiet moves may be reduced by one ply. The reduction starts with the fifth searched move at depth three, excludes TT moves, killers, strong-history moves, captures, promotions, checks, and nodes already in check, and always performs a normal-depth zero-window re-search when the reduced result raises alpha. The ordinary PVS full-window re-search remains authoritative when needed.
 
@@ -47,6 +47,8 @@ Single release runs on the same Apple Silicon host, five positions, depth 5:
 | Conservative fixed-R2 NMP | 180,591 | 126 ms phase median | retained after 7,946 valid games |
 
 The final row is the median of five runs; the preceding rows are single-run development snapshots. These are engineering measurements, not Elo evidence. Search-tree changes make raw NPS comparisons insufficient; paired games and SPRT decide strength patches.
+
+The later F1 legality-filter and G1 exact-SEE optimizations preserve the final 180,591-node depth-5 tree and the 4,483,694-node depth-8 tree exactly. G1 reduced the binding 15-run depth-8 median from 2,341 to 2,237 ms (-4.44%) against frozen F1, then completed a clean strict 2,000-game regression screen at 50.98%. This is score-preserving throughput evidence, not a general Elo estimate.
 
 ## Experiment outcome and next search work
 

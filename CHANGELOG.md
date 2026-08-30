@@ -19,6 +19,7 @@ All notable changes to NEYRANG are documented here.
 - Exact SEE now carries color occupancy and target attackers through the exchange, reveals slider x-rays incrementally, prepares each accepted legal LVA state once, and preserves every prior score, threshold answer, exchange-step count, search tree, and checksum.
 - The retained G1 candidate reduced median depth-8 wall time by a further 4.44% and raised median NPS by 4.62% across 15 interleaved runs per frozen binary.
 - H0 keeps the default release byte-for-byte identical to G1 while isolating evaluation evidence tooling behind the non-default `eval-tools` feature.
+- The paired-match auditor now distinguishes nonzero fastchess timeout/crash summary counters from clean zero counters, with regression coverage for both summaries and free-form failures.
 
 ### Evidence
 

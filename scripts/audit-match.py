@@ -30,11 +30,17 @@ TELEMETRY_PATTERNS = {
 }
 LOG_ANOMALIES = {
     "warning": re.compile(r"\bwarning\b", re.IGNORECASE),
-    "timeout": re.compile(r"\b(?:timeout|timed\s+out)\b", re.IGNORECASE),
+    "timeout": re.compile(
+        r"\btimeouts?\s*:\s*[1-9]\d*\b|\btimed\s+out\b|\btimeout\b(?!\s*:\s*0\b)",
+        re.IGNORECASE,
+    ),
     "time_forfeit": re.compile(r"\btime\s+(?:forfeit|loss)\b", re.IGNORECASE),
     "illegal_move": re.compile(r"\billegal\s+move\b", re.IGNORECASE),
     "disconnect": re.compile(r"\bdisconnect(?:ed|ion)?\b", re.IGNORECASE),
-    "crash": re.compile(r"\bcrash(?:ed)?\b", re.IGNORECASE),
+    "crash": re.compile(
+        r"\bcrashed\s*:\s*[1-9]\d*\b|\bcrash\b|\bcrashed\b(?!\s*:\s*0\b)",
+        re.IGNORECASE,
+    ),
     "stall": re.compile(r"\bstall(?:ed|ing)?\b", re.IGNORECASE),
     "fatal": re.compile(r"\bfatal\b", re.IGNORECASE),
     "protocol_error": re.compile(r"\bprotocol\s+error\b", re.IGNORECASE),

@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::{
-    chess::{Move, MoveList, Position},
+    chess::{Move, MoveList, PieceType, Position},
     eval,
 };
 
@@ -21,6 +21,50 @@ pub const MAX_PLY: usize = 128;
 pub const VALUE_DRAW: i32 = 0;
 pub const VALUE_MATE: i32 = 30_000;
 pub const VALUE_INFINITE: i32 = 32_000;
+const NULL_MOVE_MIN_DEPTH: i32 = 4;
+const NULL_MOVE_REDUCTION: i32 = 2;
+
+#[derive(Clone, Copy)]
+struct SearchContext {
+    preferred: Option<Move>,
+    null_allowed: bool,
+    in_null_subtree: bool,
+}
+
+impl SearchContext {
+    const fn normal(preferred: Option<Move>) -> Self {
+        Self {
+            preferred,
+            null_allowed: true,
+            in_null_subtree: false,
+        }
+    }
+
+    #[cfg(test)]
+    const fn without_null(preferred: Option<Move>) -> Self {
+        Self {
+            preferred,
+            null_allowed: false,
+            in_null_subtree: false,
+        }
+    }
+
+    const fn after_move(self) -> Self {
+        Self {
+            preferred: None,
+            null_allowed: self.null_allowed,
+            in_null_subtree: self.in_null_subtree,
+        }
+    }
+
+    const fn after_null(self) -> Self {
+        Self {
+            preferred: None,
+            null_allowed: false,
+            in_null_subtree: true,
+        }
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct SearchInfo {
@@ -73,7 +117,10 @@ pub struct SearchStatistics {
     pub aspiration_searches: u64,
     pub see_prunes: u64,
     pub futility_prunes: u64,
+    pub null_move_attempts: u64,
+    pub null_move_fail_highs: u64,
     pub null_move_cutoffs: u64,
+    pub null_move_verifications: u64,
     pub lmr_reductions: u64,
     pub lmr_researches: u64,
     #[cfg(feature = "stats")]
@@ -133,7 +180,10 @@ impl SearchStatistics {
         self.aspiration_searches += other.aspiration_searches;
         self.see_prunes += other.see_prunes;
         self.futility_prunes += other.futility_prunes;
+        self.null_move_attempts += other.null_move_attempts;
+        self.null_move_fail_highs += other.null_move_fail_highs;
         self.null_move_cutoffs += other.null_move_cutoffs;
+        self.null_move_verifications += other.null_move_verifications;
         self.lmr_reductions += other.lmr_reductions;
         self.lmr_researches += other.lmr_researches;
         self.move_generation_calls += other.move_generation_calls;
@@ -243,7 +293,14 @@ impl<'a> Searcher<'a> {
                 if depth >= 4 {
                     self.statistics.aspiration_searches += 1;
                 }
-                let score = self.negamax(position, depth as i32, 0, alpha, beta, Some(best_move));
+                let score = self.negamax(
+                    position,
+                    depth as i32,
+                    0,
+                    alpha,
+                    beta,
+                    SearchContext::normal(Some(best_move)),
+                );
                 if self.stopped || depth < 4 {
                     break score;
                 }
@@ -349,7 +406,7 @@ impl<'a> Searcher<'a> {
         ply: usize,
         mut alpha: i32,
         beta: i32,
-        preferred: Option<Move>,
+        context: SearchContext,
     ) -> i32 {
         if ply >= MAX_PLY - 1 {
             return eval::evaluate(position);
@@ -360,17 +417,21 @@ impl<'a> Searcher<'a> {
         if self.should_stop() {
             return VALUE_DRAW;
         }
-        if self.is_draw(position) {
+        if !context.in_null_subtree && self.is_draw(position) {
             return VALUE_DRAW;
         }
         if depth <= 0 {
-            return self.qsearch(position, ply, alpha, beta);
+            return self.qsearch(position, ply, alpha, beta, context);
         }
 
         let key = position.hash();
         let original_alpha = alpha;
         let is_pv_node = beta - alpha > 1;
-        let tt_data = self.tt.probe(key, ply);
+        let tt_data = if context.in_null_subtree {
+            None
+        } else {
+            self.tt.probe(key, ply)
+        };
         #[cfg(feature = "stats")]
         if tt_data.is_some() {
             self.statistics.tt_hits += 1;
@@ -419,9 +480,47 @@ impl<'a> Searcher<'a> {
                 VALUE_DRAW
             };
         }
+        let mate_bound = VALUE_MATE - MAX_PLY as i32;
+        if ply != 0
+            && !is_pv_node
+            && context.null_allowed
+            && !context.in_null_subtree
+            && !in_check
+            && depth >= NULL_MOVE_MIN_DEPTH
+            && beta > -mate_bound
+            && beta < mate_bound
+            && has_meaningful_non_pawn_material(position)
+            && eval::evaluate(position) >= beta
+        {
+            #[cfg(feature = "stats")]
+            {
+                self.statistics.null_move_attempts += 1;
+            }
+            let undo = position.make_null_move();
+            let score = -self.negamax(
+                position,
+                depth - 1 - NULL_MOVE_REDUCTION,
+                ply + 1,
+                -beta,
+                -beta + 1,
+                context.after_null(),
+            );
+            position.unmake_null_move(undo);
+            if self.stopped {
+                return VALUE_DRAW;
+            }
+            if score >= beta {
+                #[cfg(feature = "stats")]
+                {
+                    self.statistics.null_move_fail_highs += 1;
+                    self.statistics.null_move_cutoffs += 1;
+                }
+                return beta;
+            }
+        }
         let moving_color = position.side_to_move();
         let tt_move = tt_data.map(|data| data.best_move);
-        let ordering_preferred = tt_move.or(preferred);
+        let ordering_preferred = tt_move.or(context.preferred);
         let mut picker =
             ordering::MovePicker::main(moves, ordering_preferred, self.killers[ply], moving_color);
 
@@ -459,10 +558,19 @@ impl<'a> Searcher<'a> {
                 && self.history.score(moving_color, mv) < HistoryTable::MAX_SCORE / 4;
             let undo = position.make_move(mv);
             let gives_check = can_reduce && position.is_in_check(position.side_to_move());
-            self.hashes.push(position.repetition_hash());
+            if !context.in_null_subtree {
+                self.hashes.push(position.repetition_hash());
+            }
             let mut score;
             if move_index == 0 {
-                score = -self.negamax(position, depth - 1, ply + 1, -beta, -alpha, None);
+                score = -self.negamax(
+                    position,
+                    depth - 1,
+                    ply + 1,
+                    -beta,
+                    -alpha,
+                    context.after_move(),
+                );
             } else {
                 #[cfg(feature = "stats")]
                 {
@@ -473,28 +581,57 @@ impl<'a> Searcher<'a> {
                     {
                         self.statistics.lmr_reductions += 1;
                     }
-                    score = -self.negamax(position, depth - 2, ply + 1, -alpha - 1, -alpha, None);
+                    score = -self.negamax(
+                        position,
+                        depth - 2,
+                        ply + 1,
+                        -alpha - 1,
+                        -alpha,
+                        context.after_move(),
+                    );
                     if score > alpha {
                         #[cfg(feature = "stats")]
                         {
                             self.statistics.lmr_researches += 1;
                             self.statistics.pvs_zero_window_searches += 1;
                         }
-                        score =
-                            -self.negamax(position, depth - 1, ply + 1, -alpha - 1, -alpha, None);
+                        score = -self.negamax(
+                            position,
+                            depth - 1,
+                            ply + 1,
+                            -alpha - 1,
+                            -alpha,
+                            context.after_move(),
+                        );
                     }
                 } else {
-                    score = -self.negamax(position, depth - 1, ply + 1, -alpha - 1, -alpha, None);
+                    score = -self.negamax(
+                        position,
+                        depth - 1,
+                        ply + 1,
+                        -alpha - 1,
+                        -alpha,
+                        context.after_move(),
+                    );
                 }
                 if score > alpha && score < beta {
                     #[cfg(feature = "stats")]
                     {
                         self.statistics.pvs_researches += 1;
                     }
-                    score = -self.negamax(position, depth - 1, ply + 1, -beta, -alpha, None);
+                    score = -self.negamax(
+                        position,
+                        depth - 1,
+                        ply + 1,
+                        -beta,
+                        -alpha,
+                        context.after_move(),
+                    );
                 }
             }
-            self.hashes.pop();
+            if !context.in_null_subtree {
+                self.hashes.pop();
+            }
             position.unmake_move(mv, undo);
 
             if self.stopped {
@@ -523,7 +660,7 @@ impl<'a> Searcher<'a> {
                         self.statistics.quiet_beta_cutoffs += 1;
                     }
                 }
-                if !mv.is_capture() && !mv.is_promotion() {
+                if !context.in_null_subtree && !mv.is_capture() && !mv.is_promotion() {
                     self.record_killer(ply, mv);
                     self.history.reward(moving_color, mv, depth);
                     for &failed in searched_moves.iter() {
@@ -545,12 +682,21 @@ impl<'a> Searcher<'a> {
         } else {
             Bound::Exact
         };
-        self.tt
-            .store(key, depth as i16, best, bound, best_move, ply);
+        if !context.in_null_subtree {
+            self.tt
+                .store(key, depth as i16, best, bound, best_move, ply);
+        }
         best
     }
 
-    fn qsearch(&mut self, position: &mut Position, ply: usize, mut alpha: i32, beta: i32) -> i32 {
+    fn qsearch(
+        &mut self,
+        position: &mut Position,
+        ply: usize,
+        mut alpha: i32,
+        beta: i32,
+        context: SearchContext,
+    ) -> i32 {
         if ply >= MAX_PLY - 1 {
             return eval::evaluate(position);
         }
@@ -561,7 +707,7 @@ impl<'a> Searcher<'a> {
         if self.should_stop() {
             return VALUE_DRAW;
         }
-        if self.is_draw(position) {
+        if !context.in_null_subtree && self.is_draw(position) {
             return VALUE_DRAW;
         }
 
@@ -607,9 +753,13 @@ impl<'a> Searcher<'a> {
                 }
             }
             let undo = position.make_move(mv);
-            self.hashes.push(position.repetition_hash());
-            let score = -self.qsearch(position, ply + 1, -beta, -alpha);
-            self.hashes.pop();
+            if !context.in_null_subtree {
+                self.hashes.push(position.repetition_hash());
+            }
+            let score = -self.qsearch(position, ply + 1, -beta, -alpha, context.after_move());
+            if !context.in_null_subtree {
+                self.hashes.pop();
+            }
             position.unmake_move(mv, undo);
 
             if self.stopped {
@@ -728,13 +878,22 @@ impl<'a> Searcher<'a> {
     }
 }
 
+fn has_meaningful_non_pawn_material(position: &Position) -> bool {
+    let color = position.side_to_move();
+    let major = position.pieces(color, PieceType::Rook) | position.pieces(color, PieceType::Queen);
+    let minor =
+        position.pieces(color, PieceType::Knight) | position.pieces(color, PieceType::Bishop);
+    major != 0 || minor.count_ones() >= 2
+}
+
 #[cfg(all(test, feature = "stats"))]
 mod tests {
     use std::sync::atomic::AtomicBool;
 
+    use super::{SearchContext, SearchStatistics};
     use crate::{
-        chess::Position,
-        search::{SearchLimits, Searcher, VALUE_INFINITE},
+        chess::{Move, Position},
+        search::{SearchLimits, Searcher, VALUE_INFINITE, VALUE_MATE, tt::Bound},
     };
 
     #[test]
@@ -751,9 +910,157 @@ mod tests {
         let hashes = [position.hash()];
         searcher.reset(&mut position, &SearchLimits::depth(1), &hashes);
 
-        let _ = searcher.qsearch(&mut position, 0, -VALUE_INFINITE, VALUE_INFINITE);
+        let _ = searcher.qsearch(
+            &mut position,
+            0,
+            -VALUE_INFINITE,
+            VALUE_INFINITE,
+            SearchContext::normal(None),
+        );
 
         assert!(searcher.statistics.bad_captures > 0);
         assert_eq!(searcher.statistics.see_prunes, 0);
     }
+
+    #[test]
+    fn null_move_guards_block_root_pv_shallow_check_nested_and_mate_nodes() {
+        let cases = [
+            (
+                Position::startpos(),
+                4,
+                0,
+                -1_000,
+                -999,
+                SearchContext::normal(None),
+            ),
+            (
+                Position::startpos(),
+                4,
+                1,
+                -1_000,
+                1_000,
+                SearchContext::normal(None),
+            ),
+            (
+                Position::startpos(),
+                3,
+                1,
+                -1_000,
+                -999,
+                SearchContext::normal(None),
+            ),
+            (
+                Position::from_fen("k5r1/8/8/8/8/7q/4Q1r1/6K1 w - - 0 1")
+                    .expect("in-check fixture must be valid"),
+                4,
+                1,
+                -1_000,
+                -999,
+                SearchContext::normal(None),
+            ),
+            (
+                Position::startpos(),
+                4,
+                1,
+                -1_000,
+                -999,
+                SearchContext::normal(None).after_null(),
+            ),
+            (
+                Position::startpos(),
+                4,
+                1,
+                VALUE_MATE - super::MAX_PLY as i32 - 1,
+                VALUE_MATE - super::MAX_PLY as i32,
+                SearchContext::normal(None),
+            ),
+        ];
+
+        for (mut position, depth, ply, alpha, beta, context) in cases {
+            let original = position.clone();
+            let stop = AtomicBool::new(false);
+            let mut searcher = Searcher::new(&stop);
+            let hashes = [position.repetition_hash()];
+            searcher.reset(&mut position, &SearchLimits::depth(depth as u8), &hashes);
+
+            let _ = searcher.negamax(&mut position, depth, ply, alpha, beta, context);
+
+            assert_eq!(searcher.statistics.null_move_attempts, 0);
+            assert_eq!(position, original);
+        }
+    }
+
+    #[test]
+    fn internal_stalemate_is_resolved_before_a_null_probe() {
+        let mut position = Position::from_fen("k7/1r1N4/8/1N1Q4/8/8/8/7K b - - 0 1")
+            .expect("pinned-rook stalemate fixture must be valid");
+        assert!(!position.is_in_check(position.side_to_move()));
+        assert!(position.legal_moves().is_empty());
+        let original = position.clone();
+        let stop = AtomicBool::new(false);
+        let mut searcher = Searcher::new(&stop);
+        let hashes = [position.repetition_hash()];
+        searcher.reset(&mut position, &SearchLimits::depth(4), &hashes);
+
+        let score = searcher.negamax(
+            &mut position,
+            4,
+            1,
+            -10_001,
+            -10_000,
+            SearchContext::normal(None),
+        );
+
+        assert_eq!(score, 0);
+        assert_eq!(searcher.statistics.null_move_attempts, 0);
+        assert_eq!(position, original);
+    }
+
+    #[test]
+    fn synthetic_subtree_does_not_probe_store_or_train_persistent_state() {
+        let mut position = Position::startpos();
+        let original = position.clone();
+        let legal_moves = position.legal_moves();
+        let stop = AtomicBool::new(false);
+        let mut searcher = Searcher::new(&stop);
+        let hashes = [position.repetition_hash()];
+        searcher.reset(&mut position, &SearchLimits::depth(4), &hashes);
+        let key = position.hash();
+        searcher
+            .tt
+            .store(key, 8, 1_234, Bound::Exact, Move::NONE, 1);
+        searcher.statistics = SearchStatistics::default();
+
+        let _ = searcher.negamax(
+            &mut position,
+            4,
+            1,
+            -1_000,
+            -999,
+            SearchContext::normal(None).after_null(),
+        );
+
+        assert_eq!(searcher.statistics.tt_hits, 0);
+        assert_eq!(
+            searcher.tt.probe(key, 1).map(|data| data.score),
+            Some(1_234)
+        );
+        assert!(
+            legal_moves
+                .iter()
+                .all(|&mv| searcher.history.score(position.side_to_move(), mv) == 0)
+        );
+        assert!(
+            searcher
+                .killers
+                .iter()
+                .flatten()
+                .all(|&mv| mv == Move::NONE)
+        );
+        assert_eq!(position, original);
+    }
 }
+
+#[cfg(all(test, feature = "stats"))]
+#[path = "zugzwang_tests.rs"]
+mod zugzwang_tests;

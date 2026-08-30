@@ -107,6 +107,19 @@ fn print_benchmark_statistics(statistics: neyrang::search::SearchStatistics) {
     );
     println!("stats.beta_cutoffs: {}", statistics.beta_cutoffs);
     println!(
+        "stats.null_move_attempts: {}",
+        statistics.null_move_attempts
+    );
+    println!(
+        "stats.null_move_fail_highs: {}",
+        statistics.null_move_fail_highs
+    );
+    println!("stats.null_move_cutoffs: {}", statistics.null_move_cutoffs);
+    println!(
+        "stats.null_move_verifications: {}",
+        statistics.null_move_verifications
+    );
+    println!(
         "stats.first_move_beta_cutoffs: {}",
         statistics.first_move_beta_cutoffs
     );

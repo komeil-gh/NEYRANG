@@ -201,3 +201,80 @@ fn lmr_reduces_late_quiet_moves() {
     assert!(result.statistics.lmr_researches > 0);
     assert!(result.statistics.lmr_researches <= result.statistics.lmr_reductions);
 }
+
+#[cfg(feature = "stats")]
+#[test]
+fn null_move_pruning_attempts_and_cuts_off_in_a_middlegame() {
+    let mut position = Position::startpos();
+    let original = position.clone();
+    let hashes = [position.hash()];
+    let stop = AtomicBool::new(false);
+    let mut searcher = Searcher::new(&stop);
+
+    let result = searcher.search(&mut position, &SearchLimits::depth(7), &hashes, |_| {});
+
+    assert!(result.statistics.null_move_attempts > 0);
+    assert!(result.statistics.null_move_fail_highs > 0);
+    assert_eq!(
+        result.statistics.null_move_cutoffs,
+        result.statistics.null_move_fail_highs
+    );
+    assert_eq!(result.statistics.null_move_verifications, 0);
+    assert_eq!(position, original);
+    assert!(
+        result
+            .pv
+            .iter()
+            .try_fold(position.clone(), |mut current, &mv| {
+                if !current.legal_moves().iter().any(|&legal| legal == mv) {
+                    return None;
+                }
+                current.make_move(mv);
+                Some(current)
+            })
+            .is_some()
+    );
+}
+
+#[cfg(feature = "stats")]
+#[test]
+fn null_move_pruning_stays_disabled_in_zugzwang_prone_material() {
+    for fen in [
+        "4k3/8/8/4K3/4P3/8/8/8 w - - 0 1",
+        "4k3/8/8/8/8/8/3B4/4K3 w - - 0 1",
+        "4k3/8/8/8/8/8/3N4/4K3 w - - 0 1",
+    ] {
+        let mut position = Position::from_fen(fen).expect("guard fixture must be valid");
+        let original = position.clone();
+        let hashes = [position.hash()];
+        let stop = AtomicBool::new(false);
+        let mut searcher = Searcher::new(&stop);
+
+        let result = searcher.search(&mut position, &SearchLimits::depth(8), &hashes, |_| {});
+
+        assert_eq!(result.statistics.null_move_attempts, 0, "FEN: {fen}");
+        assert_eq!(result.statistics.null_move_cutoffs, 0, "FEN: {fen}");
+        assert_eq!(position, original, "FEN: {fen}");
+    }
+}
+
+#[cfg(feature = "stats")]
+#[test]
+fn node_stop_during_null_search_restores_the_root_position() {
+    let mut position = Position::startpos();
+    let original = position.clone();
+    let hashes = [position.hash()];
+    let stop = AtomicBool::new(false);
+    let mut searcher = Searcher::new(&stop);
+
+    let result = searcher.search(&mut position, &SearchLimits::nodes(10_000), &hashes, |_| {});
+
+    assert!(result.stopped);
+    assert!(result.nodes <= 10_000);
+    assert!(result.statistics.null_move_attempts > 0);
+    assert_eq!(position, original);
+    let best = result
+        .best_move
+        .expect("a stopped search keeps a fallback move");
+    assert!(position.legal_moves().iter().any(|&legal| legal == best));
+}

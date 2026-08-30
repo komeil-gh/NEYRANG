@@ -103,6 +103,23 @@ Run `scripts/test-match-config.sh` before comparative testing. Use `scripts/regr
 
 Keep engine settings equal, reverse colors, use an audited balanced opening suite, retain PGNs, and report games/W/D/L/score/Elo confidence intervals. The eight bundled openings are only a smoke/development set. The frozen 0.2.0 development configuration is recorded in [the baseline document](development/0.2.0-baseline.md), and feature outcomes belong in [the experiment ledger](development/experiments.md).
 
+Audit a completed paired match independently of fastchess's final console report:
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r scripts/requirements.txt
+.venv/bin/python scripts/audit-match.py \
+  --pgn testing/example/match.pgn \
+  --log testing/example/match.log \
+  --meta testing/example/match.meta.txt \
+  --candidate NEYRANG-candidate \
+  --opponent NEYRANG-parent \
+  --expected-games 2000 \
+  --expected-time-control 0.5+0.005
+```
+
+The auditor parses every game with python-chess, compares header and movetext results, reconstructs W/D/L and pentanomial counts, verifies consecutive opening pairs and color reversal, requires normal terminations and complete per-ply telemetry, reports latency/time-left distributions, checks completed metadata, scans the strict log for known failure classes, and compares its independent counts with fastchess's final summary. It exits nonzero on any mismatch.
+
 ## NEYRANG 0.2.0 release evidence
 
 Final versioned release gates:
@@ -150,3 +167,9 @@ Conservative fixed-R2 NMP then completed 7,946 valid games without a timeout or 
 Final cumulative validation against immutable v0.2.0 passed the deterministic gate: 8.16% fewer nodes, 11.97% lower median wall time, and 3.91% higher median NPS. The fixed primary screen did not complete cleanly because immutable v0.2.0 twice emitted a PV that continued after threefold repetition. Both histories reproduce directly in the baseline and not in the candidate. The registration allowed only one replacement, so no primary SPRT, holdout match, cumulative longer-TC match, version change, or tag followed.
 
 The final accepted source was rechecked with formatting, Clippy across all targets/features with warnings denied, 63 normal tests, 76 all-feature tests, 11 tactical tests, the three required Perft fixtures, a warning-free release build, and fastchess UCI compliance 40/40. The complete accounting and release decision are in the [0.3 search-development final report](development/0.3.0-final-report.md).
+
+## Post-0.3 F1 legality-filter evidence
+
+The retained F1 implementation replaced production make/check/unmake legality filtering with final-occupancy validation while preserving the old generator as a test-only oracle. Exact list and order equality passed across 100,000 deterministic positions, including checks, double checks, pins, en passant, castling, and promotions. The normal/all-feature/tactical suites passed 64/77/11 tests; formatting, warnings-denied Clippy, the release build, all required Perft fixtures, match-runner tests, and fastchess UCI compliance 40/40 also passed.
+
+All 15 interleaved depth-8 runs per frozen binary searched exactly 4,483,694 nodes with checksum `d8d4a9b6bbcde023`. Median time fell from 2,998 ms to 1,979 ms (-33.99%) and median NPS rose from 1,495,268 to 2,265,339 (+51.50%). The subsequent strict 2,000-game / 1,000-pair equal-time match at `0.5+0.005` scored 958 wins, 572 draws, and 470 losses for F1 (62.20%, reported `+86.52 +/-12.60 Elo`). Independent artifact auditing verified 1,000 unique paired FENs with colors reversed, all 195,161 plies with complete telemetry, 2,000 normal terminations, no negative time-left sample, and no timeout, warning, crash, illegal move, disconnect, forfeit, or protocol error. The full registration, hashes, and KEEP decision are in the [experiment ledger](development/experiments.md).

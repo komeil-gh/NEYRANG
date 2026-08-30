@@ -14,7 +14,9 @@ Squares use `a1 = 0` through `h8 = 63`. The position keeps twelve piece bitboard
 
 ## Legal move generation
 
-The current implementation generates pseudo-legal moves into `[Move; 256]`, makes each move, rejects positions where the moving king is attacked, and unmakes it. This deliberately favors a small trustworthy legality path. Castling checks the origin, transit, and destination squares before emission. En-passant discovered checks are caught by the normal post-move legality test.
+The production implementation generates pseudo-legal moves into `[Move; 256]`, computes the current checkers and absolute pins once, and accepts ordinary unpinned non-king moves directly when the side is not in check. King moves, pinned-piece moves, every en-passant capture, and all check evasions are validated against a simulated final occupancy and an enemy piece set with the captured piece removed. Merely enumerating legal moves no longer mutates the position.
+
+The previous make/check/unmake filter remains compiled under tests as an immutable reference oracle. A deterministic 100,000-position corpus compares the exact legal list and order and explicitly records coverage of checks, double checks, pins, en passant, castling, and promotions. Castling still checks the origin, transit, and destination squares before emission and receives a final-occupancy safety check. En-passant discovered checks are handled by removing both the moving pawn's origin and the captured pawn before attack calculation.
 
 Leaper attacks are compile-time tables. Bishops, rooks, and queens use portable occupancy rays. A future magic or lookup backend must preserve the scalar implementation as a reference/fallback and demonstrate a benchmark gain on Apple Silicon.
 

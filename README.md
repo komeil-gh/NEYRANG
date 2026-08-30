@@ -149,6 +149,7 @@ The bundled opening file is intentionally small; replace `OPENINGS_FILE` with a 
 - [0.3.0 search plan](docs/development/0.3.0-plan.md)
 - [0.3 cumulative release validation](docs/development/0.3.0-release-validation.md)
 - [0.3 search-development final report](docs/development/0.3.0-final-report.md)
+- [Next strength phase and profile](docs/development/next-strength-phase.md)
 
 ## Roadmap
 

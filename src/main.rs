@@ -1,5 +1,13 @@
 use std::{env, process::ExitCode, time::Instant};
 
+#[cfg(feature = "eval-tools")]
+use std::{
+    fs::File,
+    io::{self, BufReader, BufWriter},
+};
+
+#[cfg(feature = "eval-tools")]
+use neyrang::tools::eval_trace;
 use neyrang::{
     chess::{Position, divide, perft},
     engine::info::{ENGINE_NAME, ENGINE_VERSION},
@@ -69,6 +77,26 @@ fn run() -> Result<(), String> {
             #[cfg(feature = "stats")]
             print_benchmark_statistics(result.statistics);
             let _ = started;
+        }
+        #[cfg(feature = "eval-tools")]
+        "eval-trace" => {
+            let input = arguments
+                .get(1)
+                .ok_or_else(|| "eval-trace requires a TSV path or '-' for stdin".to_owned())?;
+            if arguments.len() != 2 {
+                return Err("eval-trace accepts exactly one TSV path or '-'".to_owned());
+            }
+
+            let stdout = io::stdout();
+            let output = BufWriter::new(stdout.lock());
+            if input == "-" {
+                let stdin = io::stdin();
+                eval_trace::export(stdin.lock(), output)?;
+            } else {
+                let file = File::open(input)
+                    .map_err(|error| format!("cannot open eval-trace input '{input}': {error}"))?;
+                eval_trace::export(BufReader::new(file), output)?;
+            }
         }
         "--version" | "-V" => println!("{ENGINE_NAME} {ENGINE_VERSION}"),
         "--help" | "-h" => print_help(),
@@ -166,4 +194,6 @@ fn print_help() {
     println!("  neyrang divide <depth>          Per-move Perft from the initial position");
     println!("  neyrang perft-fen <FEN> <depth> Perft from a FEN");
     println!("  neyrang bench [depth]           Deterministic search benchmark");
+    #[cfg(feature = "eval-tools")]
+    println!("  neyrang eval-trace <TSV|->      Export exact evaluation features");
 }

@@ -5,6 +5,34 @@ use super::{
 pub(crate) fn generate_legal(position: &mut Position) -> MoveList {
     let pseudo = generate_pseudo_legal(position);
     let moving_color = position.side_to_move();
+    let Some(king_square) = single_square(position.pieces(moving_color, PieceType::King)) else {
+        return MoveList::new();
+    };
+    let enemy = moving_color.opposite();
+    let checkers = attackers_to(position, king_square, enemy, position.all_occupancy(), 0);
+    let pinned = if checkers == 0 {
+        absolute_pins(position, moving_color, king_square)
+    } else {
+        0
+    };
+    let mut legal = MoveList::new();
+    for &mv in pseudo.iter() {
+        let requires_validation = checkers != 0
+            || mv.from() == king_square
+            || mv.is_en_passant()
+            || pinned & mv.from().bit() != 0;
+        if !requires_validation || king_is_safe_after_move(position, mv, moving_color, king_square)
+        {
+            legal.push(mv);
+        }
+    }
+    legal
+}
+
+#[cfg(test)]
+fn generate_legal_reference(position: &mut Position) -> MoveList {
+    let pseudo = generate_pseudo_legal(position);
+    let moving_color = position.side_to_move();
     let mut legal = MoveList::new();
     for &mv in pseudo.iter() {
         let undo = position.make_move(mv);
@@ -38,21 +66,132 @@ pub(crate) fn is_in_check(position: &Position, color: Color) -> bool {
 }
 
 pub(crate) fn is_square_attacked(position: &Position, square: Square, by: Color) -> bool {
-    if attacks::pawn_attacks(by.opposite(), square) & position.pieces(by, PieceType::Pawn) != 0 {
-        return true;
+    attackers_to(position, square, by, position.all_occupancy(), 0) != 0
+}
+
+fn king_is_safe_after_move(
+    position: &Position,
+    mv: Move,
+    moving_color: Color,
+    king_square: Square,
+) -> bool {
+    let from = mv.from();
+    let to = mv.to();
+    let capture_square = if mv.is_en_passant() {
+        Square::from_coords(to.file(), from.rank())
+            .expect("an en-passant capture square is on the board")
+    } else {
+        to
+    };
+    let removed_enemy = if mv.is_capture() {
+        capture_square.bit()
+    } else {
+        0
+    };
+
+    let mut occupancy = position.all_occupancy() & !from.bit() & !removed_enemy;
+    occupancy |= to.bit();
+    if mv.is_castle() {
+        let (rook_from, rook_to) = castle_rook_squares(mv);
+        occupancy = occupancy & !rook_from.bit() | rook_to.bit();
     }
-    if attacks::knight_attacks(square) & position.pieces(by, PieceType::Knight) != 0 {
-        return true;
+
+    let final_king_square = if from == king_square { to } else { king_square };
+    attackers_to(
+        position,
+        final_king_square,
+        moving_color.opposite(),
+        occupancy,
+        removed_enemy,
+    ) == 0
+}
+
+fn attackers_to(
+    position: &Position,
+    square: Square,
+    by: Color,
+    occupancy: Bitboard,
+    removed: Bitboard,
+) -> Bitboard {
+    let pawns = position.pieces(by, PieceType::Pawn) & !removed;
+    let knights = position.pieces(by, PieceType::Knight) & !removed;
+    let kings = position.pieces(by, PieceType::King) & !removed;
+    let diagonal =
+        (position.pieces(by, PieceType::Bishop) | position.pieces(by, PieceType::Queen)) & !removed;
+    let orthogonal =
+        (position.pieces(by, PieceType::Rook) | position.pieces(by, PieceType::Queen)) & !removed;
+
+    (attacks::pawn_attacks(by.opposite(), square) & pawns)
+        | (attacks::knight_attacks(square) & knights)
+        | (attacks::king_attacks(square) & kings)
+        | (attacks::bishop_attacks(square, occupancy) & diagonal)
+        | (attacks::rook_attacks(square, occupancy) & orthogonal)
+}
+
+fn absolute_pins(position: &Position, color: Color, king_square: Square) -> Bitboard {
+    const DIRECTIONS: [(i8, i8, bool); 8] = [
+        (-1, -1, true),
+        (-1, 0, false),
+        (-1, 1, true),
+        (0, -1, false),
+        (0, 1, false),
+        (1, -1, true),
+        (1, 0, false),
+        (1, 1, true),
+    ];
+
+    let own = position.occupancy(color);
+    let enemy = color.opposite();
+    let diagonal_sliders =
+        position.pieces(enemy, PieceType::Bishop) | position.pieces(enemy, PieceType::Queen);
+    let orthogonal_sliders =
+        position.pieces(enemy, PieceType::Rook) | position.pieces(enemy, PieceType::Queen);
+    let mut pinned = 0;
+
+    for (file_step, rank_step, diagonal) in DIRECTIONS {
+        let mut file = king_square.file() as i8 + file_step;
+        let mut rank = king_square.rank() as i8 + rank_step;
+        let mut candidate = 0;
+        while (0..8).contains(&file) && (0..8).contains(&rank) {
+            let square = Square::from_coords(file as u8, rank as u8)
+                .expect("validated pin-ray coordinates are on the board");
+            let bit = square.bit();
+            if position.all_occupancy() & bit != 0 {
+                if candidate == 0 {
+                    if own & bit == 0 {
+                        break;
+                    }
+                    candidate = bit;
+                } else {
+                    let compatible_sliders = if diagonal {
+                        diagonal_sliders
+                    } else {
+                        orthogonal_sliders
+                    };
+                    if compatible_sliders & bit != 0 {
+                        pinned |= candidate;
+                    }
+                    break;
+                }
+            }
+            file += file_step;
+            rank += rank_step;
+        }
     }
-    if attacks::king_attacks(square) & position.pieces(by, PieceType::King) != 0 {
-        return true;
-    }
-    let diagonal = position.pieces(by, PieceType::Bishop) | position.pieces(by, PieceType::Queen);
-    if attacks::bishop_attacks(square, position.all_occupancy()) & diagonal != 0 {
-        return true;
-    }
-    let orthogonal = position.pieces(by, PieceType::Rook) | position.pieces(by, PieceType::Queen);
-    attacks::rook_attacks(square, position.all_occupancy()) & orthogonal != 0
+    pinned
+}
+
+fn castle_rook_squares(mv: Move) -> (Square, Square) {
+    let rank = mv.from().rank();
+    let (from_file, to_file) = match mv.flag() {
+        MoveFlag::KingCastle => (7, 5),
+        MoveFlag::QueenCastle => (0, 3),
+        _ => unreachable!("only castling moves relocate a rook"),
+    };
+    (
+        Square::from_coords(from_file, rank).expect("a castling rook starts on the board"),
+        Square::from_coords(to_file, rank).expect("a castling rook ends on the board"),
+    )
 }
 
 fn generate_pawns(position: &Position, moves: &mut MoveList) {
@@ -281,4 +420,142 @@ fn pop_square(bitboard: &mut Bitboard) -> Option<Square> {
     let index = bitboard.trailing_zeros() as u8;
     *bitboard &= *bitboard - 1;
     Square::from_index(index)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const CURATED_FENS: [&str; 8] = [
+        Position::STARTPOS_FEN,
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+        "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
+        "7k/8/8/8/3pP3/8/8/K7 b - e3 0 1",
+        "4r2k/8/8/3pP3/8/8/8/4K3 w - d6 0 1",
+        "4r2k/8/8/8/1b6/8/8/4K3 w - - 0 1",
+        "4r2k/8/8/8/8/8/4R3/4K3 w - - 0 1",
+        "7k/P7/8/8/8/8/7p/K7 w - - 0 1",
+    ];
+
+    #[derive(Default)]
+    struct Coverage {
+        positions: usize,
+        checks: usize,
+        double_checks: usize,
+        pinned_positions: usize,
+        en_passant_moves: usize,
+        castling_moves: usize,
+        promotion_moves: usize,
+    }
+
+    #[test]
+    fn occupancy_filter_matches_reference_on_special_rules_and_random_play() {
+        let mut coverage = Coverage::default();
+        for fen in CURATED_FENS {
+            let mut position = Position::from_fen(fen).expect("curated legality FEN is valid");
+            compare_with_reference(&mut position, &mut coverage);
+        }
+
+        let mut random = SplitMix64(0xA6B4_9D27_C135_EE01);
+        let mut position = Position::startpos();
+        let mut game_ply = 0;
+        while coverage.positions < 100_000 {
+            let reference = compare_with_reference(&mut position, &mut coverage);
+            if reference.is_empty() || game_ply == 191 {
+                position = Position::startpos();
+                game_ply = 0;
+                continue;
+            }
+            let mv = reference.as_slice()[(random.next() as usize) % reference.len()];
+            position.make_move(mv);
+            game_ply += 1;
+        }
+
+        eprintln!(
+            "legality oracle coverage: positions={} checks={} double_checks={} pinned_positions={} en_passant_moves={} castling_moves={} promotion_moves={}",
+            coverage.positions,
+            coverage.checks,
+            coverage.double_checks,
+            coverage.pinned_positions,
+            coverage.en_passant_moves,
+            coverage.castling_moves,
+            coverage.promotion_moves,
+        );
+        assert!(coverage.positions >= 100_000);
+        assert!(coverage.checks > 0, "corpus must contain checks");
+        assert!(
+            coverage.double_checks > 0,
+            "corpus must contain double checks"
+        );
+        assert!(
+            coverage.pinned_positions > 0,
+            "corpus must contain absolute pins"
+        );
+        assert!(
+            coverage.en_passant_moves > 0,
+            "corpus must contain en-passant"
+        );
+        assert!(coverage.castling_moves > 0, "corpus must contain castling");
+        assert!(
+            coverage.promotion_moves > 0,
+            "corpus must contain promotions"
+        );
+    }
+
+    fn compare_with_reference(position: &mut Position, coverage: &mut Coverage) -> MoveList {
+        let before = position.clone();
+        let reference = generate_legal_reference(position);
+        assert_eq!(
+            *position, before,
+            "reference generation must restore position"
+        );
+        let candidate = generate_legal(position);
+        assert_eq!(
+            *position, before,
+            "candidate generation must not mutate position"
+        );
+        assert_eq!(
+            candidate.as_slice(),
+            reference.as_slice(),
+            "legality mismatch for {}",
+            position.to_fen()
+        );
+
+        let color = position.side_to_move();
+        if let Some(king) = single_square(position.pieces(color, PieceType::King)) {
+            let checkers = attackers_to(
+                position,
+                king,
+                color.opposite(),
+                position.all_occupancy(),
+                0,
+            );
+            if checkers != 0 {
+                coverage.checks += 1;
+            }
+            if checkers.count_ones() > 1 {
+                coverage.double_checks += 1;
+            }
+            if absolute_pins(position, color, king) != 0 {
+                coverage.pinned_positions += 1;
+            }
+        }
+        coverage.en_passant_moves += reference.iter().filter(|mv| mv.is_en_passant()).count();
+        coverage.castling_moves += reference.iter().filter(|mv| mv.is_castle()).count();
+        coverage.promotion_moves += reference.iter().filter(|mv| mv.is_promotion()).count();
+        coverage.positions += 1;
+        reference
+    }
+
+    struct SplitMix64(u64);
+
+    impl SplitMix64 {
+        fn next(&mut self) -> u64 {
+            self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
+            let mut value = self.0;
+            value = (value ^ (value >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            value = (value ^ (value >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            value ^ (value >> 31)
+        }
+    }
 }

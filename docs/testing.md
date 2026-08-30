@@ -201,3 +201,7 @@ The registered quiet extraction produced 3,002 paired samples and 2,910 globally
 The default release remains byte-identical to frozen G1. Full Rust formatting, warnings-denied Clippy, normal/all-feature/tactical tests, match-runner tests, Perft, deterministic tree/checksum, and fastchess compliance 40/40 pass. H2b is retained as an eligible fresh source, but its group-level train/validation sample is being expanded before weight fitting.
 
 The H2c expansion uses `scripts/select-fresh-openings.py` to reproduce a disjoint hash-ranked EPD from the source book plus PGN/EPD exclusions. Three tests cover order-independent determinism, both exclusion formats, canonical duplicates, insufficient source capacity, and refusal to overwrite. The 4,500-opening H2c artifact has no overlap with the historical or H2b opening sets; its exact registration and checksums are in the experiment ledger.
+
+## H2c rejected expansion evidence
+
+H2c completed 7,462 structurally valid games before fastchess recorded one F1 timeout in game 7,463 and exited nonzero. The independent audit reconstructs all 3,731 complete pairs and 732,065 telemetry-complete plies, but also confirms the timeout and missing completed metadata. The pre-registered all-or-nothing rule therefore rejects the entire H2c game source: it is not resumed, repaired, pooled, extracted, or used for fitting. Its artifacts remain only as independently reproducible failure evidence in the experiment ledger.

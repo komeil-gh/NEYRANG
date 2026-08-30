@@ -119,6 +119,8 @@ fn print_benchmark_statistics(statistics: neyrang::search::SearchStatistics) {
         "stats.null_move_verifications: {}",
         statistics.null_move_verifications
     );
+    println!("stats.lmr_reductions: {}", statistics.lmr_reductions);
+    println!("stats.lmr_researches: {}", statistics.lmr_researches);
     println!(
         "stats.first_move_beta_cutoffs: {}",
         statistics.first_move_beta_cutoffs

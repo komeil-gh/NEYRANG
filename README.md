@@ -27,6 +27,7 @@ Implemented:
 - 50-move, threefold repetition, checkmate, and stalemate detection
 - cooperative atomic stop plus soft/hard time limits
 - asynchronous UCI loop and deterministic benchmark command
+- feature-gated exact evaluation trace and streaming dataset export on the development branch
 
 Not implemented in the retained development source: SMP, Syzygy, NNUE, LMP, futility pruning, continuation/capture history, or an optimized sliding-attack backend. `Threads` is accepted by UCI but search remains deliberately single-threaded. Capture History and 1-ply Continuation History were tested and reverted; the second conservative NMP experiment was retained on the development branch but has not earned a release.
 
@@ -152,6 +153,7 @@ The bundled opening file is intentionally small; replace `OPENINGS_FILE` with a 
 - [0.3 cumulative release validation](docs/development/0.3.0-release-validation.md)
 - [0.3 search-development final report](docs/development/0.3.0-final-report.md)
 - [Next strength phase and profile](docs/development/next-strength-phase.md)
+- [Evaluation corpus and tuning protocol](docs/development/evaluation-tuning.md)
 
 ## Roadmap
 

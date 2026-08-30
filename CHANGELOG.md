@@ -9,6 +9,7 @@ All notable changes to NEYRANG are documented here.
 - A reusable paired-match auditor that independently parses PGNs, reconstructs W/D/L and pentanomial counts, verifies opening/color pairs and complete telemetry, audits metadata, and scans strict logs for failure classes.
 - A 100,000-position exact-list/order legality oracle covering checks, double checks, pins, en passant, castling, and promotions.
 - A test-only immutable pre-G1 SEE oracle, exercised over 100,000 legal positions, 336,083 tactical moves, and 7,393,826 threshold queries.
+- A feature-gated `neyrang-eval-trace-v1` coefficient schema and streaming TSV exporter, verified against production evaluation over 100,000 legal positions.
 
 ### Changed
 
@@ -16,6 +17,7 @@ All notable changes to NEYRANG are documented here.
 - The retained F1 candidate reduced median depth-8 wall time by 33.99% and raised median NPS by 51.50% across 15 interleaved runs per frozen binary.
 - Exact SEE now carries color occupancy and target attackers through the exchange, reveals slider x-rays incrementally, prepares each accepted legal LVA state once, and preserves every prior score, threshold answer, exchange-step count, search tree, and checksum.
 - The retained G1 candidate reduced median depth-8 wall time by a further 4.44% and raised median NPS by 4.62% across 15 interleaved runs per frozen binary.
+- H0 keeps the default release byte-for-byte identical to G1 while isolating evaluation evidence tooling behind the non-default `eval-tools` feature.
 
 ### Evidence
 

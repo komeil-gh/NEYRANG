@@ -4,6 +4,8 @@
 
 `src/chess` owns architecture-independent rules: compact types, bitboards, FEN, attacks, move generation, make/unmake, Zobrist hashing, and Perft. `src/eval` evaluates a position without depending on search. `src/search` owns iterative deepening, qsearch, ordering, history, TT, time limits, and stop checks. `src/uci` is the protocol boundary. `src/tools` contains deterministic developer tooling.
 
+Evaluation evidence code is isolated behind the non-default `eval-tools` feature. Its independent coefficient trace and TSV exporter do not enter the normal playing binary; the default H0 build is byte-identical to the frozen G1 executable. This boundary prevents corpus/training I/O and allocations from leaking into UCI or search.
+
 The engine has no runtime dependencies outside `std`. Strings, vectors, threads, and I/O remain at root/tool/protocol boundaries. A search node uses fixed move buffers and stack-based undo state.
 
 ## Position representation

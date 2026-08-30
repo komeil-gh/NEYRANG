@@ -1,6 +1,6 @@
 # NEYRANG
 
-NEYRANG is an independent UCI chess engine written from scratch in stable Rust. Version `0.2.0` is a correct, single-threaded, classical engine developed through isolated search experiments: Perft and tactical correctness first, then deterministic benchmarks, paired engine matches, and SPRT.
+NEYRANG is an independent UCI chess engine written from scratch in stable Rust. Version `0.2.0` remains the latest release. The `dev/0.3-search` branch contains accepted but unreleased timing, staged-MovePicker, threshold-SEE, and conservative-NMP work developed through isolated correctness gates, deterministic benchmarks, paired engine matches, and SPRT.
 
 NEYRANG does not wrap an existing chess library or engine. The runtime chess core uses only the Rust standard library.
 
@@ -18,13 +18,15 @@ Implemented:
 - iterative deepening, alpha-beta, quiescence, PVS, aspiration windows
 - transposition table with mate-score normalization
 - TT/SEE-capture/killer/history move ordering with losing captures deferred
+- fixed-storage staged move delivery on the development branch
 - legal static exchange evaluation and conservative qsearch SEE pruning
 - conservative one-ply late move reductions with mandatory full-depth re-search
+- guarded fixed-R2 null-move pruning on the development branch
 - 50-move, threefold repetition, checkmate, and stalemate detection
 - cooperative atomic stop plus soft/hard time limits
 - asynchronous UCI loop and deterministic benchmark command
 
-Not implemented yet: SMP, Syzygy, NNUE, null-move pruning, LMP, futility pruning, continuation/capture history, or an optimized sliding-attack backend. `Threads` is accepted by UCI but search remains deliberately single-threaded. A guarded null-move implementation was tested and deliberately reverted because its capped SPRT did not accept the positive hypothesis.
+Not implemented in the retained development source: SMP, Syzygy, NNUE, LMP, futility pruning, continuation/capture history, or an optimized sliding-attack backend. `Threads` is accepted by UCI but search remains deliberately single-threaded. Capture History and 1-ply Continuation History were tested and reverted; the second conservative NMP experiment was retained on the development branch but has not earned a release.
 
 No project license has been selected yet.
 
@@ -145,6 +147,8 @@ The bundled opening file is intentionally small; replace `OPENINGS_FILE` with a 
 - [0.3 retrospective game campaign](docs/development/0.3.0-game-campaign.md)
 - [0.3 timing audit and BASE_0_3](docs/development/0.3.0-timing-audit.md)
 - [0.3.0 search plan](docs/development/0.3.0-plan.md)
+- [0.3 cumulative release validation](docs/development/0.3.0-release-validation.md)
+- [0.3 search-development final report](docs/development/0.3.0-final-report.md)
 
 ## Roadmap
 

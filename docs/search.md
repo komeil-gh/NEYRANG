@@ -6,7 +6,7 @@ NEYRANG uses iterative deepening over negamax alpha-beta. Non-first moves use a 
 
 At depth zero, quiescence searches promotions and captures whose legal static exchange evaluation is non-negative. Positions in check do not use stand pat or SEE pruning and search every legal evasion. Mate scores encode root ply and are normalized when crossing the transposition-table boundary, so retrieval at a different ply preserves mate distance.
 
-Move ordering is:
+Main-search move ordering is delivered progressively by a fixed-capacity staged MovePicker:
 
 1. TT/PV move
 2. promotions and non-losing captures, scored once with SEE plus MVV-LVA
@@ -14,9 +14,13 @@ Move ordering is:
 4. quiet history
 5. losing captures
 
-SEE updates temporary bitboards, exposes slider x-rays, handles promotions and en passant, excludes absolutely pinned attackers, and rejects illegal king recaptures. It is computed once per tactical move before sorting rather than from the comparator.
+Each stage is initialized only when search reaches it; a cutoff can therefore avoid scoring every later quiet or tactical move. The picker suppresses preferred/killer duplicates and returns every legal candidate at most once. Tactical classification still uses exact SEE. The oracle-equivalent `see_ge` primitive is retained and tested, but the experimental lazy main-search caller was reverted, so current production ordering does not silently substitute threshold classification for exact exchange scores.
+
+SEE updates temporary bitboards, exposes slider x-rays, handles promotions and en passant, excludes absolutely pinned attackers, and rejects illegal king recaptures. Qsearch retains exact SEE classification and its established losing-capture pruning.
 
 At non-root, non-PV nodes, sufficiently late quiet moves may be reduced by one ply. The reduction starts with the fifth searched move at depth three, excludes TT moves, killers, strong-history moves, captures, promotions, checks, and nodes already in check, and always performs a normal-depth zero-window re-search when the reduced result raises alpha. The ordinary PVS full-window re-search remains authoritative when needed.
+
+The retained development branch also uses conservative fixed-R2 null-move pruning at eligible null-window nodes. It requires depth four, no check or earlier null, a non-mate beta, static evaluation at least beta, and meaningful friendly non-pawn material. Pawn-only and lone-minor endings are excluded. Legal terminal detection precedes the probe. Synthetic null descendants cannot use real-game repetition/fifty-move adjudication, the TT, or persistent killer/history training, and null state is restored exactly. There is no dynamic reduction or verification search in this variant.
 
 ## Draws and limits
 
@@ -39,22 +43,23 @@ Single release runs on the same Apple Silicon host, five positions, depth 5:
 | Precomputed SEE ordering | 528,816 | 464 ms median | retained after positive match screens |
 | Qsearch SEE pruning | 359,538 | 203 ms median | retained |
 | Conservative LMR | 196,627 | 166 ms median | retained and release-proven cumulatively |
+| Staged MovePicker | 193,669 | 158 ms phase median | retained after 7,046 valid games |
+| Conservative fixed-R2 NMP | 180,591 | 126 ms phase median | retained after 7,946 valid games |
 
 The final row is the median of five runs; the preceding rows are single-run development snapshots. These are engineering measurements, not Elo evidence. Search-tree changes make raw NPS comparisons insufficient; paired games and SPRT decide strength patches.
 
 ## Experiment outcome and next search work
 
-Guarded null-move pruning reduced this benchmark to 182,768 nodes but did not accept H1 in a capped 1,000-game SPRT against the LMR parent, so it was reverted. Reverse futility pruning was not attempted in 0.2.0.
+The first 0.2 guarded null-move candidate reduced the benchmark to 182,768 nodes but did not accept H1 in a capped 1,000-game SPRT against the LMR parent, so that historical implementation was reverted. Reverse futility pruning was not attempted in 0.2.0.
 
 The [0.3 retrospective campaign](development/0.3.0-game-campaign.md) completed 4,000 fixed games across the preserved 0.1/SEE/qsearch/LMR/0.2 binaries. SEE ordering measured `+29.25 +/-17.09 Elo`, qsearch SEE pruning measured `+66.46 +/-18.72 Elo`, isolated LMR remained inconclusive at `+6.25 +/-12.52 Elo`, and cumulative v0.2.0 measured `+90.97 +/-18.38 Elo` against v0.1.0. Five 2-11 ms time forfeits in historical parents triggered a separate timing audit. Exact v0.2.0 reproduced strict zero-margin losses; isolated hardening closed with a clean 1,000-game timing stress and defined `BASE_0_3` at `303711a`.
 
 The 0.3 ordering work then kept the staged MovePicker after 7,046 valid comparison games. A real oracle-equivalent `see_ge` primitive was verified, but the only registered lazy main-search caller was rejected after 12,000 valid games: its final 10,000-game normalized SPRT capped at LLR `+0.69` inside the decision bounds. Commit `2e9637e` restored the accepted MovePicker/B0 search behavior while retaining the unused threshold primitive.
 
-The single registered Capture History candidate then completed 2,000 valid screening games. Its node-limited and equal-time scores were 50.40% and 50.05%, but it expanded the deterministic benchmark tree from 193,669 to 201,535 nodes (+4.06%) and increased median wall time from 130 to 135 ms (+3.85%). That crossed the pre-registered rejection boundary without compensating tree reduction, so commit `f5450ec` removed the feature. The post-revert source and 569,504-byte binary are identical to the accepted `2e9637e` parent, including SHA-256 `4ade6870655269142b1be7f8b597f27c9e16beb267732973b157bdee9ad9f15e`. NEYRANG does not learn merely by playing these games; improvements still require an explicit, tested patch.
+The single registered Capture History candidate then completed 2,000 valid screening games. Its node-limited and equal-time scores were 50.40% and 50.05%, but it expanded the deterministic benchmark tree from 193,669 to 201,535 nodes (+4.06%) and increased median wall time from 130 to 135 ms (+3.85%). That crossed the pre-registered rejection boundary without compensating tree reduction, so commit `f5450ec` removed the feature.
 
-Next candidates are isolated and measured in this order:
+The following 1-ply Continuation History candidate completed 2,000 diagnostic games. Its node screen was exactly neutral and its recovered equal-time score was 50.80%, but a strict candidate timeout was binding under the registered protocol. Commit `3a9e2d9` restored the same 569,504-byte parent, SHA-256 `4ade6870655269142b1be7f8b597f27c9e16beb267732973b157bdee9ad9f15e`.
 
-- add Continuation History as a separate experiment so quiet ordering gains previous-move context and gives LMR a better late-move distribution
-- revisit guarded null-move pruning only against the resulting stronger ordering baseline
+The second conservative NMP experiment was then run against that restored ordering baseline. E1 accepted H1 after 4,946 fresh normalized-SPRT games and scored 54.95% in a separate clean 1,000-game confirmation at `8+0.08`; it was retained after 7,946 valid games. The cumulative candidate reduced the immutable v0.2.0 benchmark tree by 8.16% and median wall time by 11.97%. Release validation nevertheless stopped after both permitted primary-screen attempts triggered reproducible repetition-invalid PV output from immutable v0.2.0. No v0.3.0 version or tag was created.
 
-Pawn hashing remains useful but is deferred below these search-ordering experiments. Any renewed null move, reverse futility, LMP, ProbCut, or singular-extension work must be added one at a time rather than as a bundled selective-search rewrite. The detailed acceptance sequence is frozen in the [0.3.0 search plan](development/0.3.0-plan.md).
+NEYRANG does not learn merely by playing games; improvements still require an explicit, tested patch. Pawn hashing remains deferred. Any future baseline-protocol repair, null-move refinement, reverse futility, LMP, ProbCut, or singular-extension work must be pre-registered and isolated rather than bundled into the accepted candidate. The complete outcome is in the [0.3 final report](development/0.3.0-final-report.md).

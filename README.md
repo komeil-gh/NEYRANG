@@ -29,6 +29,7 @@ Implemented:
 - asynchronous UCI loop and deterministic benchmark command
 - feature-gated exact evaluation trace and streaming dataset export on the development branch
 - deterministic pair-first train/validation/holdout corpus construction with provenance and leakage controls
+- independent PGN-to-corpus replay auditing, including resistance to rehashed TSV tampering
 
 Not implemented in the retained development source: SMP, Syzygy, NNUE, LMP, futility pruning, continuation/capture history, or an optimized sliding-attack backend. `Threads` is accepted by UCI but search remains deliberately single-threaded. Capture History and 1-ply Continuation History were tested and reverted; the second conservative NMP experiment was retained on the development branch but has not earned a release.
 
@@ -164,4 +165,4 @@ Post-campaign F1 removed make/unmake from the common legality-filtering path wit
 
 G1 then made exact SEE carry target attackers and color occupancy incrementally while retaining the complete pre-G1 implementation as a test oracle. Equality passed over 100,000 positions, 336,083 tactical moves, and 7,393,826 threshold queries. The tree-identical 15-run depth-8 comparison reduced median wall time by another 4.44%; a fresh strict 2,000-game screen finished `672/695/633` (50.98%) with all 2,000 terminations normal and no timing, legality, crash, or protocol anomaly. G1 is retained at playing-source commit `b80b08a2e188973383d254dd6b3ced908560364c`; the project has now recorded 39,992 valid comparison games. Accepted work stays on `dev/0.3-search`; the released version and immutable `v0.2.0` tag remain unchanged. Pawn hashing remains lower priority.
 
-H0/H1 then added byte-isolated evaluation evidence tooling and proved it on a 4,000-game historical pilot. The trace reconstructs production evaluation exactly; the corpus builder creates deterministic opening-group train/validation/holdout splits and independently replayable records. No evaluation weight was changed, and the historical pilot is not being treated as strength evidence or a tuning set.
+H0/H1 then added byte-isolated evaluation evidence tooling and proved it on a 4,000-game historical pilot. H2b subsequently completed 4,000 fresh paired games without a timing, crash, legality, warning, or protocol failure and produced 2,910 independently replayed unique records. Its holdout remains sealed, no evaluation weight was changed, and another disjoint fresh-data campaign is required before fitting the 42 effective tapered parameters.

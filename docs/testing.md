@@ -185,3 +185,9 @@ All 15 interleaved depth-8 runs per frozen binary retained exactly 4,483,694 nod
 H0 adds only feature-gated measurement code. The normal release remains exactly 569,504 bytes with SHA-256 `056082e8e2e185a1b0a5bdaf78aaa54b4662414504cf7707891dc1d4350793e4`, byte-identical to frozen G1. The depth-5/depth-8 trees remain `180591/e04f83f9a9880115` and `4483694/d8d4a9b6bbcde023`.
 
 The independent trace matched production evaluation and its own component reconstruction on 100,000 legal positions. Formatting, warnings-denied Clippy, 68 normal tests, 85 all-feature tests, 11 tactical tests, required Perft, both release builds, match-runner tests, and fastchess compliance 40/40 pass. Three one-million-row export runs produced the same checksum; median end-to-end wall time was 1.77 seconds on the development host. Full identities and the KEEP decision are in the [experiment ledger](development/experiments.md).
+
+## H1 evaluation-corpus evidence
+
+H1 added a deterministic pair-first corpus builder without changing the playing engine. Four Python tests cover opening-group co-location, deterministic reruns, quiet-position filtering, malformed/odd pair rejection, cross-partition transposition removal, manifest checksums, and no-overwrite behavior.
+
+The historical pilot independently replayed 4,000 already-audited games / 2,000 color-reversed pairs and produced 2,967 globally unique quiet positions: 2,382 train, 318 validation, and 267 untouched holdout. Reversing source argument order produced byte-identical TSVs; every record exported as one fixed 38-column `neyrang-eval-trace-v1` row. A separate audit reconstructed every encoded ply and rechecked FEN, target, quietness, split assignment, and uniqueness without a mismatch. H1 is retained as evidence infrastructure only; the pilot is too small and correlated to authorize weight tuning.

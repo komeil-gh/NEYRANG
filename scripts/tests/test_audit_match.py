@@ -40,5 +40,45 @@ class ScanLogTests(unittest.TestCase):
         self.assertEqual(counts["crash"], 1)
 
 
+class ExpectedMetadataTests(unittest.TestCase):
+    def test_exact_fields_pass(self) -> None:
+        expected, errors = AUDIT_MATCH.audit_expected_metadata(
+            {"limit_mode": "per-engine-nodes", "engine_a_nodes": "30000"},
+            ["limit_mode=per-engine-nodes", "engine_a_nodes=30000"],
+        )
+
+        self.assertEqual(
+            expected,
+            {"limit_mode": "per-engine-nodes", "engine_a_nodes": "30000"},
+        )
+        self.assertEqual(errors, [])
+
+    def test_missing_or_mismatched_fields_fail(self) -> None:
+        _, errors = AUDIT_MATCH.audit_expected_metadata(
+            {"limit_mode": "time"},
+            ["limit_mode=per-engine-nodes", "engine_a_nodes=30000"],
+        )
+
+        self.assertEqual(len(errors), 2)
+        self.assertIn("metadata limit_mode is 'time'", errors[0])
+        self.assertIn("metadata engine_a_nodes is None", errors[1])
+
+    def test_malformed_and_conflicting_expectations_fail(self) -> None:
+        _, errors = AUDIT_MATCH.audit_expected_metadata(
+            {"nodes": "30000"},
+            ["missing-separator", "nodes=30000", "nodes=29200"],
+        )
+
+        self.assertEqual(len(errors), 2)
+        self.assertIn("invalid expected metadata field", errors[0])
+        self.assertIn("conflicting expected metadata values", errors[1])
+
+    def test_expectations_require_metadata(self) -> None:
+        _, errors = AUDIT_MATCH.audit_expected_metadata(
+            None, ["limit_mode=per-engine-nodes"]
+        )
+
+        self.assertEqual(errors, ["expected metadata fields require --meta"])
+
 if __name__ == "__main__":
     unittest.main()

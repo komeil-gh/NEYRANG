@@ -78,6 +78,60 @@ done
 
 echo "match configuration test passed"
 
+per_engine_meta_out="$scratch/per-engine.meta.txt"
+per_engine_output="$(
+    DRY_RUN=1 \
+    FASTCHESS_BIN=true \
+    ENGINE_A=/usr/bin/true \
+    ENGINE_B=/usr/bin/true \
+    ENGINE_A_NODES=30000 \
+    ENGINE_B_NODES=29200 \
+    OPENINGS_FILE="$repo_root/scripts/openings.epd" \
+    GAMES=10 \
+    META_OUT="$per_engine_meta_out" \
+    PGN_OUT="$scratch/per-engine.pgn" \
+    "$script_dir/match.sh"
+)"
+
+for expected in \
+    "name=NEYRANG-new nodes=30000" \
+    "name=NEYRANG-reference nodes=29200"; do
+    if [[ "$per_engine_output" != *"$expected"* ]]; then
+        echo "per-engine dry-run output is missing: $expected" >&2
+        exit 1
+    fi
+done
+
+for expected in \
+    "limit_mode=per-engine-nodes" \
+    "nodes=" \
+    "engine_a_nodes=30000" \
+    "engine_b_nodes=29200"; do
+    if ! grep -Fqx "$expected" "$per_engine_meta_out"; then
+        echo "per-engine metadata is missing: $expected" >&2
+        exit 1
+    fi
+done
+
+if DRY_RUN=1 FASTCHESS_BIN=true ENGINE_A=/usr/bin/true ENGINE_B=/usr/bin/true \
+    ENGINE_A_NODES=30000 OPENINGS_FILE="$repo_root/scripts/openings.epd" \
+    GAMES=10 PGN_OUT="$scratch/invalid.pgn" "$script_dir/match.sh" \
+    >/dev/null 2>&1; then
+    echo "match runner accepted an incomplete per-engine node limit" >&2
+    exit 1
+fi
+
+if DRY_RUN=1 FASTCHESS_BIN=true ENGINE_A=/usr/bin/true ENGINE_B=/usr/bin/true \
+    NODES=30000 ENGINE_A_NODES=30000 ENGINE_B_NODES=29200 \
+    OPENINGS_FILE="$repo_root/scripts/openings.epd" GAMES=10 \
+    PGN_OUT="$scratch/invalid-mixed.pgn" "$script_dir/match.sh" \
+    >/dev/null 2>&1; then
+    echo "match runner accepted mixed shared and per-engine node limits" >&2
+    exit 1
+fi
+
+echo "per-engine node configuration test passed"
+
 sprt_meta_out="$scratch/sprt.meta.txt"
 sprt_output="$(
     DRY_RUN=1 \

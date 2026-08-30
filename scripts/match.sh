@@ -13,6 +13,8 @@ games="${GAMES:-200}"
 concurrency="${CONCURRENCY:-1}"
 time_control="${TC:-10+0.1}"
 nodes="${NODES:-}"
+engine_a_nodes="${ENGINE_A_NODES:-}"
+engine_b_nodes="${ENGINE_B_NODES:-}"
 hash_mb="${HASH_MB:-64}"
 threads="${THREADS:-1}"
 move_overhead_ms="${MOVE_OVERHEAD_MS:-}"
@@ -41,8 +43,23 @@ if (( games < 2 || games % 2 != 0 )); then
     echo "GAMES must be a positive even number for paired openings" >&2
     exit 2
 fi
-if [[ -n "$nodes" ]] && (( nodes < 1 )); then
+if [[ -n "$nodes" ]] && ! [[ "$nodes" =~ ^[1-9][0-9]*$ ]]; then
     echo "NODES must be a positive integer when set" >&2
+    exit 2
+fi
+if [[ -n "$engine_a_nodes" && -z "$engine_b_nodes" ]] ||
+    [[ -z "$engine_a_nodes" && -n "$engine_b_nodes" ]]; then
+    echo "ENGINE_A_NODES and ENGINE_B_NODES must be set together" >&2
+    exit 2
+fi
+if [[ -n "$nodes" && -n "$engine_a_nodes" ]]; then
+    echo "NODES cannot be combined with per-engine node limits" >&2
+    exit 2
+fi
+if [[ -n "$engine_a_nodes" ]] &&
+    { ! [[ "$engine_a_nodes" =~ ^[1-9][0-9]*$ ]] ||
+        ! [[ "$engine_b_nodes" =~ ^[1-9][0-9]*$ ]]; }; then
+    echo "ENGINE_A_NODES and ENGINE_B_NODES must be positive integers" >&2
     exit 2
 fi
 if [[ -n "$time_margin_ms" ]] && ! [[ "$time_margin_ms" =~ ^[0-9]+$ ]]; then
@@ -110,9 +127,8 @@ limit_mode="time"
 if [[ -n "$nodes" ]]; then
     search_limit=("nodes=$nodes")
     limit_mode="nodes"
-fi
-if [[ -n "$time_margin_ms" ]]; then
-    search_limit+=("timemargin=$time_margin_ms")
+elif [[ -n "$engine_a_nodes" ]]; then
+    limit_mode="per-engine-nodes"
 fi
 if [[ -n "$move_overhead_ms" ]]; then
     engine_options+=("option.Move Overhead=$move_overhead_ms")
@@ -121,8 +137,25 @@ fi
 command=(
     "$fastchess_path"
     -engine "cmd=$engine_a" "name=$engine_a_name"
+)
+if [[ "$limit_mode" == "per-engine-nodes" ]]; then
+    command+=("nodes=$engine_a_nodes")
+fi
+command+=(
     -engine "cmd=$engine_b" "name=$engine_b_name"
-    -each "${search_limit[@]}" "${engine_options[@]}"
+)
+if [[ "$limit_mode" == "per-engine-nodes" ]]; then
+    command+=("nodes=$engine_b_nodes")
+fi
+command+=(-each)
+if [[ "$limit_mode" != "per-engine-nodes" ]]; then
+    command+=("${search_limit[@]}")
+fi
+if [[ -n "$time_margin_ms" ]]; then
+    command+=("timemargin=$time_margin_ms")
+fi
+command+=(
+    "${engine_options[@]}"
     -openings "file=$openings_file" format=epd "order=$opening_order"
     -srand "$opening_seed"
     -rounds "$((games / 2))" -repeat
@@ -166,6 +199,8 @@ fi
     echo "limit_mode=$limit_mode"
     echo "time_control=$time_control"
     echo "nodes=$nodes"
+    echo "engine_a_nodes=$engine_a_nodes"
+    echo "engine_b_nodes=$engine_b_nodes"
     echo "threads=$threads"
     echo "hash_mb=$hash_mb"
     echo "move_overhead_ms=$move_overhead_ms"

@@ -205,3 +205,9 @@ The H2c expansion uses `scripts/select-fresh-openings.py` to reproduce a disjoin
 ## H2c rejected expansion evidence
 
 H2c completed 7,462 structurally valid games before fastchess recorded one F1 timeout in game 7,463 and exited nonzero. The independent audit reconstructs all 3,731 complete pairs and 732,065 telemetry-complete plies, but also confirms the timeout and missing completed metadata. The pre-registered all-or-nothing rule therefore rejects the entire H2c game source: it is not resumed, repaired, pooled, extracted, or used for fitting. Its artifacts remain only as independently reproducible failure evidence in the experiment ledger.
+
+## H2d deterministic replacement registration
+
+The paired-match runner now supports exact per-engine node limits and refuses incomplete or mixed shared/per-engine configurations. The auditor can assert arbitrary metadata identities with repeatable `--expect-meta KEY=VALUE` arguments. Four new metadata tests bring the Python suite to 16 passing tests; the match/SPRT configuration suite also passes.
+
+The registered H2d replacement uses G1 at 30,000 and F1 at 29,200 nodes per move, derived only from aggregate per-move H2c telemetry. A 20-game smoke run passed exact metadata, pairing, telemetry, strict-log, and process gates and diverged in 7 of 10 paired trajectories; its score is not used. The full 9,000-game restart and all-or-nothing acceptance rules are fixed in the experiment ledger before any retained H2d game exists.

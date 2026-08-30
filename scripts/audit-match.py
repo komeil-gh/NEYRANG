@@ -55,6 +55,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--opponent", required=True)
     parser.add_argument("--expected-games", required=True, type=int)
     parser.add_argument("--expected-time-control")
+    parser.add_argument(
+        "--expect-meta",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="require an exact metadata field; repeat for multiple fields",
+    )
     parser.add_argument("--log", type=Path)
     parser.add_argument("--meta", type=Path)
     return parser.parse_args()
@@ -111,6 +118,33 @@ def parse_metadata(path: Path) -> dict[str, str]:
             key, value = line.split("=", 1)
             fields[key] = value
     return fields
+
+
+def audit_expected_metadata(
+    actual: dict[str, str] | None, expected_items: list[str]
+) -> tuple[dict[str, str], list[str]]:
+    expected: dict[str, str] = {}
+    errors: list[str] = []
+    for item in expected_items:
+        key, separator, value = item.partition("=")
+        if not separator or not key:
+            errors.append(f"invalid expected metadata field {item!r}; use KEY=VALUE")
+            continue
+        if key in expected and expected[key] != value:
+            errors.append(f"conflicting expected metadata values for {key!r}")
+            continue
+        expected[key] = value
+
+    if expected and actual is None:
+        errors.append("expected metadata fields require --meta")
+        return expected, errors
+    if actual is not None:
+        for key, value in expected.items():
+            if actual.get(key) != value:
+                errors.append(
+                    f"metadata {key} is {actual.get(key)!r}, expected {value!r}"
+                )
+    return expected, errors
 
 
 def scan_log(path: Path) -> tuple[dict[str, int], list[str], dict[str, Any]]:
@@ -313,6 +347,10 @@ def main() -> int:
             errors.append(
                 f"metadata games is {metadata.get('games')!r}, expected {args.expected_games}"
             )
+    expected_metadata, metadata_errors = audit_expected_metadata(
+        metadata, args.expect_meta
+    )
+    errors.extend(metadata_errors)
 
     log_anomaly_counts: dict[str, int] | None = None
     log_summary: dict[str, Any] | None = None
@@ -364,6 +402,7 @@ def main() -> int:
         "log_anomaly_counts": log_anomaly_counts,
         "fastchess_final_summary": log_summary,
         "metadata": metadata,
+        "expected_metadata": expected_metadata,
         "errors": errors,
         "python": sys.version.split()[0],
         "python_chess": chess.__version__,

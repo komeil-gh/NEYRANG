@@ -9,3 +9,4 @@ __pycache__/
 *.epd
 !examples/*.pgn
 !scripts/openings.epd
+!scripts/holdout-0.3.epd

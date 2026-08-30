@@ -12,6 +12,7 @@ All notable changes to NEYRANG are documented here.
 - A feature-gated `neyrang-eval-trace-v1` coefficient schema and streaming TSV exporter, verified against production evaluation over 100,000 legal positions.
 - A deterministic pair-first evaluation-corpus builder with provenance manifests, opening-group splits, quiet-position sampling, cross-partition leakage removal, and independently replayable records.
 - An independent corpus auditor that reconstructs every sampled position from PGN and rejects content tampering even when manifest hashes are rewritten.
+- A deterministic fresh-opening selector with PGN/EPD exclusion sets, canonical-FEN deduplication, fixed hash ranking, provenance output, and fail-closed capacity/overwrite checks.
 
 ### Changed
 

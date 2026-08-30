@@ -30,6 +30,7 @@ Implemented:
 - feature-gated exact evaluation trace and streaming dataset export on the development branch
 - deterministic pair-first train/validation/holdout corpus construction with provenance and leakage controls
 - independent PGN-to-corpus replay auditing, including resistance to rehashed TSV tampering
+- deterministic disjoint-opening selection from audited EPD/PGN provenance sets
 
 Not implemented in the retained development source: SMP, Syzygy, NNUE, LMP, futility pruning, continuation/capture history, or an optimized sliding-attack backend. `Threads` is accepted by UCI but search remains deliberately single-threaded. Capture History and 1-ply Continuation History were tested and reverted; the second conservative NMP experiment was retained on the development branch but has not earned a release.
 

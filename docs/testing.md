@@ -65,6 +65,27 @@ NEYRANG 0.2.0 on the same workload and host:
 
 The 0.2.0 tree is 56.1% smaller and its local median wall time is 40.7% lower. Median NPS is 26.3% lower, so the improvement comes from search selectivity rather than cheaper nodes. Timing remains machine- and load-dependent.
 
+## OpenBench repository contract
+
+OpenBench public workers build an engine through `make EXE=<assigned-name>` and
+require the executable beside that Makefile. Their bench parser runs
+`./<binary> bench`, extracts nodes/NPS, repeats the command concurrently, and
+rejects missing or non-deterministic results.
+
+NEYRANG's root Makefile implements that build contract. Verify it independently of
+the normal Cargo build with:
+
+```bash
+scripts/test-openbench-contract.sh
+```
+
+The test creates a unique temporary executable, requires three sequential and
+three concurrent 180,591-node benches with positive NPS, verifies UCI `Hash`,
+`Threads`, `uciok`, and `readyok`, and removes every temporary artifact on each
+exit path. This is a build and protocol gate, not game-strength evidence.
+Deployment prerequisites and the server-side configuration template are in
+[the OpenBench guide](openbench.md).
+
 ## Lazy-SMP correctness and scaling
 
 The P3 candidate keeps the direct single-thread semantic gates at 180,591 nodes/checksum `e04f83f9a9880115` for depth 5 and 4,483,694/checksum `d8d4a9b6bbcde023` for depth 8. Targeted tests cover packed shared-TT fields, signatures, replacement, generation, clearing, memory budget, coherent concurrent publication, root voting, exact aggregate node limits, terminal roots, depth searches, pre-signalled/external stop, and UCI depth/node/movetime/infinite behavior with exactly one bestmove.

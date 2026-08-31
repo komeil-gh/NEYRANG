@@ -1,0 +1,57 @@
+name: Strength experiment
+description: Preregister a search, evaluation, performance, or infrastructure experiment.
+title: "experiment: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Register the hypothesis and stopping rule before generating decision evidence. A feature stays only if it passes its frozen gates.
+
+  - type: textarea
+    id: hypothesis
+    attributes:
+      label: Hypothesis
+      description: State one falsifiable claim and why current profiling or game evidence supports testing it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: parent_identity
+    attributes:
+      label: Frozen parent identity
+      description: Full source SHA, binary path/SHA-256, benchmark nodes/checksum, and network hash when applicable.
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Candidate scope
+      description: Files, algorithmic mechanism, tunable parameters, and explicit non-goals.
+    validations:
+      required: true
+
+  - type: textarea
+    id: invariants
+    attributes:
+      label: Correctness and deterministic gates
+      description: Perft, tactical, oracle, tree/checksum, trace, timing, or inference-equivalence requirements.
+    validations:
+      required: true
+
+  - type: textarea
+    id: decision_rule
+    attributes:
+      label: Game and stopping decision rule
+      description: Opening identity, pairing, TC/nodes, Hash/Threads, SPRT bounds, alpha/beta, cap, audit requirements, and reversion condition.
+    validations:
+      required: true
+
+  - type: textarea
+    id: risks
+    attributes:
+      label: Known risks and confounders
+      description: NPS changes, evaluator coupling, worker heterogeneity, data leakage, timing, or baseline defects.
+    validations:
+      required: true

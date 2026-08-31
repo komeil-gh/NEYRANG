@@ -1,0 +1,57 @@
+# Contributing to NEYRANG
+
+NEYRANG is developed by measured experiments. Correctness is mandatory; a search or evaluation idea stays only after it passes its preregistered deterministic and game gates.
+
+## Before changing code
+
+Build the current branch and record its identity:
+
+```bash
+git rev-parse HEAD
+cargo build --release --locked
+shasum -a 256 target/release/neyrang
+target/release/neyrang bench
+```
+
+For a playing change, open a **Strength experiment** issue before collecting decision evidence. Freeze the parent source/binary, hypothesis, exact scope, benchmark expectations, opening set, resource controls, stopping rule, and reversion condition.
+
+Do not copy another engine's code or tuned constants. Primary sources may justify an experiment, but NEYRANG must derive its own implementation and earn its own parameters. Record the provenance and license of every external dataset, network, book, or tool.
+
+## Code boundaries
+
+- `src/chess`: rules, representation, move generation, make/unmake, hashing, Perft
+- `src/eval`: search-independent evaluation
+- `src/search`: search, ordering, history, TT, time and parallel control
+- `src/uci`: protocol parsing and engine boundary
+- `src/tools` and `scripts`: deterministic developer and evidence tooling
+
+Keep the runtime dependency-free unless a proposal demonstrates why a dependency belongs in the playing binary. Preserve scalar/reference implementations when adding platform-specific acceleration.
+
+## Required local gates
+
+```bash
+cargo fmt --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --locked
+cargo test --locked --all-features
+python3 -m unittest discover -s scripts/tests
+scripts/test-match-config.sh
+cargo build --release --locked
+scripts/test-openbench-contract.sh
+```
+
+Run the three explicit Perft commands in [the testing guide](docs/testing.md#perft-gates). A deterministic tree/checksum change must be explained; it is never dismissed as a speed optimization.
+
+## Playing-strength evidence
+
+Use color-reversed pairs, an audited balanced opening set, equal resources, frozen binaries, full PGN telemetry, and an independent result audit. Report game count, W/D/L, pentanomial counts, score, confidence interval or SPRT decision, and every abnormal termination. Fixed-node results isolate decision quality but do not replace equal-time testing when NPS changes.
+
+Small samples, Perft, puzzle suites, node reductions, NPS, or offline loss are not Elo evidence. Revert a candidate that fails its registered rule instead of preserving it for narrative value.
+
+## Pull requests
+
+Keep commits scoped and use the pull-request evidence template. Documentation-only and infrastructure changes should say why they cannot change playing semantics. Generated bulk games, corpora, binaries, networks, local paths, credentials, and machine-specific build products do not belong in Git.
+
+## License boundary
+
+The project owner has not selected a project license yet. Until that decision is recorded, source availability does not grant permission to copy, redistribute, or create derivative releases. Discuss substantial external contributions with the maintainer before investing work so authorship and future licensing terms are explicit.

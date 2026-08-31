@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "dev/**"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  engine:
+    name: engine / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Toolchain identity
+        run: rustup show active-toolchain
+
+      - name: Format
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Default tests
+        run: cargo test --locked
+
+      - name: All-feature tests
+        run: cargo test --all-features --locked
+
+      - name: Python test environment
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r scripts/requirements.txt
+
+      - name: Python infrastructure tests
+        run: .venv/bin/python -m unittest discover -s scripts/tests
+
+      - name: Match-runner contract
+        run: scripts/test-match-config.sh
+
+      - name: Release build
+        run: cargo build --locked --release
+
+      - name: Release Perft gates
+        shell: bash
+        run: |
+          test "$(target/release/neyrang perft 5)" = "4865609"
+          test "$(target/release/neyrang perft-fen 'r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1' 4)" = "4085603"
+          test "$(target/release/neyrang perft-fen '8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1' 5)" = "674624"
+
+      - name: OpenBench build and deterministic bench contract
+        run: scripts/test-openbench-contract.sh

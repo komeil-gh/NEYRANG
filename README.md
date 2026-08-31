@@ -58,6 +58,15 @@ Portable release binary:
 target/release/neyrang
 ```
 
+OpenBench-compatible build (the executable is written at the repository root
+under the exact `EXE` name):
+
+```bash
+make EXE=NEYRANG-local
+./NEYRANG-local bench
+scripts/test-openbench-contract.sh
+```
+
 Apple Silicon native tuning is optional and should not be used for portable artifacts:
 
 ```bash
@@ -152,6 +161,11 @@ worker starts, and requires a second raw-PGN audit when the coordinator combines
 results. The complete command contract and the boundary with a real OpenBench
 SPRT server are documented in [testing](docs/testing.md#distributed-fixed-game-campaigns).
 
+The repository also satisfies the local OpenBench build/bench contract. A real
+distributed SPRT deployment still requires a selected license, public remote,
+pinned server fork, audited book, and trusted workers; see the
+[OpenBench integration guide](docs/openbench.md).
+
 `OPENING_SEED`, `OPENING_ORDER`, `TC`, `HASH_MB`, `THREADS`, and `CONCURRENCY` are explicit inputs. Set `NODES` on `match.sh` for a node-limited comparison; omit it for a time-controlled match. Each run writes PGN telemetry plus adjacent `.log` and `.meta.txt` files containing engine, Git, binary, opening, and fastchess identities. Pass `ENGINE_A_GIT_SHA`, `ENGINE_B_GIT_SHA`, `OPENINGS_SOURCE`, and `OPENINGS_LICENSE` for an auditable experiment.
 
 The bundled opening file is intentionally small; replace `OPENINGS_FILE` with a larger audited balanced suite for strength testing. Do not infer Elo from Perft, NPS, tactical puzzles, or a small game sample.
@@ -162,6 +176,7 @@ The bundled opening file is intentionally small; replace `OPENINGS_FILE` with a 
 - [Search](docs/search.md)
 - [Evaluation](docs/evaluation.md)
 - [Testing and benchmarks](docs/testing.md)
+- [OpenBench integration](docs/openbench.md)
 - [En Croissant integration](docs/en-croissant.md)
 - [0.2.0 frozen baseline](docs/development/0.2.0-baseline.md)
 - [Search experiment ledger](docs/development/experiments.md)
@@ -171,7 +186,16 @@ The bundled opening file is intentionally small; replace `OPENINGS_FILE` with a 
 - [0.3 cumulative release validation](docs/development/0.3.0-release-validation.md)
 - [0.3 search-development final report](docs/development/0.3.0-final-report.md)
 - [Next strength phase and profile](docs/development/next-strength-phase.md)
+- [Competitive roadmap: OpenBench, H3, NNUE, and selective search](docs/development/competitive-roadmap.md)
 - [Evaluation corpus and tuning protocol](docs/development/evaluation-tuning.md)
+
+## Contributing and security
+
+Evidence and review requirements are documented in [CONTRIBUTING.md](CONTRIBUTING.md).
+Report security-sensitive parser, resource, build, or artifact-integrity issues
+using the process in [SECURITY.md](SECURITY.md). The project owner has not yet
+selected a license, so source availability is not currently an open-source
+license grant.
 
 ## Roadmap
 

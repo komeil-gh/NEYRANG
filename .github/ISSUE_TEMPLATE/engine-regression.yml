@@ -1,0 +1,73 @@
+name: Engine regression
+description: Report a reproducible legality, protocol, timing, crash, or strength regression.
+title: "regression: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        NEYRANG keeps only reproducible evidence. Remove private paths or credentials, but keep exact engine and artifact identities.
+
+  - type: dropdown
+    id: class
+    attributes:
+      label: Regression class
+      options:
+        - Illegal move or position corruption
+        - Crash, hang, or protocol failure
+        - Time-management failure
+        - Deterministic benchmark change
+        - Playing-strength regression
+        - Build or portability failure
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include the exact commands, UCI transcript, FEN, time control, and expected versus actual behavior.
+    validations:
+      required: true
+
+  - type: input
+    id: commit
+    attributes:
+      label: Commit or tag
+      placeholder: Full Git SHA or release tag
+    validations:
+      required: true
+
+  - type: input
+    id: binary_sha256
+    attributes:
+      label: Binary SHA-256
+      placeholder: 64 hexadecimal characters
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, architecture, Rust version, GUI/runner version, CPU/thread count, and Hash/Threads/Move Overhead settings.
+    validations:
+      required: true
+
+  - type: textarea
+    id: artifacts
+    attributes:
+      label: Evidence artifacts
+      description: Attach or link the PGN, engine log, runner log, metadata, benchmark output, or crash report. Include checksums where possible.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Reporter checks
+      options:
+        - label: I reproduced this from a clean process with the exact identity above.
+          required: true
+        - label: I have not inferred Elo from a small, unpaired, or unaudited sample.
+          required: true

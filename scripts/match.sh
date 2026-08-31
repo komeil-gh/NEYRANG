@@ -16,7 +16,10 @@ nodes="${NODES:-}"
 engine_a_nodes="${ENGINE_A_NODES:-}"
 engine_b_nodes="${ENGINE_B_NODES:-}"
 hash_mb="${HASH_MB:-64}"
+threads_explicit="${THREADS+x}"
 threads="${THREADS:-1}"
+engine_a_threads="${ENGINE_A_THREADS:-}"
+engine_b_threads="${ENGINE_B_THREADS:-}"
 move_overhead_ms="${MOVE_OVERHEAD_MS:-}"
 time_margin_ms="${TIME_MARGIN_MS:-}"
 strict="${STRICT:-0}"
@@ -67,6 +70,33 @@ if [[ -n "$engine_a_nodes" ]] &&
         ! [[ "$engine_b_nodes" =~ ^[1-9][0-9]*$ ]]; }; then
     echo "ENGINE_A_NODES and ENGINE_B_NODES must be positive integers" >&2
     exit 2
+fi
+if [[ -n "$engine_a_threads" && -z "$engine_b_threads" ]] ||
+    [[ -z "$engine_a_threads" && -n "$engine_b_threads" ]]; then
+    echo "ENGINE_A_THREADS and ENGINE_B_THREADS must be set together" >&2
+    exit 2
+fi
+thread_mode="shared"
+if [[ -n "$engine_a_threads" ]]; then
+    if [[ -n "$threads_explicit" ]]; then
+        echo "THREADS cannot be combined with ENGINE_A_THREADS/ENGINE_B_THREADS" >&2
+        exit 2
+    fi
+    if ! [[ "$engine_a_threads" =~ ^[1-9][0-9]*$ ]] ||
+        ! [[ "$engine_b_threads" =~ ^[1-9][0-9]*$ ]] ||
+        (( engine_a_threads > 256 || engine_b_threads > 256 )); then
+        echo "ENGINE_A_THREADS and ENGINE_B_THREADS must be integers between 1 and 256" >&2
+        exit 2
+    fi
+    thread_mode="per-engine"
+    threads=""
+else
+    if ! [[ "$threads" =~ ^[1-9][0-9]*$ ]] || (( threads > 256 )); then
+        echo "THREADS must be an integer between 1 and 256" >&2
+        exit 2
+    fi
+    engine_a_threads="$threads"
+    engine_b_threads="$threads"
 fi
 if [[ -n "$time_margin_ms" ]] && ! [[ "$time_margin_ms" =~ ^[0-9]+$ ]]; then
     echo "TIME_MARGIN_MS must be a non-negative integer when set" >&2
@@ -146,7 +176,10 @@ openings_sha256="$(sha256_file "$openings_file")"
 fastchess_sha256="$(sha256_file "$fastchess_path")"
 
 search_limit=("tc=$time_control")
-engine_options=("option.Hash=$hash_mb" "option.Threads=$threads")
+each_engine_options=("option.Hash=$hash_mb")
+if [[ "$thread_mode" == "shared" ]]; then
+    each_engine_options+=("option.Threads=$threads")
+fi
 limit_mode="time"
 if [[ -n "$nodes" ]]; then
     search_limit=("nodes=$nodes")
@@ -155,19 +188,25 @@ elif [[ -n "$engine_a_nodes" ]]; then
     limit_mode="per-engine-nodes"
 fi
 if [[ -n "$move_overhead_ms" ]]; then
-    engine_options+=("option.Move Overhead=$move_overhead_ms")
+    each_engine_options+=("option.Move Overhead=$move_overhead_ms")
 fi
 
 command=(
     "$fastchess_path"
     -engine "cmd=$engine_a" "name=$engine_a_name"
 )
+if [[ "$thread_mode" == "per-engine" ]]; then
+    command+=("option.Threads=$engine_a_threads")
+fi
 if [[ "$limit_mode" == "per-engine-nodes" ]]; then
     command+=("nodes=$engine_a_nodes")
 fi
 command+=(
     -engine "cmd=$engine_b" "name=$engine_b_name"
 )
+if [[ "$thread_mode" == "per-engine" ]]; then
+    command+=("option.Threads=$engine_b_threads")
+fi
 if [[ "$limit_mode" == "per-engine-nodes" ]]; then
     command+=("nodes=$engine_b_nodes")
 fi
@@ -179,7 +218,7 @@ if [[ -n "$time_margin_ms" ]]; then
     command+=("timemargin=$time_margin_ms")
 fi
 command+=(
-    "${engine_options[@]}"
+    "${each_engine_options[@]}"
     -openings "file=$openings_file" format=epd "order=$opening_order"
     -srand "$opening_seed"
     -rounds "$((games / 2))" -repeat
@@ -230,7 +269,10 @@ fi
     echo "nodes=$nodes"
     echo "engine_a_nodes=$engine_a_nodes"
     echo "engine_b_nodes=$engine_b_nodes"
+    echo "thread_mode=$thread_mode"
     echo "threads=$threads"
+    echo "engine_a_threads=$engine_a_threads"
+    echo "engine_b_threads=$engine_b_threads"
     echo "hash_mb=$hash_mb"
     echo "move_overhead_ms=$move_overhead_ms"
     echo "concurrency=$concurrency"

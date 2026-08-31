@@ -143,6 +143,60 @@ fi
 
 echo "per-engine node configuration test passed"
 
+per_engine_threads_meta_out="$scratch/per-engine-threads.meta.txt"
+per_engine_threads_output="$(
+    DRY_RUN=1 \
+    FASTCHESS_BIN=true \
+    ENGINE_A=/usr/bin/true \
+    ENGINE_B=/usr/bin/true \
+    ENGINE_A_THREADS=2 \
+    ENGINE_B_THREADS=1 \
+    OPENINGS_FILE="$repo_root/scripts/openings.epd" \
+    GAMES=10 \
+    META_OUT="$per_engine_threads_meta_out" \
+    PGN_OUT="$scratch/per-engine-threads.pgn" \
+    "$script_dir/match.sh"
+)"
+
+for expected in \
+    "name=NEYRANG-new option.Threads=2" \
+    "name=NEYRANG-reference option.Threads=1"; do
+    if [[ "$per_engine_threads_output" != *"$expected"* ]]; then
+        echo "per-engine Threads dry-run output is missing: $expected" >&2
+        exit 1
+    fi
+done
+
+for expected in \
+    "thread_mode=per-engine" \
+    "threads=" \
+    "engine_a_threads=2" \
+    "engine_b_threads=1"; do
+    if ! grep -Fqx "$expected" "$per_engine_threads_meta_out"; then
+        echo "per-engine Threads metadata is missing: $expected" >&2
+        exit 1
+    fi
+done
+
+if DRY_RUN=1 FASTCHESS_BIN=true ENGINE_A=/usr/bin/true ENGINE_B=/usr/bin/true \
+    ENGINE_A_THREADS=2 OPENINGS_FILE="$repo_root/scripts/openings.epd" \
+    GAMES=10 PGN_OUT="$scratch/invalid-threads.pgn" "$script_dir/match.sh" \
+    >/dev/null 2>&1; then
+    echo "match runner accepted an incomplete per-engine Threads configuration" >&2
+    exit 1
+fi
+
+if DRY_RUN=1 FASTCHESS_BIN=true ENGINE_A=/usr/bin/true ENGINE_B=/usr/bin/true \
+    THREADS=4 ENGINE_A_THREADS=2 ENGINE_B_THREADS=1 \
+    OPENINGS_FILE="$repo_root/scripts/openings.epd" GAMES=10 \
+    PGN_OUT="$scratch/invalid-mixed-threads.pgn" "$script_dir/match.sh" \
+    >/dev/null 2>&1; then
+    echo "match runner accepted mixed shared and per-engine Threads" >&2
+    exit 1
+fi
+
+echo "per-engine Threads configuration test passed"
+
 compat_meta_out="$scratch/compat.meta.txt"
 compat_output="$(
     DRY_RUN=1 \

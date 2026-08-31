@@ -1,5 +1,6 @@
 /target/
 /tools/nnue-reference/target/
+/tools/nnue-data/target/
 /dist/
 /builds/
 /testing/

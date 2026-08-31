@@ -94,7 +94,7 @@ The project's existing fixed-shard tool remains useful for frozen fixed-size cam
 
 ## Data generation boundary
 
-OpenBench also supports distributed data generation through a `genfens` command that emits seeded opening FENs. NEYRANG does not implement that command yet. It must be designed with exact 64-bit seed use, deterministic diversity tests, stall handling, and a versioned game/binpack schema before NNUE data generation is registered.
+OpenBench also supports distributed data generation through a `genfens` command that emits seeded opening FENs. NEYRANG does not implement that command yet. N1a now defines and independently audits the versioned, lossless [NNUE game-record contract](development/nnue-data.md), but scalable generation still requires exact 64-bit seed use, deterministic diversity tests, stall handling, frozen generator identities and sharded provenance manifests before any workload is registered.
 
 ## Primary references
 

@@ -39,8 +39,10 @@ Implemented:
   exact opening-sequence audits, checksummed result manifests, and coordinator replay
 - isolated scalar NNUE reference tooling with versioned fail-closed artifacts,
   dual-perspective feature mapping, and refresh/incremental accumulator oracles
+- isolated lossless NNUE game records with legal replay, byte-exact upstream
+  compatibility fixtures, special-move coverage, and an independent auditor
 
-Not implemented in the retained playing source: Syzygy, NNUE evaluation, LMP, futility pruning, continuation/capture history, or an optimized sliding-attack backend. The standalone NNUE scalar reference is correctness infrastructure only: it has no trained network, is not linked into search, and carries no Elo claim. The single pre-registered P3 Lazy-SMP design passed its correctness, scaling, deadline, and 2,000-game paired gates and is retained on the development branch. This is controlled development evidence, not a new release or a universal Elo claim. Capture History and 1-ply Continuation History were tested and reverted; the second conservative NMP experiment was retained on the development branch but has not earned a release.
+Not implemented in the retained playing source: Syzygy, NNUE evaluation, LMP, futility pruning, continuation/capture history, or an optimized sliding-attack backend. The standalone NNUE scalar reference and lossless data codec are correctness infrastructure only: there is no trained network, neither tool is linked into search, and neither carries an Elo claim. The single pre-registered P3 Lazy-SMP design passed its correctness, scaling, deadline, and 2,000-game paired gates and is retained on the development branch. This is controlled development evidence, not a new release or a universal Elo claim. Capture History and 1-ply Continuation History were tested and reverted; the second conservative NMP experiment was retained on the development branch but has not earned a release.
 
 No project license has been selected yet.
 
@@ -145,6 +147,7 @@ cargo clippy --all-targets --all-features
 cargo test
 cargo test --features stats
 cargo test --manifest-path tools/nnue-reference/Cargo.toml --locked
+cargo test --manifest-path tools/nnue-data/Cargo.toml --locked
 scripts/test-match-config.sh
 .venv/bin/python -m unittest discover -s scripts/tests
 ```
@@ -191,6 +194,7 @@ The bundled opening file is intentionally small; replace `OPENINGS_FILE` with a 
 - [Next strength phase and profile](docs/development/next-strength-phase.md)
 - [Competitive roadmap: OpenBench, H3, NNUE, and selective search](docs/development/competitive-roadmap.md)
 - [NNUE scalar reference and artifact contract](docs/development/nnue-reference.md)
+- [NNUE lossless game-record and provenance contract](docs/development/nnue-data.md)
 - [Evaluation corpus and tuning protocol](docs/development/evaluation-tuning.md)
 
 ## Contributing and security
@@ -214,3 +218,5 @@ P1 then resolved the immutable-v0.2.0 runner ambiguity with a narrow, independen
 P3 subsequently retained one root-diversified Lazy-SMP design. Frozen Threads 2/4 throughput reached `2.010776x / 3.956388x` the Threads-1 aggregate NPS with sub-millisecond p95 hard-deadline overshoot. The binding same-binary Threads-2-versus-Threads-1 screen completed all 2,000 games at `0.5+0.005`: `711/701/588`, 53.075%, reported `+21.39 +/-10.90 Elo`, and pentanomial `[57,184,437,223,99]`. Independent replay verified all 1,000 pairs and 196,758 plies with zero warning, timeout, crash, illegal move, protocol error, forfeit, or negative time-left sample. The project has now recorded 43,992 valid comparison games. Accepted work stays on `dev/0.3-search`; the released version and immutable `v0.2.0` tag remain unchanged. A normalized Lazy-SMP SPRT requires its own preregistration. Pawn hashing remains lower priority.
 
 H0/H1 then added byte-isolated evaluation evidence tooling and proved it on a 4,000-game historical pilot. H2b subsequently completed 4,000 fresh paired games without a timing, crash, legality, warning, or protocol failure. The first 9,000-game H2c expansion was rejected in full after one timeout; its deterministic H2d replacement completed and independently audited all 9,000 games at fixed per-engine node budgets. H2b+H2d first produced a conservative 9,959-record corpus, then H2e recovered 35,032 unique records through pre-registered gap-constrained, pair-balanced dense extraction without generating or accepting another game. Train and validation contain 28,040/3,564 rows from 4,146/538 opening groups, both 42-column designs have full rank, and a scale-only diagnostic is stable but statistically unresolved on validation. No evaluation weight changed. Because aggregate current-holdout summaries were accidentally exposed, any future fitter requires its own preregistration and a new disjoint untouched final holdout before a playing candidate can exist.
+
+N0a/N1a now add two one-way, non-playing crates: the scalar `Chess768`/artifact oracle and a strict Viriformat-compatible game codec. The data codec preserves complete classical position state, white-relative score/WDL targets and contiguous moves, rejects illegal or lossy input, and is cross-checked by an independent python-chess auditor. This is the foundation for geometric 1M/4M/16M/64M/256M data gates; no production corpus, trained network, search integration or strength result exists yet.

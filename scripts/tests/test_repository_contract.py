@@ -22,6 +22,7 @@ class RepositoryContractTests(unittest.TestCase):
             "cargo clippy --all-targets --all-features -- -D warnings",
             "cargo test --all-features",
             "cargo test --manifest-path tools/nnue-reference/Cargo.toml --locked",
+            "cargo test --manifest-path tools/nnue-data/Cargo.toml --locked",
             ".venv/bin/pip install -r scripts/requirements.txt",
             ".venv/bin/python -m unittest discover -s scripts/tests",
             "scripts/test-openbench-contract.sh",
@@ -55,6 +56,7 @@ class RepositoryContractTests(unittest.TestCase):
             "docs/openbench.md",
             "docs/development/competitive-roadmap.md",
             "docs/development/nnue-reference.md",
+            "docs/development/nnue-data.md",
             "CONTRIBUTING.md",
             "SECURITY.md",
         ]:
@@ -67,6 +69,17 @@ class RepositoryContractTests(unittest.TestCase):
         self.assertIn('unsafe_code = "forbid"', cargo)
         self.assertIn("NEYRANGNNUE", specification)
         self.assertIn("No playing-strength claim", specification)
+
+    def test_nnue_data_codec_is_isolated_lossless_and_documented(self) -> None:
+        cargo = self.read("tools/nnue-data/Cargo.toml")
+        specification = self.read("docs/development/nnue-data.md")
+        gitignore = self.read(".gitignore")
+        self.assertIn('neyrang = { path = "../.." }', cargo)
+        self.assertIn('unsafe_code = "forbid"', cargo)
+        self.assertIn("Viriformat-compatible", specification)
+        self.assertIn("white-relative", specification)
+        self.assertIn("No playing-strength claim", specification)
+        self.assertIn("/tools/nnue-data/target/", gitignore)
 
 
 if __name__ == "__main__":

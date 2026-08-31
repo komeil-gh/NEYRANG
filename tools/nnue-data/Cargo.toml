@@ -1,0 +1,14 @@
+[package]
+name = "neyrang-nnue-data"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+publish = false
+description = "Lossless game-record codec for NEYRANG NNUE training data"
+
+[dependencies]
+neyrang = { path = "../.." }
+
+[lints.rust]
+unsafe_code = "forbid"
+

@@ -37,8 +37,10 @@ Implemented:
 - deterministic disjoint-opening selection from audited EPD/PGN provenance sets
 - immutable fixed-game campaign sharding with per-worker asset verification,
   exact opening-sequence audits, checksummed result manifests, and coordinator replay
+- isolated scalar NNUE reference tooling with versioned fail-closed artifacts,
+  dual-perspective feature mapping, and refresh/incremental accumulator oracles
 
-Not implemented in the retained development source: Syzygy, NNUE, LMP, futility pruning, continuation/capture history, or an optimized sliding-attack backend. The single pre-registered P3 Lazy-SMP design passed its correctness, scaling, deadline, and 2,000-game paired gates and is retained on the development branch. This is controlled development evidence, not a new release or a universal Elo claim. Capture History and 1-ply Continuation History were tested and reverted; the second conservative NMP experiment was retained on the development branch but has not earned a release.
+Not implemented in the retained playing source: Syzygy, NNUE evaluation, LMP, futility pruning, continuation/capture history, or an optimized sliding-attack backend. The standalone NNUE scalar reference is correctness infrastructure only: it has no trained network, is not linked into search, and carries no Elo claim. The single pre-registered P3 Lazy-SMP design passed its correctness, scaling, deadline, and 2,000-game paired gates and is retained on the development branch. This is controlled development evidence, not a new release or a universal Elo claim. Capture History and 1-ply Continuation History were tested and reverted; the second conservative NMP experiment was retained on the development branch but has not earned a release.
 
 No project license has been selected yet.
 
@@ -142,6 +144,7 @@ cargo fmt --check
 cargo clippy --all-targets --all-features
 cargo test
 cargo test --features stats
+cargo test --manifest-path tools/nnue-reference/Cargo.toml --locked
 scripts/test-match-config.sh
 .venv/bin/python -m unittest discover -s scripts/tests
 ```
@@ -187,6 +190,7 @@ The bundled opening file is intentionally small; replace `OPENINGS_FILE` with a 
 - [0.3 search-development final report](docs/development/0.3.0-final-report.md)
 - [Next strength phase and profile](docs/development/next-strength-phase.md)
 - [Competitive roadmap: OpenBench, H3, NNUE, and selective search](docs/development/competitive-roadmap.md)
+- [NNUE scalar reference and artifact contract](docs/development/nnue-reference.md)
 - [Evaluation corpus and tuning protocol](docs/development/evaluation-tuning.md)
 
 ## Contributing and security

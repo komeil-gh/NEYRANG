@@ -13,6 +13,9 @@ all:
 
 quality:
 	$(CARGO) fmt --check
+	$(CARGO) fmt --manifest-path tools/nnue-reference/Cargo.toml --check
 	$(CARGO) clippy --all-targets --all-features -- -D warnings
+	$(CARGO) clippy --manifest-path tools/nnue-reference/Cargo.toml --all-targets -- -D warnings
 	$(CARGO) test
 	$(CARGO) test --all-features
+	$(CARGO) test --manifest-path tools/nnue-reference/Cargo.toml --locked

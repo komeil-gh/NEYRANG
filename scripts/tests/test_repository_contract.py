@@ -21,6 +21,7 @@ class RepositoryContractTests(unittest.TestCase):
             "cargo fmt --check",
             "cargo clippy --all-targets --all-features -- -D warnings",
             "cargo test --all-features",
+            "cargo test --manifest-path tools/nnue-reference/Cargo.toml --locked",
             ".venv/bin/pip install -r scripts/requirements.txt",
             ".venv/bin/python -m unittest discover -s scripts/tests",
             "scripts/test-openbench-contract.sh",
@@ -53,10 +54,19 @@ class RepositoryContractTests(unittest.TestCase):
         for link in [
             "docs/openbench.md",
             "docs/development/competitive-roadmap.md",
+            "docs/development/nnue-reference.md",
             "CONTRIBUTING.md",
             "SECURITY.md",
         ]:
             self.assertIn(link, readme)
+
+    def test_nnue_reference_is_isolated_and_documented(self) -> None:
+        cargo = self.read("tools/nnue-reference/Cargo.toml")
+        specification = self.read("docs/development/nnue-reference.md")
+        self.assertIn('neyrang = { path = "../.." }', cargo)
+        self.assertIn('unsafe_code = "forbid"', cargo)
+        self.assertIn("NEYRANGNNUE", specification)
+        self.assertIn("No playing-strength claim", specification)
 
 
 if __name__ == "__main__":

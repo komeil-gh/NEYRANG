@@ -16,7 +16,7 @@ All notable changes to NEYRANG are documented here.
 - Per-engine deterministic node budgets in the paired-match runner, with fail-closed shared/per-engine exclusivity and exact metadata assertions in the independent auditor.
 - An explicit immutable-baseline warning policy that retains only a named opponent's exact threefold-PV continuation while rejecting candidate or unrelated warnings; default behavior remains reject-all.
 - A frozen fixed-game campaign tool that creates deterministic non-overlapping opening shards, binds workers to external campaign and asset hashes, checksums every result artifact, and independently replays every shard before aggregation.
-- A pre-registered root-diversified Lazy-SMP candidate with worker-private search state, a coherent packed atomic shared TT, exact aggregate node limits, score voting, aggregate UCI telemetry, and an external 1/2/4-thread scaling harness.
+- A retained root-diversified Lazy-SMP path with worker-private search state, a coherent packed atomic shared TT, exact aggregate node limits, score voting, aggregate UCI telemetry, and an external 1/2/4-thread scaling harness.
 - Per-engine thread counts in the fixed paired-match runner, with shared/per-engine exclusivity, range validation, dry-run regression coverage, and explicit metadata.
 
 ### Changed
@@ -30,7 +30,7 @@ All notable changes to NEYRANG are documented here.
 - H2d replaces H2c's wall-clock allocation with pre-registered 30,000/29,200-node G1/F1 limits derived from 732,065 plies of rejected-run telemetry; no playing code or evaluation weight changes.
 - The fixed match runner records the selected warning policy and refuses to combine the immutable-baseline compatibility policy with fastchess strict mode.
 - The match auditor can require the exact registered opening sequence, while distributed metadata carries campaign/shard identities and pair offsets. Sub-millisecond time controls are rejected before games because they cannot round-trip through the PGN header.
-- `Threads=1` retains the established local full-key TT and deterministic search entry point; `Threads>1` now exercises the isolated P3 shared-TT path on the development branch pending its binding scaling and paired-game decisions.
+- `Threads=1` retains the established local full-key TT and deterministic search entry point; `Threads>1` exercises the retained P3 shared-TT path after passing its binding scaling, deadline, and paired-game decisions.
 
 ### Evidence
 
@@ -40,6 +40,7 @@ All notable changes to NEYRANG are documented here.
 - H2c was rejected in full after one timeout following 7,462 complete games; the independently audited prefix is preserved only as failure evidence and is excluded from every corpus and tuning decision.
 - P1 completed and independently audited 2,000 cumulative G1-versus-v0.2.0 games at 65.875% (`+114.26 +/-12.79 Elo`), with 2,000 normal terminations, complete telemetry, and zero allowed or rejected warning or other anomaly. This permits a separately registered SPRT but does not change the released version.
 - A two-shard real-binary smoke completed 8/8 games and passed independent coordinator replay with exact aggregate W/D/L and pentanomial counts. This validates infrastructure only and is not strength evidence.
+- P3 passed its frozen scaling gate at `2.010776x / 3.956388x` aggregate NPS for Threads 2/4. Its binding same-binary 2,000-game Threads-2-versus-Threads-1 screen then completed `711/701/588` (53.075%, `+21.39 +/-10.90 Elo`) with pentanomial `[57,184,437,223,99]`. Independent replay verified all 1,000 pairs and 196,758 plies with no timing, legality, crash, warning, or protocol anomaly. This retains P3 on the development branch but does not change version `0.2.0` or replace a separately preregistered normalized SPRT.
 
 ## [0.2.0] - 2026-08-29
 

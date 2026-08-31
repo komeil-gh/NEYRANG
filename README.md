@@ -20,7 +20,7 @@ Implemented:
 - iterative deepening, alpha-beta, quiescence, PVS, aspiration windows
 - transposition table with mate-score normalization
 - a full-key local TT for `Threads=1` and a coherent packed atomic shared TT
-  for experimental Lazy SMP on the development branch
+  for retained Lazy SMP on the development branch
 - TT/SEE-capture/killer/history move ordering with losing captures deferred
 - fixed-storage staged move delivery on the development branch
 - legal static exchange evaluation and conservative qsearch SEE pruning
@@ -38,7 +38,7 @@ Implemented:
 - immutable fixed-game campaign sharding with per-worker asset verification,
   exact opening-sequence audits, checksummed result manifests, and coordinator replay
 
-Not implemented in the retained development source: Syzygy, NNUE, LMP, futility pruning, continuation/capture history, or an optimized sliding-attack backend. The development branch now contains the single pre-registered P3 Lazy-SMP candidate, but multicore scaling and paired-game gates still decide whether it remains; this is not yet release or Elo evidence. Capture History and 1-ply Continuation History were tested and reverted; the second conservative NMP experiment was retained on the development branch but has not earned a release.
+Not implemented in the retained development source: Syzygy, NNUE, LMP, futility pruning, continuation/capture history, or an optimized sliding-attack backend. The single pre-registered P3 Lazy-SMP design passed its correctness, scaling, deadline, and 2,000-game paired gates and is retained on the development branch. This is controlled development evidence, not a new release or a universal Elo claim. Capture History and 1-ply Continuation History were tested and reverted; the second conservative NMP experiment was retained on the development branch but has not earned a release.
 
 No project license has been selected yet.
 
@@ -77,7 +77,7 @@ printf "uci\nisready\nposition startpos\ngo depth 5\nquit\n" | target/release/ne
 Options:
 
 - `Hash` (default 64 MB)
-- `Threads` (default 1; values above one enable the experimental shared-TT
+- `Threads` (default 1; values above one enable the retained shared-TT
   Lazy-SMP path on the development branch)
 - `Move Overhead` (default 30 ms; configurable)
 
@@ -181,6 +181,8 @@ Post-campaign F1 removed make/unmake from the common legality-filtering path wit
 
 G1 then made exact SEE carry target attackers and color occupancy incrementally while retaining the complete pre-G1 implementation as a test oracle. Equality passed over 100,000 positions, 336,083 tactical moves, and 7,393,826 threshold queries. The tree-identical 15-run depth-8 comparison reduced median wall time by another 4.44%; a fresh strict 2,000-game screen finished `672/695/633` (50.98%) with all 2,000 terminations normal and no timing, legality, crash, or protocol anomaly. G1 is retained at playing-source commit `b80b08a2e188973383d254dd6b3ced908560364c`.
 
-P1 then resolved the immutable-v0.2.0 runner ambiguity with a narrow, independently tested opponent-only repetition-PV warning policy. A fresh 2,000-game cumulative screen completed `1006/623/371` for G1 (65.875%, reported `+114.26 +/-12.79 Elo`). Independent replay verified every pair and all 196,771 plies, with 2,000 normal terminations and zero warning, timeout, crash, illegal move, protocol error, or negative time-left sample. The project has now recorded 41,992 valid comparison games. Accepted work stays on `dev/0.3-search`; the released version and immutable `v0.2.0` tag remain unchanged. Pawn hashing remains lower priority.
+P1 then resolved the immutable-v0.2.0 runner ambiguity with a narrow, independently tested opponent-only repetition-PV warning policy. A fresh 2,000-game cumulative screen completed `1006/623/371` for G1 (65.875%, reported `+114.26 +/-12.79 Elo`). Independent replay verified every pair and all 196,771 plies, with 2,000 normal terminations and zero warning, timeout, crash, illegal move, protocol error, or negative time-left sample.
+
+P3 subsequently retained one root-diversified Lazy-SMP design. Frozen Threads 2/4 throughput reached `2.010776x / 3.956388x` the Threads-1 aggregate NPS with sub-millisecond p95 hard-deadline overshoot. The binding same-binary Threads-2-versus-Threads-1 screen completed all 2,000 games at `0.5+0.005`: `711/701/588`, 53.075%, reported `+21.39 +/-10.90 Elo`, and pentanomial `[57,184,437,223,99]`. Independent replay verified all 1,000 pairs and 196,758 plies with zero warning, timeout, crash, illegal move, protocol error, forfeit, or negative time-left sample. The project has now recorded 43,992 valid comparison games. Accepted work stays on `dev/0.3-search`; the released version and immutable `v0.2.0` tag remain unchanged. A normalized Lazy-SMP SPRT requires its own preregistration. Pawn hashing remains lower priority.
 
 H0/H1 then added byte-isolated evaluation evidence tooling and proved it on a 4,000-game historical pilot. H2b subsequently completed 4,000 fresh paired games without a timing, crash, legality, warning, or protocol failure. The first 9,000-game H2c expansion was rejected in full after one timeout; its deterministic H2d replacement completed and independently audited all 9,000 games at fixed per-engine node budgets. H2b+H2d first produced a conservative 9,959-record corpus, then H2e recovered 35,032 unique records through pre-registered gap-constrained, pair-balanced dense extraction without generating or accepting another game. Train and validation contain 28,040/3,564 rows from 4,146/538 opening groups, both 42-column designs have full rank, and a scale-only diagnostic is stable but statistically unresolved on validation. No evaluation weight changed. Because aggregate current-holdout summaries were accidentally exposed, any future fitter requires its own preregistration and a new disjoint untouched final holdout before a playing candidate can exist.

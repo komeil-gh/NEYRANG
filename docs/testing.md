@@ -79,6 +79,8 @@ Run the pre-registered external scaling gate only on a release build with no con
 
 The fixed command performs one excluded warm-up for each of Threads 1/2/4 and seven measured rotating-order runs. Every run searches the same five benchmark FENs at `go movetime 1000`, total Hash 64 MB, and Move Overhead 30 ms. The artifact retains every final info line, external monotonic wall time, hard-deadline overshoot, nodes, reported time/NPS, depth, PV, binary hash, host, and schedule. Aggregate NPS uses final UCI nodes divided by final UCI time: the historical Threads-1 line describes its last completed iteration, while the new SMP final line contains exact all-worker work. External wall-NPS is diagnostic only. Retention requires at least 1.35x/1.70x median aggregate NPS for Threads 2/4 and at most 30 ms p95 hard-deadline overshoot for every configuration before paired games may start.
 
+Frozen P3 passed this gate at `2.010776x / 3.956388x`; Threads 2/4 p95 hard-deadline overshoot was `0.675041 / 0.685708 ms`. The complete artifact hash and interpretation are in the experiment ledger. These measurements authorize the paired screen only; they do not establish Elo or justify release.
+
 ## Complete-game smoke evidence
 
 On 2026-08-29, the native ARM64 release was run through python-chess 1.11.2 against the official native ARM64 Stockfish 18 binary (SHA-256 `4d77c4aa3ad9bd1ea8111f2ac5a4620fe7ebf998d6893bf828d49ccd579c8cb0`). Five fixed openings were paired with colors reversed for ten games. NEYRANG used depth 3 and Stockfish depth 1.

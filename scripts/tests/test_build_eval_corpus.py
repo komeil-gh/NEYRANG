@@ -20,6 +20,117 @@ SPEC.loader.exec_module(corpus)
 
 
 class CorpusBuilderTests(unittest.TestCase):
+    def test_sampling_configuration_is_explicit(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "games.pgn"
+            write_pair(source, "Engine-A", "Engine-B")
+            config = make_config(root, root / "output", source)
+
+            self.assertTrue(hasattr(config, "samples_per_game"))
+            self.assertTrue(hasattr(config, "min_sample_gap"))
+            self.assertEqual(getattr(config, "samples_per_game", None), 1)
+            self.assertEqual(getattr(config, "min_sample_gap", None), 0)
+
+    def test_sampling_configuration_rejects_ambiguous_modes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "games.pgn"
+            write_pair(source, "Engine-A", "Engine-B")
+            base = make_config(root, root / "output", source)
+
+            invalid = (
+                ({"samples_per_game": 0}, "samples-per-game must be positive"),
+                ({"min_sample_gap": -1}, "min-sample-gap must be non-negative"),
+                (
+                    {"samples_per_game": 1, "min_sample_gap": 1},
+                    "single-sample mode requires min-sample-gap 0",
+                ),
+                (
+                    {"samples_per_game": 2, "min_sample_gap": 0},
+                    "dense mode requires a positive min-sample-gap",
+                ),
+            )
+            for changes, message in invalid:
+                config = corpus.BuildConfig(**{**base.__dict__, **changes})
+                with self.subTest(changes=changes):
+                    with self.assertRaisesRegex(corpus.CorpusError, message):
+                        corpus.validate_config(config)
+
+    def test_dense_sampling_is_gap_constrained_and_pair_balanced(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "dense.pgn"
+            write_custom_game(
+                source,
+                "Engine-A",
+                "Engine-B",
+                (
+                    "g1f3",
+                    "g8f6",
+                    "b1c3",
+                    "b8c6",
+                    "a2a3",
+                    "a7a6",
+                    "h2h3",
+                    "h7h6",
+                    "b2b3",
+                    "b7b6",
+                    "g2g3",
+                    "g7g6",
+                    "f1g2",
+                    "f8g7",
+                    "d2d3",
+                    "d7d6",
+                ),
+                append=False,
+            )
+            write_custom_game(
+                source,
+                "Engine-B",
+                "Engine-A",
+                ("e2e4", "e7e5", "g1f3", "b8c6"),
+                append=True,
+            )
+            base = make_config(root, root / "dense-output", source)
+            config = corpus.BuildConfig(
+                **{
+                    **base.__dict__,
+                    "samples_per_game": 3,
+                    "min_sample_gap": 2,
+                }
+            )
+
+            manifest = corpus.build_corpus(config)
+            counts = manifest["sources"][0]["counts"]
+            self.assertEqual(counts["records_sampled"], 4)
+            self.assertEqual(counts.get("pair_balancing_records_dropped"), 1)
+            self.assertEqual(
+                manifest["sources"][0].get("pair_record_counts"), {"4": 1}
+            )
+            self.assertEqual(
+                manifest["sources"][0].get("target_record_counts"), {"0.5": 4}
+            )
+            sampling = manifest["sampling"]
+            self.assertEqual(sampling.get("mode"), "pair-balanced-gap-hash-v1")
+            self.assertEqual(sampling["max_positions_per_game"], 3)
+            self.assertEqual(sampling.get("min_sample_gap_plies"), 2)
+
+            by_game: dict[int, list[int]] = {1: [], 2: []}
+            for partition in corpus.PARTITIONS:
+                lines = (config.output_dir / f"{partition}.input.tsv").read_text().splitlines()
+                for line in lines[1:]:
+                    record_id = line.split("\t", 1)[0]
+                    game = int(record_id.split(":game-")[1].split(":", 1)[0])
+                    ply = int(record_id.rsplit(":ply-", 1)[1])
+                    by_game[game].append(ply)
+            self.assertEqual({game: len(plies) for game, plies in by_game.items()}, {1: 2, 2: 2})
+            for plies in by_game.values():
+                ordered = sorted(plies)
+                self.assertTrue(
+                    all(right - left >= 2 for left, right in zip(ordered, ordered[1:]))
+                )
+
     def test_build_is_deterministic_and_groups_reused_openings(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -120,6 +231,22 @@ def write_pair(path: Path, first: str, second: str) -> None:
 
 
 def write_game(path: Path, white: str, black: str, append: bool) -> None:
+    write_custom_game(
+        path,
+        white,
+        black,
+        ("g1f3", "g8f6", "b1c3", "b8c6"),
+        append,
+    )
+
+
+def write_custom_game(
+    path: Path,
+    white: str,
+    black: str,
+    moves: tuple[str, ...],
+    append: bool,
+) -> None:
     game = chess.pgn.Game()
     game.headers.update(
         {
@@ -130,12 +257,12 @@ def write_game(path: Path, white: str, black: str, append: bool) -> None:
             "Result": "1/2-1/2",
             "Termination": "normal",
             "TimeControl": "1+0.01",
-            "PlyCount": "4",
+            "PlyCount": str(len(moves)),
         }
     )
     board = game.board()
     node = game
-    for notation in ("g1f3", "g8f6", "b1c3", "b8c6"):
+    for notation in moves:
         move = chess.Move.from_uci(notation)
         self_legal = move in board.legal_moves
         if not self_legal:

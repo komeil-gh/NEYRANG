@@ -18,6 +18,7 @@ import chess.pgn
 
 
 PARTITIONS = ("train", "validation", "holdout")
+DENSE_SAMPLING_SCHEMA = "neyrang-eval-dense-sampling-v1"
 RESULT_TARGET = {"1-0": "1", "0-1": "0", "1/2-1/2": "0.5"}
 RECORD_ID = re.compile(
     r"^(?P<source>[A-Za-z0-9][A-Za-z0-9._-]*):"
@@ -81,8 +82,38 @@ def audit_corpus(repo_root: Path, corpus_dir: Path) -> dict[str, Any]:
     sampling = require_mapping(manifest, "sampling")
     min_ply = require_int(sampling, "min_recorded_ply")
     tail_plies = require_int(sampling, "tail_plies_excluded")
-    if sampling.get("max_positions_per_game") != 1:
-        raise AuditError("only one sampled position per game is supported")
+    samples_per_game = require_int(sampling, "max_positions_per_game")
+    if samples_per_game <= 0:
+        raise AuditError("max positions per game must be positive")
+    if samples_per_game == 1:
+        min_sample_gap = sampling.get("min_sample_gap_plies", 0)
+        mode = sampling.get("mode", "single-hash-v1")
+        selector_schema = sampling.get("selector_schema", schema)
+        pair_balanced = sampling.get("pair_balanced_record_count", True)
+    else:
+        min_sample_gap = require_int(sampling, "min_sample_gap_plies")
+        mode = require_string(sampling, "mode")
+        selector_schema = require_string(sampling, "selector_schema")
+        pair_balanced = sampling.get("pair_balanced_record_count")
+    if not isinstance(min_sample_gap, int) or isinstance(min_sample_gap, bool):
+        raise AuditError("min_sample_gap_plies must be an integer")
+    if not isinstance(mode, str) or not mode:
+        raise AuditError("mode must be a non-empty string")
+    if not isinstance(selector_schema, str) or not selector_schema:
+        raise AuditError("selector_schema must be a non-empty string")
+    if min_sample_gap < 0:
+        raise AuditError("minimum sample gap must be non-negative")
+    if samples_per_game == 1:
+        if min_sample_gap != 0 or mode != "single-hash-v1" or selector_schema != schema:
+            raise AuditError("invalid single-sample manifest")
+    elif (
+        min_sample_gap == 0
+        or mode != "pair-balanced-gap-hash-v1"
+        or selector_schema != DENSE_SAMPLING_SCHEMA
+    ):
+        raise AuditError("invalid dense-sample manifest")
+    if pair_balanced is not True:
+        raise AuditError("corpus does not require pair-balanced record counts")
     if sampling.get("reject_in_check") is not True:
         raise AuditError("corpus does not require check rejection")
     if sampling.get("reject_any_legal_capture_or_promotion") is not True:
@@ -113,11 +144,19 @@ def audit_corpus(repo_root: Path, corpus_dir: Path) -> dict[str, Any]:
             seed=seed,
             min_ply=min_ply,
             tail_plies=tail_plies,
+            samples_per_game=samples_per_game,
+            min_sample_gap=min_sample_gap,
+            selector_schema=selector_schema,
             train_percent=train_percent,
             validation_percent=validation_percent,
         )
         expected.extend(records)
-        compare_source_evidence(source_id, source, evidence)
+        compare_source_evidence(
+            source_id,
+            source,
+            evidence,
+            require_dense_fields=samples_per_game > 1,
+        )
         source_summaries[source_id] = evidence["counts"]
 
     deduplicated, deduplication = deduplicate(expected)
@@ -180,6 +219,9 @@ def replay_source(
     seed: str,
     min_ply: int,
     tail_plies: int,
+    samples_per_game: int,
+    min_sample_gap: int,
+    selector_schema: str,
     train_percent: int,
     validation_percent: int,
 ) -> tuple[list[ExpectedRecord], dict[str, Any]]:
@@ -188,6 +230,8 @@ def replay_source(
     engines: set[str] = set()
     time_controls: Counter[str] = Counter()
     results: Counter[str] = Counter()
+    pair_record_counts: Counter[str] = Counter()
+    target_record_counts: Counter[str] = Counter()
 
     with source_path.open(encoding="utf-8") as handle:
         pair_index = 0
@@ -212,7 +256,7 @@ def replay_source(
                 train_percent,
                 validation_percent,
             )
-            samples: list[tuple[int, str] | None] = []
+            samples: list[list[tuple[int, str]]] = []
             for game_in_pair, game in enumerate((left, right), start=1):
                 sample, sample_counts = sample_game(
                     game,
@@ -223,6 +267,9 @@ def replay_source(
                     game_in_pair,
                     min_ply,
                     tail_plies,
+                    samples_per_game,
+                    min_sample_gap,
+                    selector_schema,
                 )
                 counts.update(sample_counts)
                 samples.append(sample)
@@ -234,39 +281,46 @@ def replay_source(
                 time_controls[game.headers.get("TimeControl", "missing")] += 1
                 results[game.headers["Result"]] += 1
 
-            if any(sample is None for sample in samples):
+            paired_count = min(len(samples[0]), len(samples[1]))
+            dropped = len(samples[0]) + len(samples[1]) - 2 * paired_count
+            if dropped:
+                counts["pair_balancing_records_dropped"] += dropped
+            if paired_count == 0:
                 counts["pairs_without_two_samples"] += 1
                 continue
             counts["pairs_sampled"] += 1
-            for game_in_pair, (game, sample) in enumerate(
+            pair_record_counts[str(2 * paired_count)] += 1
+            for game_in_pair, (game, game_samples) in enumerate(
                 zip((left, right), samples, strict=True), start=1
             ):
-                assert sample is not None
-                ply, fen = sample
-                record_id = (
-                    f"{source_id}:pair-{pair_index:06d}:"
-                    f"game-{game_in_pair}:ply-{ply:03d}"
-                )
-                if RECORD_ID.fullmatch(record_id) is None:
-                    raise AuditError(f"record id is outside schema: {record_id!r}")
-                records.append(
-                    ExpectedRecord(
-                        partition=partition,
-                        record_id=record_id,
-                        target=RESULT_TARGET[game.headers["Result"]],
-                        fen=fen,
-                        position_key=position_key(fen),
-                        source_id=source_id,
-                        pair_index=pair_index,
+                for ply, fen in sorted(game_samples[:paired_count]):
+                    record_id = (
+                        f"{source_id}:pair-{pair_index:06d}:"
+                        f"game-{game_in_pair}:ply-{ply:03d}"
                     )
-                )
-                counts["records_sampled"] += 1
+                    if RECORD_ID.fullmatch(record_id) is None:
+                        raise AuditError(f"record id is outside schema: {record_id!r}")
+                    records.append(
+                        ExpectedRecord(
+                            partition=partition,
+                            record_id=record_id,
+                            target=RESULT_TARGET[game.headers["Result"]],
+                            fen=fen,
+                            position_key=position_key(fen),
+                            source_id=source_id,
+                            pair_index=pair_index,
+                        )
+                    )
+                    counts["records_sampled"] += 1
+                    target_record_counts[RESULT_TARGET[game.headers["Result"]]] += 1
 
     return records, {
         "counts": sorted_counter(counts),
         "engines": sorted(engines),
         "time_controls": sorted_counter(time_controls),
         "results": sorted_counter(results),
+        "pair_record_counts": sorted_counter(pair_record_counts),
+        "target_record_counts": sorted_counter(target_record_counts),
     }
 
 
@@ -321,7 +375,10 @@ def sample_game(
     game_in_pair: int,
     min_ply: int,
     tail_plies: int,
-) -> tuple[tuple[int, str] | None, Counter[str]]:
+    samples_per_game: int,
+    min_sample_gap: int,
+    selector_schema: str,
+) -> tuple[list[tuple[int, str]], Counter[str]]:
     moves = list(game.mainline_moves())
     board = game.board()
     eligible: list[tuple[int, str]] = []
@@ -342,17 +399,44 @@ def sample_game(
 
     if not eligible:
         counts["games_without_eligible_position"] += 1
-        return None, counts
-    chosen = stable_digest(
-        schema,
-        seed,
-        source_id,
-        str(pair_index),
-        str(game_in_pair),
-        "sample",
-    )
+        return [], counts
+
+    if samples_per_game == 1:
+        chosen = stable_digest(
+            schema,
+            seed,
+            source_id,
+            str(pair_index),
+            str(game_in_pair),
+            "sample",
+        )
+        selected = [eligible[int.from_bytes(chosen[:8], "big") % len(eligible)]]
+    else:
+        ranked = sorted(
+            eligible,
+            key=lambda sample: stable_digest(
+                selector_schema,
+                seed,
+                source_id,
+                str(pair_index),
+                str(game_in_pair),
+                str(sample[0]),
+                "rank",
+            ),
+        )
+        selected = []
+        for sample in ranked:
+            if all(
+                abs(sample[0] - existing[0]) >= min_sample_gap
+                for existing in selected
+            ):
+                selected.append(sample)
+                if len(selected) == samples_per_game:
+                    break
+        counts["positions_selected"] += len(selected)
+
     counts["games_with_eligible_position"] += 1
-    return eligible[int.from_bytes(chosen[:8], "big") % len(eligible)], counts
+    return selected, counts
 
 
 def partition_for(
@@ -400,10 +484,21 @@ def deduplicate(
 
 
 def compare_source_evidence(
-    source_id: str, manifest: dict[str, Any], actual: dict[str, Any]
+    source_id: str,
+    manifest: dict[str, Any],
+    actual: dict[str, Any],
+    *,
+    require_dense_fields: bool,
 ) -> None:
     for field in ("counts", "engines", "time_controls", "results"):
         if manifest.get(field) != actual[field]:
+            raise AuditError(f"{source_id} {field} differs from independent replay")
+    for field in ("pair_record_counts", "target_record_counts"):
+        if field not in manifest:
+            if require_dense_fields:
+                raise AuditError(f"{source_id} {field} is missing")
+            continue
+        if manifest[field] != actual[field]:
             raise AuditError(f"{source_id} {field} differs from independent replay")
 
 

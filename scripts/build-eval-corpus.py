@@ -23,6 +23,7 @@ import chess.pgn
 
 
 CORPUS_SCHEMA = "neyrang-eval-corpus-v1"
+DENSE_SAMPLING_SCHEMA = "neyrang-eval-dense-sampling-v1"
 RESULT_TARGET = {"1-0": 1.0, "0-1": 0.0, "1/2-1/2": 0.5}
 PARTITIONS = ("train", "validation", "holdout")
 SOURCE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
@@ -46,6 +47,8 @@ class BuildConfig:
     seed: str
     min_ply: int = 16
     tail_plies: int = 8
+    samples_per_game: int = 1
+    min_sample_gap: int = 0
     train_percent: int = 80
     validation_percent: int = 10
 
@@ -82,6 +85,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", required=True)
     parser.add_argument("--min-ply", type=int, default=16)
     parser.add_argument("--tail-plies", type=int, default=8)
+    parser.add_argument("--samples-per-game", type=int, default=1)
+    parser.add_argument("--min-sample-gap", type=int, default=0)
     return parser.parse_args()
 
 
@@ -98,6 +103,8 @@ def main() -> int:
             seed=args.seed,
             min_ply=args.min_ply,
             tail_plies=args.tail_plies,
+            samples_per_game=args.samples_per_game,
+            min_sample_gap=args.min_sample_gap,
         )
         manifest = build_corpus(config)
     except (CorpusError, OSError) as error:
@@ -150,6 +157,14 @@ def validate_config(config: BuildConfig) -> None:
         raise CorpusError("seed must not be empty")
     if config.min_ply < 0 or config.tail_plies < 0:
         raise CorpusError("min-ply and tail-plies must be non-negative")
+    if config.samples_per_game <= 0:
+        raise CorpusError("samples-per-game must be positive")
+    if config.min_sample_gap < 0:
+        raise CorpusError("min-sample-gap must be non-negative")
+    if config.samples_per_game == 1 and config.min_sample_gap != 0:
+        raise CorpusError("single-sample mode requires min-sample-gap 0")
+    if config.samples_per_game > 1 and config.min_sample_gap == 0:
+        raise CorpusError("dense mode requires a positive min-sample-gap")
     if config.train_percent <= 0 or config.validation_percent <= 0:
         raise CorpusError("train and validation percentages must be positive")
     if config.train_percent + config.validation_percent >= 100:
@@ -214,6 +229,8 @@ def extract_source(
     engine_names: set[str] = set()
     time_controls: Counter[str] = Counter()
     results: Counter[str] = Counter()
+    pair_record_counts: Counter[str] = Counter()
+    target_record_counts: Counter[str] = Counter()
     records: list[Record] = []
 
     with source.path.open(encoding="utf-8") as handle:
@@ -235,10 +252,10 @@ def extract_source(
             opening_fen = left.headers.get("FEN", chess.STARTING_FEN)
             opening_key = canonical_position_key(opening_fen)
             partition = partition_for_opening(opening_key, config)
-            left_sample, left_stats = sample_game(
+            left_samples, left_stats = sample_game(
                 left, source.source_id, pair_index, 1, config
             )
-            right_sample, right_stats = sample_game(
+            right_samples, right_stats = sample_game(
                 right, source.source_id, pair_index, 2, config
             )
             stats.update(left_stats)
@@ -251,33 +268,40 @@ def extract_source(
                 time_controls[game.headers.get("TimeControl", "missing")] += 1
                 results[game.headers["Result"]] += 1
 
-            if left_sample is None or right_sample is None:
+            paired_count = min(len(left_samples), len(right_samples))
+            dropped = len(left_samples) + len(right_samples) - 2 * paired_count
+            if dropped:
+                stats["pair_balancing_records_dropped"] += dropped
+            if paired_count == 0:
                 stats["pairs_without_two_samples"] += 1
                 continue
 
             stats["pairs_sampled"] += 1
-            for game_in_pair, game, sample in (
-                (1, left, left_sample),
-                (2, right, right_sample),
+            pair_record_counts[str(2 * paired_count)] += 1
+            for game_in_pair, game, samples in (
+                (1, left, left_samples),
+                (2, right, right_samples),
             ):
-                record_id = (
-                    f"{source.source_id}:pair-{pair_index:06d}:"
-                    f"game-{game_in_pair}:ply-{sample.ply:03d}"
-                )
-                records.append(
-                    Record(
-                        partition=partition,
-                        record_id=record_id,
-                        target=RESULT_TARGET[game.headers["Result"]],
-                        fen=sample.fen,
-                        position_key=canonical_position_key(sample.fen),
-                        source_id=source.source_id,
-                        pair_index=pair_index,
-                        game_in_pair=game_in_pair,
-                        ply=sample.ply,
+                for sample in sorted(samples[:paired_count], key=lambda item: item.ply):
+                    record_id = (
+                        f"{source.source_id}:pair-{pair_index:06d}:"
+                        f"game-{game_in_pair}:ply-{sample.ply:03d}"
                     )
-                )
-                stats["records_sampled"] += 1
+                    records.append(
+                        Record(
+                            partition=partition,
+                            record_id=record_id,
+                            target=RESULT_TARGET[game.headers["Result"]],
+                            fen=sample.fen,
+                            position_key=canonical_position_key(sample.fen),
+                            source_id=source.source_id,
+                            pair_index=pair_index,
+                            game_in_pair=game_in_pair,
+                            ply=sample.ply,
+                        )
+                    )
+                    stats["records_sampled"] += 1
+                    target_record_counts[format_target(RESULT_TARGET[game.headers["Result"]])] += 1
 
     return (
         {
@@ -288,6 +312,8 @@ def extract_source(
             "engines": sorted(engine_names),
             "time_controls": sorted_counter(time_controls),
             "results": sorted_counter(results),
+            "pair_record_counts": sorted_counter(pair_record_counts),
+            "target_record_counts": sorted_counter(target_record_counts),
             "counts": sorted_counter(stats),
         },
         records,
@@ -350,7 +376,7 @@ def sample_game(
     pair_index: int,
     game_in_pair: int,
     config: BuildConfig,
-) -> tuple[Sample | None, Counter[str]]:
+) -> tuple[list[Sample], Counter[str]]:
     moves = list(game.mainline_moves())
     board = game.board()
     eligible: list[Sample] = []
@@ -372,16 +398,42 @@ def sample_game(
 
     if not eligible:
         stats["games_without_eligible_position"] += 1
-        return None, stats
-    digest = stable_digest(
-        CORPUS_SCHEMA,
-        config.seed,
-        source_id,
-        str(pair_index),
-        str(game_in_pair),
-        "sample",
-    )
-    selected = eligible[int.from_bytes(digest[:8], "big") % len(eligible)]
+        return [], stats
+
+    if config.samples_per_game == 1:
+        digest = stable_digest(
+            CORPUS_SCHEMA,
+            config.seed,
+            source_id,
+            str(pair_index),
+            str(game_in_pair),
+            "sample",
+        )
+        selected = [eligible[int.from_bytes(digest[:8], "big") % len(eligible)]]
+    else:
+        ranked = sorted(
+            eligible,
+            key=lambda sample: stable_digest(
+                DENSE_SAMPLING_SCHEMA,
+                config.seed,
+                source_id,
+                str(pair_index),
+                str(game_in_pair),
+                str(sample.ply),
+                "rank",
+            ),
+        )
+        selected = []
+        for sample in ranked:
+            if all(
+                abs(sample.ply - existing.ply) >= config.min_sample_gap
+                for existing in selected
+            ):
+                selected.append(sample)
+                if len(selected) == config.samples_per_game:
+                    break
+        stats["positions_selected"] += len(selected)
+
     stats["games_with_eligible_position"] += 1
     return selected, stats
 
@@ -504,9 +556,21 @@ def make_manifest(
             - config.validation_percent,
         },
         "sampling": {
+            "mode": (
+                "single-hash-v1"
+                if config.samples_per_game == 1
+                else "pair-balanced-gap-hash-v1"
+            ),
+            "selector_schema": (
+                CORPUS_SCHEMA
+                if config.samples_per_game == 1
+                else DENSE_SAMPLING_SCHEMA
+            ),
             "min_recorded_ply": config.min_ply,
             "tail_plies_excluded": config.tail_plies,
-            "max_positions_per_game": 1,
+            "max_positions_per_game": config.samples_per_game,
+            "min_sample_gap_plies": config.min_sample_gap,
+            "pair_balanced_record_count": True,
             "reject_in_check": True,
             "reject_any_legal_capture_or_promotion": True,
             "position_key": "canonical first four FEN fields",

@@ -206,8 +206,24 @@ The H2c expansion uses `scripts/select-fresh-openings.py` to reproduce a disjoin
 
 H2c completed 7,462 structurally valid games before fastchess recorded one F1 timeout in game 7,463 and exited nonzero. The independent audit reconstructs all 3,731 complete pairs and 732,065 telemetry-complete plies, but also confirms the timeout and missing completed metadata. The pre-registered all-or-nothing rule therefore rejects the entire H2c game source: it is not resumed, repaired, pooled, extracted, or used for fitting. Its artifacts remain only as independently reproducible failure evidence in the experiment ledger.
 
-## H2d deterministic replacement registration
+## H2d deterministic replacement evidence
 
 The paired-match runner now supports exact per-engine node limits and refuses incomplete or mixed shared/per-engine configurations. The auditor can assert arbitrary metadata identities with repeatable `--expect-meta KEY=VALUE` arguments. Four new metadata tests bring the Python suite to 16 passing tests; the match/SPRT configuration suite also passes.
 
-The registered H2d replacement uses G1 at 30,000 and F1 at 29,200 nodes per move, derived only from aggregate per-move H2c telemetry. A 20-game smoke run passed exact metadata, pairing, telemetry, strict-log, and process gates and diverged in 7 of 10 paired trajectories; its score is not used. The full 9,000-game restart and all-or-nothing acceptance rules are fixed in the experiment ledger before any retained H2d game exists.
+The registered H2d replacement uses G1 at 30,000 and F1 at 29,200 nodes per move, derived only from aggregate per-move H2c telemetry. A 20-game smoke run passed exact metadata, pairing, telemetry, strict-log, and process gates and diverged in 7 of 10 paired trajectories; its score is not used. The full restart then completed all 9,000 games / 4,500 pairs with 893,061 telemetry-complete plies, normal terminations, complete metadata, and zero warning, timeout, crash, disconnect, legality, or protocol anomaly. Three disclosed wall-clock latency outliers coincide with host sleep/suspension and cannot alter the registered node budgets. H2d is accepted only as a deterministic outcome-label source, not as time or strength evidence.
+
+## H2e dense corpus and diagnostic evidence
+
+H2e deterministically selects at most eight quiet positions per game with an eight-ply gap, then truncates both games in each color-reversed pair to equal record counts. H2b+H2d produced 38,234 pair-balanced records before deduplication and 35,032 unique records afterward: 28,040 train, 3,564 validation, and 3,428 current-holdout records. Reversing source order produced byte-identical TSVs, and the independent auditor replayed all 13,000 accepted source games and every selection/deduplication decision. The default one-position selector still reproduces the exact registered legacy TSV bytes.
+
+The train/validation-only analyzer reconstructs all 42 effective evaluation columns and weights every opening pair equally. Both designs have full rank and no dead column. Scale-only fits are stable around `0.80-0.83`, and all validation point estimates improve slightly, but the registered 10,000-replicate group-bootstrap intervals include zero. H2e is retained as evidence infrastructure; no evaluation weight or playing source changes.
+
+Run the deterministic Python gates with an environment containing the pinned dependencies:
+
+```bash
+python3 -m venv .venv-eval
+.venv-eval/bin/pip install -r scripts/requirements-eval.txt
+.venv-eval/bin/python -m unittest discover -s scripts/tests -p 'test_*.py'
+```
+
+The suite currently has 29 tests covering match/corpus auditing, corpus construction, dense pair balancing, legacy-manifest compatibility, opening selection, fixed 38-to-42 feature mapping, complete-group learning subsets, scale fitting, and deterministic group bootstrap. Exact campaign, corpus, feature, diagnostic, and script hashes are recorded in the experiment ledger.

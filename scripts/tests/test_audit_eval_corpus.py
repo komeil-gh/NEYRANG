@@ -39,6 +39,42 @@ class CorpusAuditorTests(unittest.TestCase):
             self.assertEqual(summary["unique_record_ids"], 2)
             self.assertEqual(summary["unique_position_keys"], 2)
 
+    def test_independent_replay_accepts_registered_legacy_single_sample_manifest(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root, output = build_fixture(Path(temporary))
+            manifest_path = output / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            for field in (
+                "mode",
+                "selector_schema",
+                "min_sample_gap_plies",
+                "pair_balanced_record_count",
+            ):
+                manifest["sampling"].pop(field)
+            for source in manifest["sources"]:
+                source.pop("pair_record_counts")
+                source.pop("target_record_counts")
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+            try:
+                summary = auditor.audit_corpus(root, output)
+            except auditor.AuditError as error:
+                self.fail(f"registered legacy manifest was rejected: {error}")
+
+            self.assertTrue(summary["ok"])
+
+    def test_independent_replay_accepts_dense_pair_balanced_corpus(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root, output = build_fixture(Path(temporary), dense=True)
+            try:
+                summary = auditor.audit_corpus(root, output)
+            except auditor.AuditError as error:
+                self.fail(f"dense independent replay was rejected: {error}")
+            self.assertTrue(summary["ok"])
+            self.assertEqual(summary["sources"]["fixture"]["records_sampled"], 4)
+
     def test_replay_rejects_rehashed_tsv_tampering(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root, output = build_fixture(Path(temporary))
@@ -63,8 +99,21 @@ class CorpusAuditorTests(unittest.TestCase):
             ):
                 auditor.audit_corpus(root, output)
 
+    def test_replay_rejects_pair_record_summary_tampering(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root, output = build_fixture(Path(temporary), dense=True)
+            manifest_path = output / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["sources"][0]["pair_record_counts"] = {"2": 999}
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
-def build_fixture(root: Path) -> tuple[Path, Path]:
+            with self.assertRaisesRegex(
+                auditor.AuditError, "pair_record_counts differs"
+            ):
+                auditor.audit_corpus(root, output)
+
+
+def build_fixture(root: Path, dense: bool = False) -> tuple[Path, Path]:
     source = root / "games.pgn"
     write_game(
         source,
@@ -88,6 +137,8 @@ def build_fixture(root: Path) -> tuple[Path, Path]:
         seed="auditor-test",
         min_ply=1,
         tail_plies=0,
+        samples_per_game=2 if dense else 1,
+        min_sample_gap=2 if dense else 0,
     )
     builder.build_corpus(config)
     shutil.copyfile(BUILDER_PATH, root / BUILDER_PATH.name)

@@ -35,7 +35,7 @@ Verify the complete local contract with:
 scripts/test-openbench-contract.sh
 ```
 
-The test builds a uniquely named binary, runs three sequential and three concurrent benches, requires the registered node count and positive NPS, verifies `Hash`, `Threads`, `uciok`, and `readyok`, and removes all temporary artifacts on exit.
+The test builds a uniquely named binary, runs three sequential and three concurrent benches, requires the registered node count and positive NPS, verifies `Hash`, `Threads`, `uciok`, and `readyok`, runs repeated `genfens` commands, checks exact line shape and proves that the upper 32 seed bits affect output. It removes all temporary artifacts on exit.
 
 ## Server-side engine configuration
 
@@ -94,7 +94,46 @@ The project's existing fixed-shard tool remains useful for frozen fixed-size cam
 
 ## Data generation boundary
 
-OpenBench also supports distributed data generation through a `genfens` command that emits seeded opening FENs. NEYRANG does not implement that command yet. N1a now defines and independently audits the versioned, lossless [NNUE game-record contract](development/nnue-data.md), but scalable generation still requires exact 64-bit seed use, deterministic diversity tests, stall handling, frozen generator identities and sharded provenance manifests before any workload is registered.
+OpenBench also supports distributed data generation through a `genfens` command that emits seeded opening FENs. NEYRANG now implements the first N1b opening-generation slice with the exact invocation shape:
+
+```bash
+./NEYRANG-01234567 "genfens N seed S book None" quit
+```
+
+The generator uses all 64 unsigned seed bits. Opening `i` depends only on
+wrapping `S + i`, so one batch is byte-identical to independently generated
+seed-offset shards. The current algorithm makes an even 8..20-ply legal walk,
+selects among moves within a 100 cp two-ply HCE reply window, rejects terminal,
+in-check, or more-than-180-cp final positions, emits exactly one
+`info string genfens <fen>` line per opening, and flushes every line. Optional
+`minplies`, `maxplies`, `margin`, and `maxeval` key/value overrides are strict;
+unknown or malformed options fail closed. This first version intentionally
+supports only `book None`.
+
+Retained EPD shards must be created through:
+
+```bash
+.venv/bin/python scripts/generate-opening-shard.py \
+  --engine target/release/neyrang \
+  --output testing/nnue/openings/shard-0000.epd \
+  --count 256 \
+  --seed 2026090100000001 \
+  --generator-source-commit FULL_GIT_SHA \
+  --compiler-identity "rustc VERSION" \
+  --source-license UNLICENSED-NEYRANG-INTERNAL
+```
+
+The wrapper independently enforces the 15-second OpenBench stall rule, exact
+stdout/stderr behavior, legal nonterminal FENs, no side-to-move check, canonical
+deduplication, engine SHA-256, source/compiler/license identity, manifest-first
+no-clobber output publication, and overwrite refusal. Its adjacent
+`neyrang-genfens-shard-v1` manifest is an
+opening-input provenance record, not a scored NNUE corpus.
+
+N1a defines and independently audits the versioned, lossless
+[NNUE game-record contract](development/nnue-data.md). Production self-play,
+search-score/WDL recording, scored-game shard manifests, Bullet ingestion, and
+the first one-million-position gate remain unfinished.
 
 ## Primary references
 

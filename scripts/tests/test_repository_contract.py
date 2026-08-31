@@ -81,6 +81,16 @@ class RepositoryContractTests(unittest.TestCase):
         self.assertIn("No playing-strength claim", specification)
         self.assertIn("/tools/nnue-data/target/", gitignore)
 
+    def test_genfens_has_engine_and_independent_provenance_gates(self) -> None:
+        engine = self.read("src/tools/genfens.rs")
+        integration = self.read("tests/genfens.rs")
+        generator = self.read("scripts/generate-opening-shard.py")
+        specification = self.read("docs/development/nnue-data.md")
+        self.assertIn("SplitMix64", engine)
+        self.assertIn("one_batch_matches_independently_sharded_seed_offsets", integration)
+        self.assertIn("neyrang-genfens-shard-v1", generator)
+        self.assertIn("N1b", specification)
+
 
 if __name__ == "__main__":
     unittest.main()

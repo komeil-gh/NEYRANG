@@ -76,4 +76,23 @@ grep -Fq "option name Threads type spin" <<<"$uci_output"
 grep -Fxq "uciok" <<<"$uci_output"
 grep -Fxq "readyok" <<<"$uci_output"
 
-echo "OpenBench contract passed: sequential+concurrent bench=$first_nodes profile=$profile"
+genfens_command="genfens 8 seed 7 book None"
+genfens_first="$("$engine" "$genfens_command" quit)"
+genfens_second="$("$engine" "$genfens_command" quit)"
+genfens_high_seed="$("$engine" "genfens 8 seed 4294967303 book None" quit)"
+
+if [[ "$genfens_first" != "$genfens_second" ]]; then
+    echo "Non-deterministic genfens output for the same 64-bit seed" >&2
+    exit 1
+fi
+if [[ "$genfens_first" == "$genfens_high_seed" ]]; then
+    echo "Genfens discarded the upper 32 seed bits" >&2
+    exit 1
+fi
+genfens_lines="$(awk '$1 == "info" && $2 == "string" && $3 == "genfens" && NF == 9 { count++ } END { print count + 0 }' <<<"$genfens_first")"
+if [[ "$genfens_lines" != "8" ]]; then
+    echo "Genfens emitted $genfens_lines valid lines, expected 8" >&2
+    exit 1
+fi
+
+echo "OpenBench contract passed: sequential+concurrent bench=$first_nodes genfens=8 profile=$profile"

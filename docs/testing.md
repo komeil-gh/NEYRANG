@@ -81,10 +81,34 @@ scripts/test-openbench-contract.sh
 
 The test creates a unique temporary executable, requires three sequential and
 three concurrent 180,591-node benches with positive NPS, verifies UCI `Hash`,
-`Threads`, `uciok`, and `readyok`, and removes every temporary artifact on each
-exit path. This is a build and protocol gate, not game-strength evidence.
+`Threads`, `uciok`, and `readyok`, repeats an eight-opening `genfens` workload,
+checks its exact line shape and upper-seed-bit sensitivity, and removes every
+temporary artifact on each exit path. This is a build and protocol gate, not
+game-strength evidence.
 Deployment prerequisites and the server-side configuration template are in
 [the OpenBench guide](openbench.md).
+
+## Deterministic opening-generation gates
+
+`tests/genfens.rs` fixes the engine-facing contract: legal nonterminal output,
+no check on the side to move, deterministic diversity, full 64-bit seed use,
+batch/shard equivalence, strict rejection, and the exact two-argument OpenBench
+process shape. The Python infrastructure suite separately checks atomic shard
+publication, provenance, canonical duplicate rejection, malformed FEN rejection,
+overwrite refusal, and process termination after a simulated stall.
+
+Run both layers with:
+
+```bash
+cargo test --test genfens --locked
+.venv/bin/python -m unittest scripts.tests.test_generate_opening_shard
+```
+
+For a retained shard, use `scripts/generate-opening-shard.py`; do not redirect
+raw engine stdout into a file and call it audited data. Generated EPD/manifests
+belong under the ignored `testing/` tree or external content-addressed storage,
+not Git. This gate certifies openings and provenance only, not self-play labels,
+NNUE scale, offline loss, or Elo.
 
 ## Lazy-SMP correctness and scaling
 

@@ -11,7 +11,7 @@ use neyrang::tools::eval_trace;
 use neyrang::{
     chess::{Position, divide, perft},
     engine::info::{ENGINE_NAME, ENGINE_VERSION},
-    tools::bench,
+    tools::{bench, genfens},
     uci,
 };
 
@@ -27,6 +27,23 @@ fn main() -> ExitCode {
 
 fn run() -> Result<(), String> {
     let arguments: Vec<String> = env::args().skip(1).collect();
+    if let Some(command_line) = arguments.first().filter(|argument| {
+        argument
+            .split_ascii_whitespace()
+            .next()
+            .is_some_and(|command| command == "genfens")
+            && argument.contains(char::is_whitespace)
+    }) {
+        if arguments.len() != 2 || arguments[1] != "quit" {
+            return Err(
+                "quoted OpenBench genfens invocation must be followed by exactly 'quit'".to_owned(),
+            );
+        }
+        let stdout = std::io::stdout();
+        let mut output = stdout.lock();
+        genfens::run(command_line, &mut output).map_err(|error| error.to_string())?;
+        return Ok(());
+    }
     let Some(command) = arguments.first().map(String::as_str) else {
         return uci::run().map_err(|error| error.to_string());
     };
@@ -77,6 +94,11 @@ fn run() -> Result<(), String> {
             #[cfg(feature = "stats")]
             print_benchmark_statistics(result.statistics);
             let _ = started;
+        }
+        "genfens" => {
+            let stdout = std::io::stdout();
+            let mut output = stdout.lock();
+            genfens::run(&arguments.join(" "), &mut output).map_err(|error| error.to_string())?;
         }
         #[cfg(feature = "eval-tools")]
         "eval-trace" => {
@@ -194,6 +216,7 @@ fn print_help() {
     println!("  neyrang divide <depth>          Per-move Perft from the initial position");
     println!("  neyrang perft-fen <FEN> <depth> Perft from a FEN");
     println!("  neyrang bench [depth]           Deterministic search benchmark");
+    println!("  neyrang genfens ...             Seeded OpenBench opening generation");
     #[cfg(feature = "eval-tools")]
     println!("  neyrang eval-trace <TSV|->      Export exact evaluation features");
 }

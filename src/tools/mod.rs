@@ -3,3 +3,4 @@
 pub mod bench;
 #[cfg(feature = "eval-tools")]
 pub mod eval_trace;
+pub mod genfens;

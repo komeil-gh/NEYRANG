@@ -21,6 +21,8 @@ All notable changes to NEYRANG are documented here.
 - A frozen fixed-game campaign tool that creates deterministic non-overlapping opening shards, binds workers to external campaign and asset hashes, checksums every result artifact, and independently replays every shard before aggregation.
 - A retained root-diversified Lazy-SMP path with worker-private search state, a coherent packed atomic shared TT, exact aggregate node limits, score voting, aggregate UCI telemetry, and an external 1/2/4-thread scaling harness.
 - Per-engine thread counts in the fixed paired-match runner, with shared/per-engine exclusivity, range validation, dry-run regression coverage, and explicit metadata.
+- Deterministic OpenBench `genfens` support using the complete unsigned 64-bit seed, shard-invariant `seed + index` streams, legal two-ply HCE-filtered opening walks, exact line output, and fail-closed option parsing.
+- An independent `python-chess` opening-shard generator/auditor with the OpenBench 15-second stall rule, canonical-position deduplication, executable/source/compiler/license provenance, SHA-256 identities, manifest-first no-clobber EPD publication, and overwrite refusal.
 
 ### Changed
 

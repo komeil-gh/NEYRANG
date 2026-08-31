@@ -41,8 +41,16 @@ Implemented:
   dual-perspective feature mapping, and refresh/incremental accumulator oracles
 - isolated lossless NNUE game records with legal replay, byte-exact upstream
   compatibility fixtures, special-move coverage, and an independent auditor
+- deterministic OpenBench `genfens` opening generation using every bit of the
+  unsigned 64-bit seed, with shard-invariant streams and exact protocol output
+- independently audited, content-addressed opening shards with executable,
+  source, compiler, and license provenance in adjacent manifests
 
 Not implemented in the retained playing source: Syzygy, NNUE evaluation, LMP, futility pruning, continuation/capture history, or an optimized sliding-attack backend. The standalone NNUE scalar reference and lossless data codec are correctness infrastructure only: there is no trained network, neither tool is linked into search, and neither carries an Elo claim. The single pre-registered P3 Lazy-SMP design passed its correctness, scaling, deadline, and 2,000-game paired gates and is retained on the development branch. This is controlled development evidence, not a new release or a universal Elo claim. Capture History and 1-ply Continuation History were tested and reverted; the second conservative NMP experiment was retained on the development branch but has not earned a release.
+
+The first N1b opening-generation slice is implemented, but a production
+self-play scorer, million-position corpus, trainer, exported network, and NNUE
+playing integration still do not exist.
 
 No project license has been selected yet.
 
@@ -171,6 +179,30 @@ The repository also satisfies the local OpenBench build/bench contract. A real
 distributed SPRT deployment still requires a selected license, public remote,
 pinned server fork, audited book, and trusted workers; see the
 [OpenBench integration guide](docs/openbench.md).
+
+OpenBench-compatible deterministic openings can be generated directly:
+
+```bash
+target/release/neyrang "genfens 8 seed 2026090100000001 book None" quit
+```
+
+Retained local shards must go through the independent wrapper so the process is
+monitored, every FEN is revalidated with `python-chess`, and an immutable
+manifest is written beside the EPD:
+
+```bash
+.venv/bin/python scripts/generate-opening-shard.py \
+  --engine target/release/neyrang \
+  --output testing/nnue/openings/shard-0000.epd \
+  --count 256 \
+  --seed 2026090100000001 \
+  --generator-source-commit FULL_GIT_SHA \
+  --compiler-identity "rustc VERSION" \
+  --source-license UNLICENSED-NEYRANG-INTERNAL
+```
+
+The license value above is an explicit internal-data marker, not permission to
+redistribute a corpus. Select a real project/data license before publication.
 
 `OPENING_SEED`, `OPENING_ORDER`, `TC`, `HASH_MB`, `THREADS`, and `CONCURRENCY` are explicit inputs. Set `NODES` on `match.sh` for a node-limited comparison; omit it for a time-controlled match. Each run writes PGN telemetry plus adjacent `.log` and `.meta.txt` files containing engine, Git, binary, opening, and fastchess identities. Pass `ENGINE_A_GIT_SHA`, `ENGINE_B_GIT_SHA`, `OPENINGS_SOURCE`, and `OPENINGS_LICENSE` for an auditable experiment.
 

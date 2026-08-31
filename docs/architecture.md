@@ -2,7 +2,7 @@
 
 ## Boundaries
 
-`src/chess` owns architecture-independent rules: compact types, bitboards, FEN, attacks, move generation, make/unmake, Zobrist hashing, and Perft. `src/eval` evaluates a position without depending on search. `src/search` owns iterative deepening, qsearch, ordering, history, TT, time limits, and stop checks. `src/uci` is the protocol boundary. `src/tools` contains deterministic developer tooling.
+`src/chess` owns architecture-independent rules: compact types, bitboards, FEN, attacks, move generation, make/unmake, Zobrist hashing, and Perft. `src/eval` evaluates a position without depending on search. `src/search` owns iterative deepening, qsearch, ordering, history, TT, time limits, and stop checks. `src/uci` is the protocol boundary. `src/tools` contains deterministic developer tooling, including the non-UCI OpenBench `genfens` command path.
 
 Evaluation evidence code is isolated behind the non-default `eval-tools` feature. Its independent coefficient trace and TSV exporter do not enter the normal playing binary; the default H0 build is byte-identical to the frozen G1 executable. This boundary prevents corpus/training I/O and allocations from leaking into UCI or search.
 
@@ -38,5 +38,15 @@ worker emits a manifest for its PGN, log, match metadata, fastchess configuratio
 and local audit. The coordinator verifies those hashes and reruns the PGN auditor
 against the registered opening sequence before aggregating results. This is a
 fixed-game evidence transport, not shared search state and not an SPRT server.
+
+Opening generation is also outside search/UCI state. `src/tools/genfens.rs`
+uses legal move generation and the frozen HCE to make a deterministic two-ply
+reply-filtered walk. Each opening depends only on one complete unsigned 64-bit
+seed, and batch index `i` maps to wrapping `seed + i`; OpenBench workers can
+therefore split seed ranges without changing the resulting sequence. This first
+version supports only `book None` and emits one exact
+`info string genfens <fen>` line at a time. The independent Python wrapper
+enforces the 15-second stall rule and publishes EPD plus provenance manifest
+only after complete validation.
 
 No x86 or ARM intrinsics are currently required. CPU-specific NNUE or attack code must stay behind isolated platform modules when introduced.

@@ -61,6 +61,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--expected-games", required=True, type=int)
     parser.add_argument("--expected-time-control")
     parser.add_argument(
+        "--expected-openings",
+        type=Path,
+        help="require each color-reversed pair to match this EPD/FEN sequence",
+    )
+    parser.add_argument(
         "--expect-meta",
         action="append",
         default=[],
@@ -156,6 +161,47 @@ def audit_expected_metadata(
                     f"metadata {key} is {actual.get(key)!r}, expected {value!r}"
                 )
     return expected, errors
+
+
+def audit_expected_openings(
+    pair_fens: list[str], path: Path
+) -> tuple[list[str], list[str]]:
+    expected: list[str] = []
+    errors: list[str] = []
+    for line_number, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        line = raw.strip()
+        if not line:
+            continue
+        try:
+            expected.append(canonical_opening(line))
+        except ValueError as error:
+            errors.append(f"invalid expected opening at {path}:{line_number}: {error}")
+
+    if len(pair_fens) != len(expected):
+        errors.append(
+            f"found {len(pair_fens)} opening pairs, expected {len(expected)} opening pairs"
+        )
+    for index, (actual, wanted) in enumerate(zip(pair_fens, expected, strict=False), 1):
+        try:
+            canonical_actual = canonical_opening(actual)
+        except ValueError as error:
+            errors.append(f"pair {index} has invalid opening FEN: {error}")
+            continue
+        if canonical_actual != wanted:
+            errors.append(
+                f"pair {index} opening is {canonical_actual!r}, expected {wanted!r}"
+            )
+    return expected, errors
+
+
+def canonical_opening(value: str) -> str:
+    fields = value.split()
+    if len(fields) == 6:
+        board = chess.Board(value)
+    else:
+        board = chess.Board()
+        board.set_epd(value)
+    return " ".join(board.fen(en_passant="fen").split()[:4])
 
 
 def warning_is_allowed(
@@ -272,6 +318,7 @@ def main() -> int:
     time_left: dict[str, list[float]] = defaultdict(list)
     total_plies = 0
     pair_scores: list[float] = []
+    pair_opening_fens: list[str] = []
     unique_fens: set[str] = set()
 
     for index, game in enumerate(games):
@@ -341,6 +388,7 @@ def main() -> int:
         right_fen = right_headers.get("FEN", chess.STARTING_FEN)
         if left_fen != right_fen:
             errors.append(f"pair {pair_index + 1} has different opening FENs")
+        pair_opening_fens.append(left_fen)
         if left_headers.get("Round") != right_headers.get("Round"):
             errors.append(f"pair {pair_index + 1} has different round headers")
         if not (
@@ -360,6 +408,13 @@ def main() -> int:
             pair_score += candidate_score(result, white == args.candidate)
         if pair_valid:
             pair_scores.append(pair_score)
+
+    expected_openings: list[str] | None = None
+    if args.expected_openings:
+        expected_openings, opening_errors = audit_expected_openings(
+            pair_opening_fens, args.expected_openings
+        )
+        errors.extend(opening_errors)
 
     if any(telemetry_missing.values()):
         errors.append(f"missing telemetry fields: {dict(telemetry_missing)}")
@@ -462,6 +517,14 @@ def main() -> int:
         ),
         "pentanomial": pentanomial,
         "unique_opening_fens": len(unique_fens),
+        "expected_openings": (
+            {
+                "path": str(args.expected_openings),
+                "pairs": len(expected_openings or []),
+            }
+            if args.expected_openings
+            else None
+        ),
         "terminations": dict(termination_counts),
         "time_controls": dict(time_controls),
         "plies": total_plies,

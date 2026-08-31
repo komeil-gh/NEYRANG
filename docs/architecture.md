@@ -26,4 +26,13 @@ Leaper attacks are compile-time tables. Bishops, rooks, and queens use portable 
 
 Search is single-threaded. The UCI input loop is separate from the search worker and signals stop through `AtomicBool` with relaxed operations; the flag carries no associated data and only requests cooperative cancellation. Search ownership is transferred into the worker, so the position and TT need no node-level locks. When the worker finishes, its TT is returned to the UCI controller and reused by the next search; `ucinewgame` clears it and a Hash option change replaces it.
 
+Distributed match concurrency remains outside the playing engine. The campaign
+tool deterministically assigns each canonical opening to exactly one shard,
+passes only sequential shard books to fastchess, and binds a worker to an
+out-of-band campaign SHA plus exact engine, runner, and book hashes. A successful
+worker emits a manifest for its PGN, log, match metadata, fastchess configuration,
+and local audit. The coordinator verifies those hashes and reruns the PGN auditor
+against the registered opening sequence before aggregating results. This is a
+fixed-game evidence transport, not shared search state and not an SPRT server.
+
 No x86 or ARM intrinsics are currently required. CPU-specific NNUE or attack code must stay behind isolated platform modules when introduced.

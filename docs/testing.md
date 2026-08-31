@@ -124,6 +124,77 @@ The default warning policy is `reject-all` and is unchanged. A comparison agains
 
 P1 exercised this path with frozen G1 against immutable v0.2.0 over 2,000 games / 1,000 pairs at `0.5+0.005`. G1 scored `1006/623/371` (65.875%, reported `+114.26 +/-12.79 Elo`). Independent parsing verified 1,000 unique paired FENs, 196,771 telemetry-complete plies, 2,000 normal terminations, no negative time-left sample, and exact W/D/L/pentanomial reproduction. The log contained zero allowed warning and zero rejected warning or other anomaly: the compatibility path removed the runner ambiguity without excusing an event in the accepted match.
 
+## Distributed fixed-game campaigns
+
+Use the distributed tool when a pre-registered fixed number of paired games must
+be split across workers. Preparation accepts frozen executables and a source EPD,
+rejects canonical duplicates, hash-ranks the requested openings, and writes
+host-independent manifests plus disjoint sequential shard books:
+
+```bash
+.venv/bin/python scripts/distributed-testing.py prepare \
+  --engine-a /artifacts/neyrang-candidate \
+  --engine-a-name NEYRANG-candidate \
+  --engine-a-git-sha CANDIDATE_COMMIT \
+  --engine-b /artifacts/neyrang-parent \
+  --engine-b-name NEYRANG-parent \
+  --engine-b-git-sha PARENT_COMMIT \
+  --fastchess /artifacts/fastchess \
+  --fastchess-version VERSION_OR_COMMIT \
+  --openings /artifacts/openings.epd \
+  --openings-source SOURCE \
+  --openings-license LICENSE \
+  --output testing/campaign-name \
+  --seed 20260903 \
+  --pairs 5000 \
+  --pairs-per-shard 128 \
+  --tc 0.5+0.005 \
+  --hash-mb 64 \
+  --threads 1 \
+  --move-overhead-ms 100 \
+  --time-margin-ms 0 \
+  --strict
+```
+
+Preserve the printed `campaign_sha256` outside the campaign directory; it is the
+worker's trust anchor. Transfer the unchanged campaign directory and frozen
+executables to a matching OS/architecture, then run one registered shard:
+
+```bash
+.venv/bin/python scripts/distributed-testing.py run-shard \
+  --manifest testing/campaign-name/shards/shard-0000.json \
+  --campaign-sha256 CAMPAIGN_SHA256 \
+  --engine-a /artifacts/neyrang-candidate \
+  --engine-b /artifacts/neyrang-parent \
+  --fastchess /artifacts/fastchess \
+  --results worker-results
+```
+
+The worker refuses campaign, shard, platform, executable, fastchess, or opening
+drift. It also refuses to overwrite a prior attempt. A failed shard keeps its
+artifacts but emits no accepted result manifest; retry that whole shard in a new
+results directory. Time-control components must be exactly representable in
+milliseconds so the registered value round-trips through the PGN header.
+
+After copying every worker artifact into one results directory, the coordinator
+checks every result hash and reruns `audit-match.py` from raw PGN/log/metadata:
+
+```bash
+.venv/bin/python scripts/distributed-testing.py audit-campaign \
+  --campaign testing/campaign-name/campaign.json \
+  --campaign-sha256 CAMPAIGN_SHA256 \
+  --results collected-results \
+  --audit-script scripts/audit-match.py \
+  --output collected-results/campaign-audit.json
+```
+
+This local protocol covers immutable fixed-game batches and exact aggregation.
+It is influenced by OpenBench's frozen-workload model but does not implement the
+OpenBench client/server API, dynamic work allocation, or a distributed SPRT/LLR
+coordinator. Use a reviewed OpenBench deployment for that role; do not treat a
+sequence of fixed shards as an SPRT by merely stopping when a point estimate looks
+favorable.
+
 ## NEYRANG 0.2.0 release evidence
 
 Final versioned release gates:

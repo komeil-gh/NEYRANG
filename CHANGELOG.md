@@ -15,6 +15,7 @@ All notable changes to NEYRANG are documented here.
 - A deterministic fresh-opening selector with PGN/EPD exclusion sets, canonical-FEN deduplication, fixed hash ranking, provenance output, and fail-closed capacity/overwrite checks.
 - Per-engine deterministic node budgets in the paired-match runner, with fail-closed shared/per-engine exclusivity and exact metadata assertions in the independent auditor.
 - An explicit immutable-baseline warning policy that retains only a named opponent's exact threefold-PV continuation while rejecting candidate or unrelated warnings; default behavior remains reject-all.
+- A frozen fixed-game campaign tool that creates deterministic non-overlapping opening shards, binds workers to external campaign and asset hashes, checksums every result artifact, and independently replays every shard before aggregation.
 
 ### Changed
 
@@ -26,6 +27,7 @@ All notable changes to NEYRANG are documented here.
 - The paired-match auditor now distinguishes nonzero fastchess timeout/crash summary counters from clean zero counters, with regression coverage for both summaries and free-form failures.
 - H2d replaces H2c's wall-clock allocation with pre-registered 30,000/29,200-node G1/F1 limits derived from 732,065 plies of rejected-run telemetry; no playing code or evaluation weight changes.
 - The fixed match runner records the selected warning policy and refuses to combine the immutable-baseline compatibility policy with fastchess strict mode.
+- The match auditor can require the exact registered opening sequence, while distributed metadata carries campaign/shard identities and pair offsets. Sub-millisecond time controls are rejected before games because they cannot round-trip through the PGN header.
 
 ### Evidence
 
@@ -34,6 +36,7 @@ All notable changes to NEYRANG are documented here.
 - H2b completed 4,000 fresh paired games without a timing, crash, legality, warning, or protocol failure and produced 2,910 independently replayed unique evaluation records. The source is retained for later tuning, its holdout remains sealed, and no evaluation weight changed.
 - H2c was rejected in full after one timeout following 7,462 complete games; the independently audited prefix is preserved only as failure evidence and is excluded from every corpus and tuning decision.
 - P1 completed and independently audited 2,000 cumulative G1-versus-v0.2.0 games at 65.875% (`+114.26 +/-12.79 Elo`), with 2,000 normal terminations, complete telemetry, and zero allowed or rejected warning or other anomaly. This permits a separately registered SPRT but does not change the released version.
+- A two-shard real-binary smoke completed 8/8 games and passed independent coordinator replay with exact aggregate W/D/L and pentanomial counts. This validates infrastructure only and is not strength evidence.
 
 ## [0.2.0] - 2026-08-29
 

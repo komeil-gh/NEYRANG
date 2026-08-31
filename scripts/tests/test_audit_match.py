@@ -142,5 +142,50 @@ class ExpectedMetadataTests(unittest.TestCase):
 
         self.assertEqual(errors, ["expected metadata fields require --meta"])
 
+
+class ExpectedOpeningTests(unittest.TestCase):
+    def test_exact_canonical_pair_sequence_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "shard.epd"
+            path.write_text(
+                "8/8/8/8/8/8/K6k/8 w - - 0 1\n"
+                "8/8/8/8/8/8/1K5k/8 b - - 12 40\n",
+                encoding="utf-8",
+            )
+
+            expected, errors = AUDIT_MATCH.audit_expected_openings(
+                [
+                    "8/8/8/8/8/8/K6k/8 w - - 99 77",
+                    "8/8/8/8/8/8/1K5k/8 b - - 0 1",
+                ],
+                path,
+            )
+
+            self.assertEqual(len(expected), 2)
+            self.assertEqual(errors, [])
+
+    def test_wrong_order_or_count_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "shard.epd"
+            path.write_text(
+                "8/8/8/8/8/8/K6k/8 w - - 0 1\n"
+                "8/8/8/8/8/8/1K5k/8 b - - 0 1\n",
+                encoding="utf-8",
+            )
+
+            _, order_errors = AUDIT_MATCH.audit_expected_openings(
+                [
+                    "8/8/8/8/8/8/1K5k/8 b - - 0 1",
+                    "8/8/8/8/8/8/K6k/8 w - - 0 1",
+                ],
+                path,
+            )
+            _, count_errors = AUDIT_MATCH.audit_expected_openings(
+                ["8/8/8/8/8/8/K6k/8 w - - 0 1"], path
+            )
+
+            self.assertIn("pair 1 opening", order_errors[0])
+            self.assertIn("expected 2 opening pairs", count_errors[0])
+
 if __name__ == "__main__":
     unittest.main()

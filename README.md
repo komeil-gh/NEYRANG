@@ -33,6 +33,8 @@ Implemented:
 - independent PGN-to-corpus replay auditing, including resistance to rehashed TSV tampering
 - opening-group-aware train/validation diagnostics for the registered 42-parameter evaluation design
 - deterministic disjoint-opening selection from audited EPD/PGN provenance sets
+- immutable fixed-game campaign sharding with per-worker asset verification,
+  exact opening-sequence audits, checksummed result manifests, and coordinator replay
 
 Not implemented in the retained development source: SMP, Syzygy, NNUE, LMP, futility pruning, continuation/capture history, or an optimized sliding-attack backend. `Threads` is accepted by UCI but search remains deliberately single-threaded. Capture History and 1-ply Continuation History were tested and reverted; the second conservative NMP experiment was retained on the development branch but has not earned a release.
 
@@ -138,6 +140,13 @@ ENGINE_B=/path/to/parent/neyrang GAMES=400 scripts/regression.sh
 ENGINE_A=target/release/neyrang ENGINE_B=/path/to/opponent scripts/match.sh
 ENGINE_B=/path/to/parent/neyrang scripts/sprt.sh
 ```
+
+For fixed-size campaigns that must be split across machines, use
+`scripts/distributed-testing.py`. It hash-ranks a unique opening set into disjoint
+color-reversed shards, verifies the campaign SHA and every executable before a
+worker starts, and requires a second raw-PGN audit when the coordinator combines
+results. The complete command contract and the boundary with a real OpenBench
+SPRT server are documented in [testing](docs/testing.md#distributed-fixed-game-campaigns).
 
 `OPENING_SEED`, `OPENING_ORDER`, `TC`, `HASH_MB`, `THREADS`, and `CONCURRENCY` are explicit inputs. Set `NODES` on `match.sh` for a node-limited comparison; omit it for a time-controlled match. Each run writes PGN telemetry plus adjacent `.log` and `.meta.txt` files containing engine, Git, binary, opening, and fastchess identities. Pass `ENGINE_A_GIT_SHA`, `ENGINE_B_GIT_SHA`, `OPENINGS_SOURCE`, and `OPENINGS_LICENSE` for an auditable experiment.
 

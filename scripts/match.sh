@@ -34,6 +34,11 @@ engine_a_git_sha="${ENGINE_A_GIT_SHA:-}"
 engine_b_git_sha="${ENGINE_B_GIT_SHA:-unknown}"
 openings_source="${OPENINGS_SOURCE:-local}"
 openings_license="${OPENINGS_LICENSE:-unknown}"
+campaign_id="${CAMPAIGN_ID:-}"
+shard_id="${SHARD_ID:-}"
+campaign_manifest_sha256="${CAMPAIGN_MANIFEST_SHA256:-}"
+shard_manifest_sha256="${SHARD_MANIFEST_SHA256:-}"
+pair_offset="${PAIR_OFFSET:-}"
 dry_run="${DRY_RUN:-0}"
 
 if [[ -z "$engine_b" ]]; then
@@ -95,6 +100,16 @@ if [[ "$opening_order" != "random" && "$opening_order" != "sequential" ]]; then
     echo "OPENING_ORDER must be random or sequential" >&2
     exit 2
 fi
+if [[ -n "$pair_offset" ]] && ! [[ "$pair_offset" =~ ^[0-9]+$ ]]; then
+    echo "PAIR_OFFSET must be a non-negative integer when set" >&2
+    exit 2
+fi
+for identity in "$campaign_id" "$shard_id" "$campaign_manifest_sha256" "$shard_manifest_sha256"; do
+    if [[ "$identity" == *$'\n'* || "$identity" == *$'\r'* ]]; then
+        echo "campaign and shard identities must be single-line values" >&2
+        exit 2
+    fi
+done
 if [[ ! -x "$engine_a" || ! -x "$engine_b" ]]; then
     echo "Both ENGINE_A and ENGINE_B must be executable" >&2
     exit 2
@@ -201,6 +216,11 @@ fi
     echo "openings_sha256=$openings_sha256"
     echo "openings_source=$openings_source"
     echo "openings_license=$openings_license"
+    echo "campaign_id=$campaign_id"
+    echo "shard_id=$shard_id"
+    echo "campaign_manifest_sha256=$campaign_manifest_sha256"
+    echo "shard_manifest_sha256=$shard_manifest_sha256"
+    echo "pair_offset=$pair_offset"
     echo "opening_order=$opening_order"
     echo "opening_seed=$opening_seed"
     echo "games=$games"

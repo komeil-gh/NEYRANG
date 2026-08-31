@@ -29,7 +29,6 @@ TELEMETRY_PATTERNS = {
     "pv": re.compile(r'(?:^|,\s*)pv="[^"]*"(?:,|$)'),
 }
 LOG_ANOMALIES = {
-    "warning": re.compile(r"\bwarning\b", re.IGNORECASE),
     "timeout": re.compile(
         r"\btimeouts?\s*:\s*[1-9]\d*\b|\btimed\s+out\b|\btimeout\b(?!\s*:\s*0\b)",
         re.IGNORECASE,
@@ -46,6 +45,12 @@ LOG_ANOMALIES = {
     "protocol_error": re.compile(r"\bprotocol\s+error\b", re.IGNORECASE),
     "forfeit": re.compile(r"\bforfeit(?:ed)?\b", re.IGNORECASE),
 }
+WARNING_POLICIES = ("reject-all", "allow-opponent-threefold-pv")
+WARNING_LINE = re.compile(r"\bwarning\b", re.IGNORECASE)
+OPPONENT_THREEFOLD_PV_WARNING = re.compile(
+    r"^Warning; PV continues after threefold repetition - "
+    r"move ([a-h][1-8][a-h][1-8][qrbn]?) from (.+)$"
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -64,6 +69,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--log", type=Path)
     parser.add_argument("--meta", type=Path)
+    parser.add_argument(
+        "--warning-policy",
+        choices=WARNING_POLICIES,
+        default="reject-all",
+        help="narrow post-run warning policy; defaults to rejecting every warning",
+    )
     return parser.parse_args()
 
 
@@ -147,11 +158,48 @@ def audit_expected_metadata(
     return expected, errors
 
 
-def scan_log(path: Path) -> tuple[dict[str, int], list[str], dict[str, Any]]:
+def warning_is_allowed(
+    line: str,
+    *,
+    warning_policy: str,
+    candidate: str,
+    opponent: str,
+) -> bool:
+    if warning_policy != "allow-opponent-threefold-pv":
+        return False
+    match = OPPONENT_THREEFOLD_PV_WARNING.fullmatch(line)
+    return bool(match and match.group(2) == opponent and match.group(2) != candidate)
+
+
+def scan_log(
+    path: Path,
+    *,
+    warning_policy: str = "reject-all",
+    candidate: str = "",
+    opponent: str = "",
+) -> tuple[dict[str, int], list[str], dict[str, Any], list[str]]:
+    if warning_policy not in WARNING_POLICIES:
+        raise ValueError(f"unknown warning policy: {warning_policy}")
     text = path.read_text(encoding="utf-8", errors="replace")
     lines = text.splitlines()
     counts: dict[str, int] = {}
     examples: list[str] = []
+    allowed_warnings: list[str] = []
+    rejected_warnings: list[str] = []
+    for line in lines:
+        if not WARNING_LINE.search(line):
+            continue
+        if warning_is_allowed(
+            line,
+            warning_policy=warning_policy,
+            candidate=candidate,
+            opponent=opponent,
+        ):
+            allowed_warnings.append(line)
+        else:
+            rejected_warnings.append(line)
+    counts["warning"] = len(rejected_warnings)
+    examples.extend(f"warning: {line}" for line in rejected_warnings[:3])
     for name, pattern in LOG_ANOMALIES.items():
         matched = [line for line in lines if pattern.search(line)]
         counts[name] = len(matched)
@@ -192,7 +240,7 @@ def scan_log(path: Path) -> tuple[dict[str, int], list[str], dict[str, Any]]:
         final["elo_error"] = float(values[1])
         final["nelo"] = float(values[2])
         final["nelo_error"] = float(values[3])
-    return counts, examples, final
+    return counts, examples, final, allowed_warnings
 
 
 def main() -> int:
@@ -347,6 +395,20 @@ def main() -> int:
             errors.append(
                 f"metadata games is {metadata.get('games')!r}, expected {args.expected_games}"
             )
+    if args.warning_policy != "reject-all":
+        if metadata is None:
+            errors.append("compatibility warning policy requires --meta")
+        else:
+            if metadata.get("warning_policy") != args.warning_policy:
+                errors.append(
+                    "metadata warning_policy is "
+                    f"{metadata.get('warning_policy')!r}, expected {args.warning_policy!r}"
+                )
+            if metadata.get("strict") != "0":
+                errors.append(
+                    f"metadata strict is {metadata.get('strict')!r}, expected '0' "
+                    "for compatibility warning policy"
+                )
     expected_metadata, metadata_errors = audit_expected_metadata(
         metadata, args.expect_meta
     )
@@ -354,10 +416,16 @@ def main() -> int:
 
     log_anomaly_counts: dict[str, int] | None = None
     log_summary: dict[str, Any] | None = None
+    allowed_log_warnings: list[str] = []
     if args.log:
-        log_anomaly_counts, examples, log_summary = scan_log(args.log)
+        log_anomaly_counts, examples, log_summary, allowed_log_warnings = scan_log(
+            args.log,
+            warning_policy=args.warning_policy,
+            candidate=args.candidate,
+            opponent=args.opponent,
+        )
         if any(log_anomaly_counts.values()):
-            errors.append(f"strict log anomalies found: {examples}")
+            errors.append(f"log anomalies found: {examples}")
         independently_counted = {
             "games": len(games),
             "wins": wdl["wins"],
@@ -400,6 +468,8 @@ def main() -> int:
         "telemetry_missing": dict(telemetry_missing),
         "telemetry": telemetry,
         "log_anomaly_counts": log_anomaly_counts,
+        "warning_policy": args.warning_policy,
+        "allowed_log_warnings": allowed_log_warnings,
         "fastchess_final_summary": log_summary,
         "metadata": metadata,
         "expected_metadata": expected_metadata,

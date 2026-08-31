@@ -14,30 +14,92 @@ SPEC.loader.exec_module(AUDIT_MATCH)
 
 
 class ScanLogTests(unittest.TestCase):
-    def scan(self, text: str) -> dict[str, int]:
+    def scan(
+        self,
+        text: str,
+        *,
+        warning_policy: str = "reject-all",
+        candidate: str = "NEYRANG-G1",
+        opponent: str = "NEYRANG-0.2.0",
+    ) -> tuple[dict[str, int], list[str]]:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "match.log"
             path.write_text(text, encoding="utf-8")
-            counts, _, _ = AUDIT_MATCH.scan_log(path)
-            return counts
+            counts, _, _, allowed = AUDIT_MATCH.scan_log(
+                path,
+                warning_policy=warning_policy,
+                candidate=candidate,
+                opponent=opponent,
+            )
+            return counts, allowed
 
     def test_zero_summary_counters_are_not_anomalies(self) -> None:
-        counts = self.scan("Player: NEYRANG\n  Timeouts: 0\n  Crashed: 0\n")
+        counts, _ = self.scan("Player: NEYRANG\n  Timeouts: 0\n  Crashed: 0\n")
 
         self.assertEqual(counts["timeout"], 0)
         self.assertEqual(counts["crash"], 0)
 
     def test_nonzero_summary_counters_are_anomalies(self) -> None:
-        counts = self.scan("Player: NEYRANG\n  Timeouts: 2\n  Crashed: 1\n")
+        counts, _ = self.scan("Player: NEYRANG\n  Timeouts: 2\n  Crashed: 1\n")
 
         self.assertEqual(counts["timeout"], 1)
         self.assertEqual(counts["crash"], 1)
 
     def test_free_form_failure_messages_remain_detected(self) -> None:
-        counts = self.scan("engine timed out waiting for bestmove\nengine crash detected\n")
+        counts, _ = self.scan(
+            "engine timed out waiting for bestmove\nengine crash detected\n"
+        )
 
         self.assertEqual(counts["timeout"], 1)
         self.assertEqual(counts["crash"], 1)
+
+    def test_default_policy_rejects_every_warning(self) -> None:
+        counts, allowed = self.scan(
+            "Warning; PV continues after threefold repetition - move f7d7 from NEYRANG-0.2.0\n"
+        )
+
+        self.assertEqual(counts["warning"], 1)
+        self.assertEqual(allowed, [])
+
+    def test_explicit_policy_allows_only_named_opponent_threefold_pv(self) -> None:
+        line = (
+            "Warning; PV continues after threefold repetition - "
+            "move f7d7 from NEYRANG-0.2.0"
+        )
+        counts, allowed = self.scan(
+            f"{line}\n",
+            warning_policy="allow-opponent-threefold-pv",
+        )
+
+        self.assertEqual(counts["warning"], 0)
+        self.assertEqual(allowed, [line])
+
+    def test_policy_rejects_same_warning_from_candidate(self) -> None:
+        counts, allowed = self.scan(
+            "Warning; PV continues after threefold repetition - move f7d7 from NEYRANG-G1\n",
+            warning_policy="allow-opponent-threefold-pv",
+        )
+
+        self.assertEqual(counts["warning"], 1)
+        self.assertEqual(allowed, [])
+
+    def test_policy_rejects_other_or_malformed_warnings(self) -> None:
+        warnings = [
+            "Warning; PV continues after fifty-move rule - move f7d7 from NEYRANG-0.2.0",
+            "Warning; PV continues after checkmate - move f7d7 from NEYRANG-0.2.0",
+            "Warning; PV continues after stalemate - move f7d7 from NEYRANG-0.2.0",
+            "Warning; Illegal PV move - move f7d7 from NEYRANG-0.2.0",
+            "Warning; Illegal move f7d7 played by NEYRANG-0.2.0",
+            "Warning; PV continues after threefold repetition - move nope from NEYRANG-0.2.0",
+            "Warning; unexpected runner condition",
+        ]
+        counts, allowed = self.scan(
+            "\n".join(warnings) + "\n",
+            warning_policy="allow-opponent-threefold-pv",
+        )
+
+        self.assertEqual(counts["warning"], len(warnings))
+        self.assertEqual(allowed, [])
 
 
 class ExpectedMetadataTests(unittest.TestCase):

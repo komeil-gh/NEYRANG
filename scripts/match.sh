@@ -20,6 +20,7 @@ threads="${THREADS:-1}"
 move_overhead_ms="${MOVE_OVERHEAD_MS:-}"
 time_margin_ms="${TIME_MARGIN_MS:-}"
 strict="${STRICT:-0}"
+warning_policy="${WARNING_POLICY:-reject-all}"
 show_latency="${SHOW_LATENCY:-0}"
 autosave_interval="${AUTOSAVE_INTERVAL:-20}"
 openings_file="${OPENINGS_FILE:-$script_dir/openings.epd}"
@@ -72,6 +73,14 @@ if [[ -n "$move_overhead_ms" ]] && ! [[ "$move_overhead_ms" =~ ^[0-9]+$ ]]; then
 fi
 if [[ "$strict" != "0" && "$strict" != "1" ]]; then
     echo "STRICT must be 0 or 1" >&2
+    exit 2
+fi
+if [[ "$warning_policy" != "reject-all" && "$warning_policy" != "allow-opponent-threefold-pv" ]]; then
+    echo "WARNING_POLICY must be reject-all or allow-opponent-threefold-pv" >&2
+    exit 2
+fi
+if [[ "$warning_policy" != "reject-all" && "$strict" != "0" ]]; then
+    echo "compatibility WARNING_POLICY requires STRICT=0" >&2
     exit 2
 fi
 if [[ "$show_latency" != "0" && "$show_latency" != "1" ]]; then
@@ -208,6 +217,7 @@ fi
     echo "time_margin_ms=$time_margin_ms"
     echo "show_latency=$show_latency"
     echo "strict=$strict"
+    echo "warning_policy=$warning_policy"
     echo "autosave_interval=$autosave_interval"
     echo "adjudication=fastchess-default"
     echo "pgn_out=$pgn_out"

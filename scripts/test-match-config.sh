@@ -67,6 +67,7 @@ for expected in \
     "move_overhead_ms=30" \
     "show_latency=1" \
     "strict=1" \
+    "warning_policy=reject-all" \
     "autosave_interval=2" \
     "games=10" \
     "config_out=$scratch/smoke.config.json"; do
@@ -131,6 +132,40 @@ if DRY_RUN=1 FASTCHESS_BIN=true ENGINE_A=/usr/bin/true ENGINE_B=/usr/bin/true \
 fi
 
 echo "per-engine node configuration test passed"
+
+compat_meta_out="$scratch/compat.meta.txt"
+compat_output="$(
+    DRY_RUN=1 \
+    FASTCHESS_BIN=true \
+    ENGINE_A=/usr/bin/true \
+    ENGINE_B=/usr/bin/true \
+    OPENINGS_FILE="$repo_root/scripts/openings.epd" \
+    WARNING_POLICY=allow-opponent-threefold-pv \
+    STRICT=0 \
+    GAMES=10 \
+    META_OUT="$compat_meta_out" \
+    PGN_OUT="$scratch/compat.pgn" \
+    "$script_dir/match.sh"
+)"
+
+if [[ "$compat_output" == *"-strict"* ]]; then
+    echo "baseline compatibility dry run unexpectedly enabled strict mode" >&2
+    exit 1
+fi
+if ! grep -Fqx "warning_policy=allow-opponent-threefold-pv" "$compat_meta_out"; then
+    echo "compatibility metadata is missing the warning policy" >&2
+    exit 1
+fi
+if DRY_RUN=1 FASTCHESS_BIN=true ENGINE_A=/usr/bin/true ENGINE_B=/usr/bin/true \
+    OPENINGS_FILE="$repo_root/scripts/openings.epd" \
+    WARNING_POLICY=allow-opponent-threefold-pv STRICT=1 GAMES=10 \
+    PGN_OUT="$scratch/invalid-policy.pgn" "$script_dir/match.sh" \
+    >/dev/null 2>&1; then
+    echo "match runner accepted strict mode with a compatibility warning policy" >&2
+    exit 1
+fi
+
+echo "baseline warning-policy configuration test passed"
 
 sprt_meta_out="$scratch/sprt.meta.txt"
 sprt_output="$(

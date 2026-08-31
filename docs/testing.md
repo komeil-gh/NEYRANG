@@ -118,7 +118,9 @@ python3 -m venv .venv
   --expected-time-control 0.5+0.005
 ```
 
-The auditor parses every game with python-chess, compares header and movetext results, reconstructs W/D/L and pentanomial counts, verifies consecutive opening pairs and color reversal, requires normal terminations and complete per-ply telemetry, reports latency/time-left distributions, checks completed metadata, scans the strict log for known failure classes, and compares its independent counts with fastchess's final summary. It exits nonzero on any mismatch.
+The auditor parses every game with python-chess, compares header and movetext results, reconstructs W/D/L and pentanomial counts, verifies consecutive opening pairs and color reversal, requires normal terminations and complete per-ply telemetry, reports latency/time-left distributions, checks completed metadata, scans the runner log for known failure classes, and compares its independent counts with fastchess's final summary. It exits nonzero on any mismatch.
+
+The default warning policy is `reject-all` and is unchanged. A comparison against the immutable 0.2.0 binary may explicitly set `WARNING_POLICY=allow-opponent-threefold-pv` with `STRICT=0`, then pass the same policy to `audit-match.py`. This compatibility mode permits only an exact threefold-repetition PV-continuation warning from the registered opponent name. It retains and reports every permitted line; the same warning from the candidate, any other warning, or any ordinary anomaly still rejects the complete match. The runner refuses to combine this policy with fastchess strict mode because strict mode stops on the known baseline warning before the post-run audit can classify it.
 
 ## NEYRANG 0.2.0 release evidence
 

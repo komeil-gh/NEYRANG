@@ -5,6 +5,7 @@ mod driver;
 pub mod history;
 mod limits;
 mod ordering;
+mod parallel;
 mod see;
 pub mod time;
 pub mod tt;
@@ -14,4 +15,5 @@ pub use driver::{
     VALUE_MATE,
 };
 pub use limits::SearchLimits;
+pub(crate) use parallel::search_parallel;
 pub use see::{see, see_ge};

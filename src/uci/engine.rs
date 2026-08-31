@@ -13,8 +13,8 @@ use crate::{
     engine::info::{ENGINE_AUTHOR, ENGINE_NAME, ENGINE_VERSION},
     eval,
     search::{
-        MAX_PLY, SearchInfo, SearchLimits, Searcher, VALUE_MATE, time::TimeManager,
-        tt::TranspositionTable,
+        MAX_PLY, SearchInfo, SearchLimits, Searcher, VALUE_MATE, search_parallel,
+        time::TimeManager, tt::TranspositionTable,
     },
 };
 
@@ -66,7 +66,7 @@ impl UciEngine {
             threads: 1,
             move_overhead_ms: DEFAULT_MOVE_OVERHEAD_MS,
             active: None,
-            table: Some(TranspositionTable::new(DEFAULT_HASH_MB)),
+            table: Some(table_for(DEFAULT_HASH_MB, 1)),
         }
     }
 
@@ -170,7 +170,7 @@ impl UciEngine {
                     return Err(format!("Hash must be between 1 and {MAX_HASH_MB} MB"));
                 }
                 self.hash_megabytes = parsed;
-                self.table = Some(TranspositionTable::new(parsed));
+                self.table = Some(table_for(parsed, self.threads));
             }
             "threads" => {
                 let parsed: usize = value
@@ -179,9 +179,11 @@ impl UciEngine {
                 if !(1..=256).contains(&parsed) {
                     return Err("Threads must be between 1 and 256".to_owned());
                 }
-                // The value is retained for protocol compatibility; the current
-                // deterministic search remains intentionally single-threaded.
+                let changes_table_mode = (self.threads == 1) != (parsed == 1);
                 self.threads = parsed;
+                if changes_table_mode {
+                    self.table = Some(table_for(self.hash_megabytes, parsed));
+                }
             }
             "move overhead" => {
                 let parsed: u64 = value
@@ -204,21 +206,37 @@ impl UciEngine {
         let game_hashes = self.game_hashes.clone();
         let stop = Arc::new(AtomicBool::new(false));
         let worker_stop = Arc::clone(&stop);
+        let threads = self.threads;
         let table = self
             .table
             .take()
-            .unwrap_or_else(|| TranspositionTable::new(self.hash_megabytes));
+            .unwrap_or_else(|| table_for(self.hash_megabytes, threads));
         let handle = thread::spawn(move || {
-            let mut position = position;
-            let mut searcher = Searcher::with_table(&worker_stop, table);
-            let result = searcher.search(&mut position, &limits, &game_hashes, |info| {
-                let _ = send_line(&format_info(info));
-            });
+            let (result, table) = if threads == 1 {
+                let mut position = position;
+                let mut searcher = Searcher::with_table(&worker_stop, table);
+                let result = searcher.search(&mut position, &limits, &game_hashes, |info| {
+                    let _ = send_line(&format_info(info));
+                });
+                (result, searcher.into_table())
+            } else {
+                search_parallel(
+                    &position,
+                    &limits,
+                    &game_hashes,
+                    threads,
+                    &worker_stop,
+                    table,
+                    |info| {
+                        let _ = send_line(&format_info(info));
+                    },
+                )
+            };
             let bestmove = result
                 .best_move
                 .map_or_else(|| "0000".to_owned(), |mv| mv.to_string());
             let _ = send_line(&format!("bestmove {bestmove}"));
-            searcher.into_table()
+            table
         });
         self.active = Some(ActiveSearch { stop, handle });
     }
@@ -246,9 +264,17 @@ impl UciEngine {
             Ok(table) => self.table = Some(table),
             Err(_) => {
                 eprintln!("NEYRANG search thread terminated unexpectedly");
-                self.table = Some(TranspositionTable::new(self.hash_megabytes));
+                self.table = Some(table_for(self.hash_megabytes, self.threads));
             }
         }
+    }
+}
+
+fn table_for(megabytes: usize, threads: usize) -> TranspositionTable {
+    if threads == 1 {
+        TranspositionTable::new(megabytes)
+    } else {
+        TranspositionTable::new_shared(megabytes)
     }
 }
 
@@ -353,5 +379,28 @@ mod tests {
 
         assert_eq!(limits.soft_time, Some(std::time::Duration::ZERO));
         assert_eq!(limits.hard_time, Some(std::time::Duration::ZERO));
+    }
+
+    #[test]
+    fn threads_option_switches_between_local_and_total_hash_shared_tables() {
+        let mut engine = UciEngine::new();
+        assert!(!engine.table.as_ref().expect("default TT").is_shared());
+
+        engine
+            .set_option("Threads", Some("4"))
+            .expect("Threads 4 should be accepted");
+        let shared = engine.table.as_ref().expect("shared TT");
+        assert!(shared.is_shared());
+        assert!(shared.allocated_bytes() <= engine.hash_megabytes * 1024 * 1024);
+
+        engine
+            .set_option("Threads", Some("2"))
+            .expect("Threads 2 should retain shared mode");
+        assert!(engine.table.as_ref().expect("shared TT").is_shared());
+
+        engine
+            .set_option("Threads", Some("1"))
+            .expect("Threads 1 should be accepted");
+        assert!(!engine.table.as_ref().expect("local TT").is_shared());
     }
 }

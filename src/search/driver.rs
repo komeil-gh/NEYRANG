@@ -1,7 +1,7 @@
 //! Iterative search driver and recursive alpha-beta implementation.
 
 use std::{
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
     time::{Duration, Instant},
 };
 
@@ -62,6 +62,31 @@ impl SearchContext {
             preferred: None,
             null_allowed: false,
             in_null_subtree: true,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct SearchSetup {
+    started: Option<Instant>,
+    root_preferred: Option<Move>,
+    advance_generation: bool,
+}
+
+impl SearchSetup {
+    const fn normal() -> Self {
+        Self {
+            started: None,
+            root_preferred: None,
+            advance_generation: true,
+        }
+    }
+
+    const fn prepared(started: Instant, root_preferred: Option<Move>) -> Self {
+        Self {
+            started: Some(started),
+            root_preferred,
+            advance_generation: false,
         }
     }
 }
@@ -153,12 +178,13 @@ pub struct SearchStatistics {
     pub picker_bad_tactical_stage_visits: u64,
 }
 
-#[cfg(feature = "stats")]
 impl SearchStatistics {
+    #[cfg(feature = "stats")]
     pub fn moves_scored_unused(self) -> u64 {
         self.moves_scored.saturating_sub(self.scored_moves_searched)
     }
 
+    #[cfg(feature = "stats")]
     pub fn see_scored_moves_unused(self) -> u64 {
         self.see_calls
             .saturating_sub(self.see_scored_moves_searched)
@@ -186,25 +212,55 @@ impl SearchStatistics {
         self.null_move_verifications += other.null_move_verifications;
         self.lmr_reductions += other.lmr_reductions;
         self.lmr_researches += other.lmr_researches;
-        self.move_generation_calls += other.move_generation_calls;
-        self.moves_generated += other.moves_generated;
-        self.ordering_calls += other.ordering_calls;
-        self.moves_scored += other.moves_scored;
-        self.full_sorts += other.full_sorts;
-        self.moves_searched += other.moves_searched;
-        self.scored_moves_searched += other.scored_moves_searched;
-        self.tactical_moves_searched += other.tactical_moves_searched;
-        self.see_scored_moves_searched += other.see_scored_moves_searched;
-        self.picker_tt_stage_visits += other.picker_tt_stage_visits;
-        self.picker_good_tactical_stage_visits += other.picker_good_tactical_stage_visits;
-        self.picker_killer_stage_visits += other.picker_killer_stage_visits;
-        self.picker_quiet_stage_visits += other.picker_quiet_stage_visits;
-        self.picker_bad_tactical_stage_visits += other.picker_bad_tactical_stage_visits;
+        #[cfg(feature = "stats")]
+        {
+            self.move_generation_calls += other.move_generation_calls;
+            self.moves_generated += other.moves_generated;
+            self.ordering_calls += other.ordering_calls;
+            self.moves_scored += other.moves_scored;
+            self.full_sorts += other.full_sorts;
+            self.moves_searched += other.moves_searched;
+            self.scored_moves_searched += other.scored_moves_searched;
+            self.tactical_moves_searched += other.tactical_moves_searched;
+            self.see_scored_moves_searched += other.see_scored_moves_searched;
+            self.picker_tt_stage_visits += other.picker_tt_stage_visits;
+            self.picker_good_tactical_stage_visits += other.picker_good_tactical_stage_visits;
+            self.picker_killer_stage_visits += other.picker_killer_stage_visits;
+            self.picker_quiet_stage_visits += other.picker_quiet_stage_visits;
+            self.picker_bad_tactical_stage_visits += other.picker_bad_tactical_stage_visits;
+        }
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct SearchProgress {
+    nodes: AtomicU64,
+    qnodes: AtomicU64,
+}
+
+impl SearchProgress {
+    fn reset(&self) {
+        self.nodes.store(0, Ordering::Relaxed);
+        self.qnodes.store(0, Ordering::Relaxed);
+    }
+
+    fn publish(&self, nodes: u64, qnodes: u64) {
+        self.nodes.store(nodes, Ordering::Relaxed);
+        self.qnodes.store(qnodes, Ordering::Relaxed);
+    }
+
+    pub(crate) fn snapshot(&self) -> (u64, u64) {
+        (
+            self.nodes.load(Ordering::Relaxed),
+            self.qnodes.load(Ordering::Relaxed),
+        )
     }
 }
 
 pub struct Searcher<'a> {
     stop: &'a AtomicBool,
+    global_nodes: Option<&'a AtomicU64>,
+    progress: Option<&'a SearchProgress>,
     limits: SearchLimits,
     started: Instant,
     nodes: u64,
@@ -230,8 +286,28 @@ impl<'a> Searcher<'a> {
     }
 
     pub fn with_table(stop: &'a AtomicBool, tt: TranspositionTable) -> Self {
+        Self::with_context(stop, tt, None, None)
+    }
+
+    pub(crate) fn with_parallel_context(
+        stop: &'a AtomicBool,
+        tt: TranspositionTable,
+        global_nodes: Option<&'a AtomicU64>,
+        progress: &'a SearchProgress,
+    ) -> Self {
+        Self::with_context(stop, tt, global_nodes, Some(progress))
+    }
+
+    fn with_context(
+        stop: &'a AtomicBool,
+        tt: TranspositionTable,
+        global_nodes: Option<&'a AtomicU64>,
+        progress: Option<&'a SearchProgress>,
+    ) -> Self {
         Self {
             stop,
+            global_nodes,
+            progress,
             limits: SearchLimits::default(),
             started: Instant::now(),
             nodes: 0,
@@ -257,22 +333,67 @@ impl<'a> Searcher<'a> {
         position: &mut Position,
         limits: &SearchLimits,
         game_hashes: &[u64],
+        on_info: F,
+    ) -> SearchResult
+    where
+        F: FnMut(&SearchInfo),
+    {
+        self.search_internal(
+            position,
+            limits,
+            game_hashes,
+            SearchSetup::normal(),
+            on_info,
+        )
+    }
+
+    pub(crate) fn search_prepared<F>(
+        &mut self,
+        position: &mut Position,
+        limits: &SearchLimits,
+        game_hashes: &[u64],
+        started: Instant,
+        root_preferred: Option<Move>,
+        on_info: F,
+    ) -> SearchResult
+    where
+        F: FnMut(&SearchInfo),
+    {
+        self.search_internal(
+            position,
+            limits,
+            game_hashes,
+            SearchSetup::prepared(started, root_preferred),
+            on_info,
+        )
+    }
+
+    fn search_internal<F>(
+        &mut self,
+        position: &mut Position,
+        limits: &SearchLimits,
+        game_hashes: &[u64],
+        setup: SearchSetup,
         mut on_info: F,
     ) -> SearchResult
     where
         F: FnMut(&SearchInfo),
     {
-        self.reset(position, limits, game_hashes);
+        self.reset(position, limits, game_hashes, setup);
         let root_moves = position.legal_moves();
         if root_moves.is_empty() {
             return self.root_terminal(position);
         }
 
         let fallback = root_moves.as_slice()[0];
-        let mut best_move = fallback;
+        let initial_preferred = setup
+            .root_preferred
+            .filter(|preferred| root_moves.iter().any(|&mv| mv == *preferred))
+            .unwrap_or(fallback);
+        let mut best_move = initial_preferred;
         let mut best_score = eval::evaluate(position);
         let mut best_depth = 0_u8;
-        let mut best_pv = vec![fallback];
+        let mut best_pv = vec![initial_preferred];
         let max_depth = limits.depth.unwrap_or((MAX_PLY - 2) as u8).max(1);
 
         for depth in 1..=max_depth {
@@ -324,6 +445,7 @@ impl<'a> Searcher<'a> {
             }
             best_score = score;
             best_depth = depth;
+            self.publish_progress();
             let info = SearchInfo {
                 depth,
                 seldepth: self.seldepth.min(u8::MAX as usize) as u8,
@@ -344,6 +466,7 @@ impl<'a> Searcher<'a> {
             }
         }
 
+        self.publish_progress();
         SearchResult {
             best_move: Some(best_move),
             score: best_score,
@@ -359,9 +482,15 @@ impl<'a> Searcher<'a> {
         }
     }
 
-    fn reset(&mut self, position: &mut Position, limits: &SearchLimits, game_hashes: &[u64]) {
+    fn reset(
+        &mut self,
+        position: &mut Position,
+        limits: &SearchLimits,
+        game_hashes: &[u64],
+        setup: SearchSetup,
+    ) {
         self.limits = limits.clone();
-        self.started = Instant::now();
+        self.started = setup.started.unwrap_or_else(Instant::now);
         self.nodes = 0;
         self.qnodes = 0;
         self.seldepth = 0;
@@ -374,8 +503,13 @@ impl<'a> Searcher<'a> {
             self.hashes.push(repetition_hash);
         }
         self.pv_len.fill(0);
-        self.tt.new_search();
+        if setup.advance_generation {
+            self.tt.new_search();
+        }
         self.killers.fill([Move::NONE; 2]);
+        if let Some(progress) = self.progress {
+            progress.reset();
+        }
     }
 
     fn root_terminal(&self, position: &Position) -> SearchResult {
@@ -411,7 +545,7 @@ impl<'a> Searcher<'a> {
         if ply >= MAX_PLY - 1 {
             return eval::evaluate(position);
         }
-        self.nodes = self.nodes.saturating_add(1);
+        self.visit_node(false);
         self.seldepth = self.seldepth.max(ply);
         self.pv_len[ply] = ply;
         if self.should_stop() {
@@ -700,8 +834,7 @@ impl<'a> Searcher<'a> {
         if ply >= MAX_PLY - 1 {
             return eval::evaluate(position);
         }
-        self.nodes = self.nodes.saturating_add(1);
-        self.qnodes = self.qnodes.saturating_add(1);
+        self.visit_node(true);
         self.seldepth = self.seldepth.max(ply);
         self.pv_len[ply] = ply;
         if self.should_stop() {
@@ -866,7 +999,11 @@ impl<'a> Searcher<'a> {
     }
 
     fn node_limit_reached(&self) -> bool {
-        self.limits.nodes.is_some_and(|limit| self.nodes >= limit)
+        self.limits.nodes.is_some_and(|limit| {
+            self.global_nodes
+                .map_or(self.nodes, |nodes| nodes.load(Ordering::Relaxed))
+                >= limit
+        })
     }
 
     fn soft_limit_reached(&self) -> bool {
@@ -875,6 +1012,44 @@ impl<'a> Searcher<'a> {
                 .limits
                 .soft_time
                 .is_some_and(|limit| self.started.elapsed() >= limit)
+    }
+
+    fn visit_node(&mut self, quiescence: bool) {
+        if let Some(nodes) = self.global_nodes {
+            let limit = self
+                .limits
+                .nodes
+                .expect("a global node counter is used only with a node limit");
+            let mut current = nodes.load(Ordering::Relaxed);
+            loop {
+                if current >= limit {
+                    self.stopped = true;
+                    return;
+                }
+                match nodes.compare_exchange_weak(
+                    current,
+                    current + 1,
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
+                ) {
+                    Ok(_) => break,
+                    Err(actual) => current = actual,
+                }
+            }
+        }
+        self.nodes = self.nodes.saturating_add(1);
+        if quiescence {
+            self.qnodes = self.qnodes.saturating_add(1);
+        }
+        if self.nodes & 1_023 == 0 {
+            self.publish_progress();
+        }
+    }
+
+    fn publish_progress(&self) {
+        if let Some(progress) = self.progress {
+            progress.publish(self.nodes, self.qnodes);
+        }
     }
 }
 
@@ -890,7 +1065,7 @@ fn has_meaningful_non_pawn_material(position: &Position) -> bool {
 mod tests {
     use std::sync::atomic::AtomicBool;
 
-    use super::{SearchContext, SearchStatistics};
+    use super::{SearchContext, SearchSetup, SearchStatistics};
     use crate::{
         chess::{Move, Position},
         search::{SearchLimits, Searcher, VALUE_INFINITE, VALUE_MATE, tt::Bound},
@@ -908,7 +1083,12 @@ mod tests {
         let stop = AtomicBool::new(false);
         let mut searcher = Searcher::new(&stop);
         let hashes = [position.hash()];
-        searcher.reset(&mut position, &SearchLimits::depth(1), &hashes);
+        searcher.reset(
+            &mut position,
+            &SearchLimits::depth(1),
+            &hashes,
+            SearchSetup::normal(),
+        );
 
         let _ = searcher.qsearch(
             &mut position,
@@ -981,7 +1161,12 @@ mod tests {
             let stop = AtomicBool::new(false);
             let mut searcher = Searcher::new(&stop);
             let hashes = [position.repetition_hash()];
-            searcher.reset(&mut position, &SearchLimits::depth(depth as u8), &hashes);
+            searcher.reset(
+                &mut position,
+                &SearchLimits::depth(depth as u8),
+                &hashes,
+                SearchSetup::normal(),
+            );
 
             let _ = searcher.negamax(&mut position, depth, ply, alpha, beta, context);
 
@@ -1000,7 +1185,12 @@ mod tests {
         let stop = AtomicBool::new(false);
         let mut searcher = Searcher::new(&stop);
         let hashes = [position.repetition_hash()];
-        searcher.reset(&mut position, &SearchLimits::depth(4), &hashes);
+        searcher.reset(
+            &mut position,
+            &SearchLimits::depth(4),
+            &hashes,
+            SearchSetup::normal(),
+        );
 
         let score = searcher.negamax(
             &mut position,
@@ -1024,7 +1214,12 @@ mod tests {
         let stop = AtomicBool::new(false);
         let mut searcher = Searcher::new(&stop);
         let hashes = [position.repetition_hash()];
-        searcher.reset(&mut position, &SearchLimits::depth(4), &hashes);
+        searcher.reset(
+            &mut position,
+            &SearchLimits::depth(4),
+            &hashes,
+            SearchSetup::normal(),
+        );
         let key = position.hash();
         searcher
             .tt

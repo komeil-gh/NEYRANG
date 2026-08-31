@@ -19,6 +19,8 @@ Implemented:
 - classical tapered evaluation
 - iterative deepening, alpha-beta, quiescence, PVS, aspiration windows
 - transposition table with mate-score normalization
+- a full-key local TT for `Threads=1` and a coherent packed atomic shared TT
+  for experimental Lazy SMP on the development branch
 - TT/SEE-capture/killer/history move ordering with losing captures deferred
 - fixed-storage staged move delivery on the development branch
 - legal static exchange evaluation and conservative qsearch SEE pruning
@@ -26,7 +28,7 @@ Implemented:
 - guarded fixed-R2 null-move pruning on the development branch
 - 50-move, threefold repetition, checkmate, and stalemate detection
 - cooperative atomic stop plus soft/hard time limits
-- asynchronous UCI loop and deterministic benchmark command
+- asynchronous UCI loop, root-diversified Lazy SMP, and deterministic benchmark command
 - feature-gated exact evaluation trace and streaming dataset export on the development branch
 - deterministic pair-first train/validation/holdout corpus construction with provenance and leakage controls
 - deterministic dense, gap-constrained, pair-balanced corpus extraction while preserving the legacy selector
@@ -36,7 +38,7 @@ Implemented:
 - immutable fixed-game campaign sharding with per-worker asset verification,
   exact opening-sequence audits, checksummed result manifests, and coordinator replay
 
-Not implemented in the retained development source: SMP, Syzygy, NNUE, LMP, futility pruning, continuation/capture history, or an optimized sliding-attack backend. `Threads` is accepted by UCI but search remains deliberately single-threaded. Capture History and 1-ply Continuation History were tested and reverted; the second conservative NMP experiment was retained on the development branch but has not earned a release.
+Not implemented in the retained development source: Syzygy, NNUE, LMP, futility pruning, continuation/capture history, or an optimized sliding-attack backend. The development branch now contains the single pre-registered P3 Lazy-SMP candidate, but multicore scaling and paired-game gates still decide whether it remains; this is not yet release or Elo evidence. Capture History and 1-ply Continuation History were tested and reverted; the second conservative NMP experiment was retained on the development branch but has not earned a release.
 
 No project license has been selected yet.
 
@@ -75,7 +77,8 @@ printf "uci\nisready\nposition startpos\ngo depth 5\nquit\n" | target/release/ne
 Options:
 
 - `Hash` (default 64 MB)
-- `Threads` (accepted; current implementation uses one search thread)
+- `Threads` (default 1; values above one enable the experimental shared-TT
+  Lazy-SMP path on the development branch)
 - `Move Overhead` (default 30 ms; configurable)
 
 ## En Croissant
@@ -131,6 +134,7 @@ cargo clippy --all-targets --all-features
 cargo test
 cargo test --features stats
 scripts/test-match-config.sh
+.venv/bin/python -m unittest discover -s scripts/tests
 ```
 
 For paired fastchess testing:

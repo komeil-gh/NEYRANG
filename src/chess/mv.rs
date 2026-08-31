@@ -54,6 +54,11 @@ impl Move {
     pub const NONE: Self = Self(u16::MAX);
 
     #[inline]
+    pub(crate) const fn from_raw(raw: u16) -> Self {
+        Self(raw)
+    }
+
+    #[inline]
     pub const fn new(from: Square, to: Square, flag: MoveFlag) -> Self {
         Self(from.index() as u16 | ((to.index() as u16) << 6) | ((flag as u16) << 12))
     }

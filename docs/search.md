@@ -22,11 +22,17 @@ At non-root, non-PV nodes, sufficiently late quiet moves may be reduced by one p
 
 The retained development branch also uses conservative fixed-R2 null-move pruning at eligible null-window nodes. It requires depth four, no check or earlier null, a non-mate beta, static evaluation at least beta, and meaningful friendly non-pawn material. Pawn-only and lone-minor endings are excluded. Legal terminal detection precedes the probe. Synthetic null descendants cannot use real-game repetition/fifty-move adjudication, the TT, or persistent killer/history training, and null state is restored exactly. There is no dynamic reduction or verification search in this variant.
 
+## Parallel search candidate
+
+P3 implements root-diversified Lazy SMP behind `Threads>1`; `Threads=1` continues through the old local table and search entry point. The main worker starts with the established root order. Helper `i` starts with legal root move `i mod root_move_count`, then private histories and the shared TT allow searches to diverge naturally. Only the main worker emits iterative information. After all workers finish, root moves receive the registered score vote `score - minimum_score + 14`; vote ties use completed depth, PV length, and main-worker priority. The chosen representative contributes score/PV while nodes, qnodes, seldepth, elapsed time, hashfull, and search statistics are aggregated.
+
+The shared TT uses one atomic word per entry, relaxed operations, a 16-bit signature, and one generation advanced by the controller. Mate scores are normalized at the same boundary as the local TT. Timed workers share a start instant before helper creation, so spawn overhead consumes the budget. Node-limited searches use one exact global budget. This candidate remains experimental until its frozen 1/2/4-thread scaling run and 2,000-game Threads-2-versus-Threads-1 screen pass; more cores are extra compute, not a free single-thread efficiency claim.
+
 ## Draws and limits
 
 The search checks the 50-move counter and counts matching hashes within the reversible history window for threefold repetition. Maximum ply is 128. At the boundary it returns static evaluation rather than indexing past fixed search storage.
 
-The UCI thread can set an atomic stop flag while search is active. Node limits are checked every node. Hard time is sampled at the first node, every node for budgets of at most 5 ms, and every 1,024 nodes otherwise. Soft time is evaluated after completed iterations. A legal root fallback is retained even when the usable budget is zero, and an interrupted iteration never replaces the last stable result. The default configurable `Move Overhead` is 30 ms after the [0.3 timing audit](development/0.3.0-timing-audit.md) measured the external macOS/runner latency tail.
+The UCI thread can set an atomic stop flag while search is active. Local node limits are checked every node; the parallel path reserves against one exact aggregate counter. Hard time is sampled at the first node, every node for budgets of at most 5 ms, and every 1,024 nodes otherwise. Soft time is evaluated after completed iterations. A legal root fallback is retained even when the usable budget is zero, and an interrupted iteration never replaces the last stable result. The default configurable `Move Overhead` is 30 ms after the [0.3 timing audit](development/0.3.0-timing-audit.md) measured the external macOS/runner latency tail.
 
 ## Measured development changes
 

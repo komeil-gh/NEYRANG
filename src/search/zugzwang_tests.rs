@@ -1,6 +1,6 @@
 use std::sync::atomic::AtomicBool;
 
-use super::{SearchContext, SearchStatistics, Searcher};
+use super::{SearchContext, SearchSetup, SearchStatistics, Searcher};
 use crate::{chess::Position, eval, search::SearchLimits};
 
 fn search_window(
@@ -13,7 +13,12 @@ fn search_window(
     let stop = AtomicBool::new(false);
     let mut searcher = Searcher::new(&stop);
     let hashes = [position.repetition_hash()];
-    searcher.reset(&mut position, &SearchLimits::depth(depth as u8), &hashes);
+    searcher.reset(
+        &mut position,
+        &SearchLimits::depth(depth as u8),
+        &hashes,
+        SearchSetup::normal(),
+    );
 
     let score = searcher.negamax(&mut position, depth, 1, beta - 1, beta, context);
     let pv = searcher.pv_line(1);

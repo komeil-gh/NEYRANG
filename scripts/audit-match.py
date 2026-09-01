@@ -194,6 +194,45 @@ def audit_expected_openings(
     return expected, errors
 
 
+def _round_sort_key(round_header: str) -> tuple[int, tuple[int, ...] | str]:
+    parts = round_header.split(".")
+    if parts and all(part.isdigit() for part in parts):
+        return 0, tuple(int(part) for part in parts)
+    return 1, round_header
+
+
+def pair_games_by_round(
+    games: list[chess.pgn.Game], expected_pairs: int
+) -> tuple[list[tuple[chess.pgn.Game, chess.pgn.Game]], list[str]]:
+    """Recover color-reversed pairs independently of PGN completion order."""
+    errors: list[str] = []
+    games_by_round: dict[str, list[chess.pgn.Game]] = defaultdict(list)
+
+    for index, game in enumerate(games, 1):
+        round_header = game.headers.get("Round")
+        if not round_header:
+            errors.append(f"game {index} has no round header")
+            continue
+        games_by_round[round_header].append(game)
+
+    if len(games_by_round) != expected_pairs:
+        errors.append(
+            f"found {len(games_by_round)} round groups, expected {expected_pairs} pairs"
+        )
+
+    pairs: list[tuple[chess.pgn.Game, chess.pgn.Game]] = []
+    for round_header in sorted(games_by_round, key=_round_sort_key):
+        round_games = games_by_round[round_header]
+        if len(round_games) != 2:
+            errors.append(
+                f"round {round_header!r} contains {len(round_games)} games, expected 2"
+            )
+            continue
+        pairs.append((round_games[0], round_games[1]))
+
+    return pairs, errors
+
+
 def canonical_opening(value: str) -> str:
     fields = value.split()
     if len(fields) == 6:
@@ -378,10 +417,10 @@ def main() -> int:
                     time_left[actor].append(float(match.group(1)))
             board.push(node.move)
 
-    expected_pairs = min(len(games), args.expected_games) // 2
-    for pair_index in range(expected_pairs):
-        left = games[2 * pair_index]
-        right = games[2 * pair_index + 1]
+    expected_pairs = args.expected_games // 2
+    paired_games, pairing_errors = pair_games_by_round(games, expected_pairs)
+    errors.extend(pairing_errors)
+    for pair_index, (left, right) in enumerate(paired_games):
         left_headers = left.headers
         right_headers = right.headers
         left_fen = left_headers.get("FEN", chess.STARTING_FEN)
@@ -389,8 +428,6 @@ def main() -> int:
         if left_fen != right_fen:
             errors.append(f"pair {pair_index + 1} has different opening FENs")
         pair_opening_fens.append(left_fen)
-        if left_headers.get("Round") != right_headers.get("Round"):
-            errors.append(f"pair {pair_index + 1} has different round headers")
         if not (
             left_headers.get("White") == right_headers.get("Black")
             and left_headers.get("Black") == right_headers.get("White")

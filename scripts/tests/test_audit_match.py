@@ -187,5 +187,52 @@ class ExpectedOpeningTests(unittest.TestCase):
             self.assertIn("pair 1 opening", order_errors[0])
             self.assertIn("expected 2 opening pairs", count_errors[0])
 
+
+class PairingTests(unittest.TestCase):
+    @staticmethod
+    def game(round_number: str, white: str, black: str) -> object:
+        game = AUDIT_MATCH.chess.pgn.Game()
+        game.headers["Round"] = round_number
+        game.headers["White"] = white
+        game.headers["Black"] = black
+        game.headers["FEN"] = AUDIT_MATCH.chess.STARTING_FEN
+        game.headers["Result"] = "1/2-1/2"
+        return game
+
+    def test_concurrent_completion_order_is_grouped_by_round(self) -> None:
+        candidate = "NEYRANG-candidate"
+        opponent = "NEYRANG-parent"
+        games = [
+            self.game("2", candidate, opponent),
+            self.game("1", candidate, opponent),
+            self.game("2", opponent, candidate),
+            self.game("1", opponent, candidate),
+        ]
+
+        pairs, errors = AUDIT_MATCH.pair_games_by_round(games, 2)
+
+        self.assertEqual(errors, [])
+        self.assertEqual([pair[0].headers["Round"] for pair in pairs], ["1", "2"])
+        self.assertTrue(
+            all(
+                left.headers["White"] == right.headers["Black"]
+                for left, right in pairs
+            )
+        )
+
+    def test_missing_or_overfull_round_is_rejected(self) -> None:
+        games = [
+            self.game("1", "A", "B"),
+            self.game("1", "B", "A"),
+            self.game("1", "A", "B"),
+            self.game("2", "A", "B"),
+        ]
+
+        pairs, errors = AUDIT_MATCH.pair_games_by_round(games, 2)
+
+        self.assertEqual(pairs, [])
+        self.assertTrue(any("round '1' contains 3 games" in error for error in errors))
+        self.assertTrue(any("round '2' contains 1 games" in error for error in errors))
+
 if __name__ == "__main__":
     unittest.main()

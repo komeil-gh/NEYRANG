@@ -204,7 +204,7 @@ python3 -m venv .venv
   --expected-time-control 0.5+0.005
 ```
 
-The auditor parses every game with python-chess, compares header and movetext results, reconstructs W/D/L and pentanomial counts, verifies consecutive opening pairs and color reversal, requires normal terminations and complete per-ply telemetry, reports latency/time-left distributions, checks completed metadata, scans the runner log for known failure classes, and compares its independent counts with fastchess's final summary. It exits nonzero on any mismatch.
+The auditor parses every game with python-chess, compares header and movetext results, reconstructs W/D/L and pentanomial counts, groups color-reversed opening pairs by the fastchess `Round` identity even when concurrent games finish out of order, requires normal terminations and complete per-ply telemetry, reports latency/time-left distributions, checks completed metadata, scans the runner log for known failure classes, and compares its independent counts with fastchess's final summary. It exits nonzero on any mismatch.
 
 The default warning policy is `reject-all` and is unchanged. A comparison against the immutable 0.2.0 binary may explicitly set `WARNING_POLICY=allow-opponent-threefold-pv` with `STRICT=0`, then pass the same policy to `audit-match.py`. This compatibility mode permits only an exact threefold-repetition PV-continuation warning from the registered opponent name. It retains and reports every permitted line; the same warning from the candidate, any other warning, or any ordinary anomaly still rejects the complete match. The runner refuses to combine this policy with fastchess strict mode because strict mode stops on the known baseline warning before the post-run audit can classify it.
 
@@ -492,4 +492,22 @@ python3 -m venv .venv-sanj
 .venv-sanj/bin/python -m unittest discover -s scripts/tests -p 'test_*.py'
 ```
 
-The repository Python suite currently has 83 tests covering match/corpus auditing, corpus construction, dense pair balancing, legacy-manifest compatibility, opening selection, fixed 38-to-42 feature mapping, complete-group learning subsets, scale fitting, deterministic group bootstrap, repository contracts, scored-shard orchestration, duplicate opening-stream quarantine, complete-game NNUE assembly, duplicate-opening/cross-partition whole-game quarantine and independent NNUE-record/terminal replay. Exact campaign, corpus, network, parity and diagnostic identities are recorded in the experiment ledger and the [N1c](evidence/nnue-n1c-1m.json), [N1d](evidence/nnue-n1d-4m.json) and [N1e](evidence/nnue-n1e-16m.json) evidence manifests.
+The repository Python suite currently has 85 tests covering match/corpus auditing, concurrency-safe round pairing, corpus construction, dense pair balancing, legacy-manifest compatibility, opening selection, fixed 38-to-42 feature mapping, complete-group learning subsets, scale fitting, deterministic group bootstrap, repository contracts, scored-shard orchestration, duplicate opening-stream quarantine, complete-game NNUE assembly, duplicate-opening/cross-partition whole-game quarantine and independent NNUE-record/terminal replay. Exact campaign, corpus, network, parity and diagnostic identities are recorded in the experiment ledger and the [N1c](evidence/nnue-n1c-1m.json), [N1d](evidence/nnue-n1d-4m.json), [N1e](evidence/nnue-n1e-16m.json) and [N2a](evidence/nnue-n2a-engine-inference.json) evidence manifests.
+
+## N2a engine-inference and playing-screen evidence
+
+The N2a feature path passed 88 default and 115 all-feature root tests, 34
+reference tests, 17 data tests and four trainer tests before the source was
+frozen at `5c5cc8f4d4d5d2f2441cf8072fc984d97c93ab46`. Engine/reference inference
+was bit-exact over both 24- and 4,096-position suites. The default build retained
+its exact depth-5 checksum and perft counts; the feature binary stayed classical
+until an explicit `EvalFile` was supplied.
+
+Fifteen interleaved benchmark runs were deterministic in both lanes. The
+subsequent strict 1,000-game screen used the same frozen executable for both
+players, 10,000 nodes/move, Threads=1, Hash=64 MiB, 500 color-reversed unique
+openings and seed `2026090201`. NNUE scored `177/633/190`, 27.20%, with reported
+`-171.02 +/- 20.09` logistic Elo. Independent replay verified all 1,000 normal
+terminations, 500 pairs, pentanomial `[195,117,143,39,6]`, 81,846 complete
+telemetry plies and zero runner anomaly. The screen rejects this network; it
+does not authorize an equal-time run, SPRT, release selection or Elo claim.

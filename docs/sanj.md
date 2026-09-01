@@ -37,9 +37,13 @@ worker owns a move-delta accumulator stack. The engine scalar output is checked
 bit-for-bit against the independent reference crate on frozen FEN suites.
 
 This is an experimental playing path, not a retained network or an Elo claim.
-Network selection still requires a new untouched final holdout, fixed-node and
-equal-time games, a normalized SPRT, longer-time-control confirmation, and an
-independent artifact audit. An empty `EvalFile` value selects classical SANJ.
+The retained N1e-16M artifact passed bit-exact inference and deterministic
+benchmark gates but scored only 27.20% in its independently audited 1,000-game
+equal-node screen (`177/633/190`). That network is rejected and must not be made
+the default. A replacement still requires a new untouched final holdout,
+fixed-node and equal-time games, a normalized SPRT, longer-time-control
+confirmation, and an independent artifact audit. An empty `EvalFile` value
+selects classical SANJ.
 
 ## Exact SANJ trace
 
@@ -70,4 +74,6 @@ record_id<TAB>target<TAB>FEN
 
 The raw coefficients reconstruct every current constant and formula exactly. A deterministic 100,000-position oracle compares the reconstruction with production evaluation. The schema is accounting infrastructure, not permission to change weights or add terms.
 
-NNUE remains deferred. A future evaluation interface may add a scalar incremental accumulator first, followed by exact scalar-versus-NEON tests. Training tooling must remain separate from the engine build.
+The scalar incremental interface now exists behind the non-default `nnue`
+feature. NEON/SIMD remains future work and must stay bit-exact with the scalar
+oracle. Training tooling remains separate from the engine build.

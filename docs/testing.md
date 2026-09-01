@@ -377,6 +377,15 @@ cargo test --manifest-path tools/nnue-data/Cargo.toml --locked
 
 The exact record, provenance, rules-only completion policy and geometric 1M/4M/16M/64M/256M gates are frozen in the [NNUE data contract](development/nnue-data.md). A small self-play shard proves process and replay mechanics only; fixed-node data generation is not strength testing.
 
+The first multi-thousand-game N1b infrastructure campaign used committed source
+`8e761d1`, 4,096 fresh deterministic opening groups, 512 nodes per move and an
+80/10/10 pre-generation split. Train and validation completed and independently
+replayed all 3,683 attempted games with zero rejection, producing 320,947 scored
+positions; all 413 holdout groups remained unplayed. Exact artifact, manifest
+and membership hashes are recorded in the NNUE data contract. These games prove
+recorder throughput and data integrity only: they neither train nor strengthen
+the current engine and do not satisfy the one-million-position pipeline gate.
+
 Run the deterministic Python gates with an environment containing the pinned dependencies:
 
 ```bash

@@ -48,6 +48,7 @@ All notable changes to NEYRANG are documented here.
 - P1 completed and independently audited 2,000 cumulative G1-versus-v0.2.0 games at 65.875% (`+114.26 +/-12.79 Elo`), with 2,000 normal terminations, complete telemetry, and zero allowed or rejected warning or other anomaly. This permits a separately registered SPRT but does not change the released version.
 - A two-shard real-binary smoke completed 8/8 games and passed independent coordinator replay with exact aggregate W/D/L and pentanomial counts. This validates infrastructure only and is not strength evidence.
 - P3 passed its frozen scaling gate at `2.010776x / 3.956388x` aggregate NPS for Threads 2/4. Its binding same-binary 2,000-game Threads-2-versus-Threads-1 screen then completed `711/701/588` (53.075%, `+21.39 +/-10.90 Elo`) with pentanomial `[57,184,437,223,99]`. Independent replay verified all 1,000 pairs and 196,758 plies with no timing, legality, crash, warning, or protocol anomaly. This retains P3 on the development branch but does not change version `0.2.0` or replace a separately preregistered normalized SPRT.
+- The first committed N1b recorder campaign completed and independently replayed 3,683/3,683 fixed-node train/validation games with zero rejection and 320,947 white-relative scored positions; 413 partitioned holdout openings were not played. This is data-pipeline evidence only, not training or Elo evidence, and remains below the one-million-position gate.
 
 ## [0.2.0] - 2026-08-29
 

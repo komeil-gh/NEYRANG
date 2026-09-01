@@ -56,6 +56,12 @@ but a production-scale million-position corpus, shard shuffle/interleave,
 trainer ingestion, exported network, and NNUE playing integration still do not
 exist.
 
+The first committed recorder campaign independently replayed 3,683/3,683
+train/validation games and 320,947 scored positions with zero rejection while
+leaving 413 assigned holdout openings unplayed. This is infrastructure evidence,
+not a training result or playing-strength claim; exact identities are in the
+[NNUE data contract](docs/development/nnue-data.md).
+
 No project license has been selected yet.
 
 ## Requirements and build

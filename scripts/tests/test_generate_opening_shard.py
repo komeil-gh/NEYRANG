@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 import sys
 import tempfile
@@ -65,6 +66,47 @@ class OpeningShardGeneratorTests(unittest.TestCase):
                 self.assertFalse(output.exists())
                 self.assertFalse(Path(f"{output}.manifest.json").exists())
 
+    def test_opt_in_duplicate_quarantine_retains_first_and_records_indices(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            attempted = [VALID_FENS[0], VALID_FENS[1], VALID_FENS[0], VALID_FENS[2]]
+            engine = write_fake_engine(root / "engine", attempted)
+            output = root / "deduplicated.epd"
+            config = make_config(
+                self.generator,
+                root,
+                engine,
+                output,
+                count=4,
+                quarantine_duplicate_openings=True,
+            )
+
+            manifest = self.generator.generate_shard(config)
+
+            self.assertEqual(
+                output.read_text(encoding="utf-8").splitlines(),
+                [VALID_FENS[0], VALID_FENS[1], VALID_FENS[2]],
+            )
+            self.assertEqual(manifest["artifact"]["openings"], 3)
+            self.assertEqual(manifest["audit"]["unique_canonical_positions"], 3)
+            self.assertEqual(manifest["generator"]["attempted_openings"], 4)
+            self.assertEqual(manifest["generator"]["last_seed"], 1)
+            self.assertEqual(
+                manifest["deduplication"],
+                {
+                    "attempted_openings": 4,
+                    "policy": "retain-first-canonical-occurrence-in-seed-order",
+                    "quarantined_duplicate_openings": 1,
+                    "quarantined_opening_indices": [3],
+                    "quarantined_opening_indices_encoding": (
+                        "one-based ASCII decimal, one LF-terminated index per line, "
+                        "occurrence order"
+                    ),
+                    "quarantined_opening_indices_sha256": hashlib.sha256(b"3\n").hexdigest(),
+                    "retained_openings": 3,
+                },
+            )
+
     def test_stalled_engine_is_terminated_without_partial_output(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -124,6 +166,7 @@ def make_config(generator, root: Path, engine: Path, output: Path, **overrides):
         "compiler_identity": "rustc 1.98.0 (test)",
         "source_license": "UNLICENSED-NEYRANG-INTERNAL",
         "stall_timeout_seconds": 15.0,
+        "quarantine_duplicate_openings": False,
     }
     values.update(overrides)
     return generator.ShardConfig(**values)

@@ -41,6 +41,7 @@ class ShardConfig:
     compiler_identity: str
     source_license: str
     stall_timeout_seconds: float = 15.0
+    quarantine_duplicate_openings: bool = False
 
 
 def parse_args() -> argparse.Namespace:
@@ -52,6 +53,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--generator-source-commit", required=True)
     parser.add_argument("--compiler-identity", required=True)
     parser.add_argument("--source-license", required=True)
+    parser.add_argument("--quarantine-duplicate-openings", action="store_true")
     return parser.parse_args()
 
 
@@ -68,6 +70,7 @@ def main() -> int:
             generator_source_commit=args.generator_source_commit,
             compiler_identity=args.compiler_identity,
             source_license=args.source_license,
+            quarantine_duplicate_openings=args.quarantine_duplicate_openings,
         )
         manifest = generate_shard(config)
         manifest_path = manifest_path_for(config.output)
@@ -96,10 +99,16 @@ def generate_shard(config: ShardConfig) -> dict[str, Any]:
 
     command_line = f"genfens {config.count} seed {config.seed} book None"
     fens = collect_engine_output(config, command_line)
-    audit = audit_fens(fens)
-    output_bytes = ("\n".join(fens) + "\n").encode("utf-8")
+    retained_fens, audit, duplicate_indices = audit_fens(
+        fens,
+        quarantine_duplicates=config.quarantine_duplicate_openings,
+    )
+    output_bytes = ("\n".join(retained_fens) + "\n").encode("utf-8")
     output_sha256 = hashlib.sha256(output_bytes).hexdigest()
     engine_sha256, engine_bytes = sha256_file(config.engine)
+    duplicate_indices_bytes = "".join(
+        f"{index}\n" for index in duplicate_indices
+    ).encode("ascii")
 
     manifest: dict[str, Any] = {
         "schema": "neyrang-genfens-shard-v1",
@@ -109,7 +118,7 @@ def generate_shard(config: ShardConfig) -> dict[str, Any]:
             "format": "full-six-field FEN, one opening per LF-terminated line",
             "bytes": len(output_bytes),
             "sha256": output_sha256,
-            "openings": len(fens),
+            "openings": len(retained_fens),
         },
         "generator": {
             "engine_path": relative(config.engine, config.repo_root),
@@ -120,6 +129,7 @@ def generate_shard(config: ShardConfig) -> dict[str, Any]:
             "evaluation": "NEYRANG HCE two-ply reply filter",
             "algorithm": "neyrang-genfens-2ply-hce-v1",
             "command": [command_line, "quit"],
+            "attempted_openings": config.count,
             "seed": config.seed,
             "last_seed": (config.seed + config.count - 1) & U64_MAX,
             "seed_bits": 64,
@@ -129,6 +139,24 @@ def generate_shard(config: ShardConfig) -> dict[str, Any]:
         "source": {
             "kind": "NEYRANG deterministic self-generated openings",
             "license": config.source_license,
+        },
+        "deduplication": {
+            "policy": (
+                "retain-first-canonical-occurrence-in-seed-order"
+                if config.quarantine_duplicate_openings
+                else "reject"
+            ),
+            "attempted_openings": config.count,
+            "retained_openings": len(retained_fens),
+            "quarantined_duplicate_openings": len(duplicate_indices),
+            "quarantined_opening_indices": duplicate_indices,
+            "quarantined_opening_indices_encoding": (
+                "one-based ASCII decimal, one LF-terminated index per line, "
+                "occurrence order"
+            ),
+            "quarantined_opening_indices_sha256": hashlib.sha256(
+                duplicate_indices_bytes
+            ).hexdigest(),
         },
         "audit": audit,
     }
@@ -267,8 +295,12 @@ def consume_stdout_lines(
     return current_deadline
 
 
-def audit_fens(fens: list[str]) -> dict[str, Any]:
+def audit_fens(
+    fens: list[str], *, quarantine_duplicates: bool
+) -> tuple[list[str], dict[str, Any], list[int]]:
     canonical_positions: set[str] = set()
+    retained_fens: list[str] = []
+    duplicate_indices: list[int] = []
     turns: Counter[str] = Counter()
     fullmoves: list[int] = []
     piece_counts: list[int] = []
@@ -287,22 +319,27 @@ def audit_fens(fens: list[str]) -> dict[str, Any]:
             raise GenerationError(f"opening {index} is terminal")
         canonical = " ".join(fen.split()[:4])
         if canonical in canonical_positions:
-            raise GenerationError(f"duplicate canonical position at opening {index}")
+            if not quarantine_duplicates:
+                raise GenerationError(f"duplicate canonical position at opening {index}")
+            duplicate_indices.append(index)
+            continue
         canonical_positions.add(canonical)
+        retained_fens.append(fen)
         turns["white" if board.turn == chess.WHITE else "black"] += 1
         fullmoves.append(board.fullmove_number)
         piece_counts.append(len(board.piece_map()))
 
-    return {
+    audit = {
         "auditor": "python-chess",
         "python_chess_version": chess.__version__,
-        "openings": len(fens),
-        "legal_nonterminal": len(fens),
+        "openings": len(retained_fens),
+        "legal_nonterminal": len(retained_fens),
         "unique_canonical_positions": len(canonical_positions),
         "side_to_move": dict(sorted(turns.items())),
         "fullmove_number": {"min": min(fullmoves), "max": max(fullmoves)},
         "piece_count": {"min": min(piece_counts), "max": max(piece_counts)},
     }
+    return retained_fens, audit, duplicate_indices
 
 
 def publish_manifest_then_output(

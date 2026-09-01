@@ -42,6 +42,9 @@ jobs:
       - name: NNUE data format
         run: cargo fmt --manifest-path tools/nnue-data/Cargo.toml --check
 
+      - name: NNUE trainer format
+        run: cargo fmt --manifest-path tools/nnue-trainer/Cargo.toml --check
+
       - name: Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
 
@@ -50,6 +53,10 @@ jobs:
 
       - name: NNUE data Clippy
         run: cargo clippy --manifest-path tools/nnue-data/Cargo.toml --all-targets -- -D warnings
+
+      - name: NNUE trainer Clippy
+        if: runner.os == 'macOS'
+        run: cargo clippy --manifest-path tools/nnue-trainer/Cargo.toml --all-targets -- -D warnings
 
       - name: Default tests
         run: cargo test --locked
@@ -62,6 +69,10 @@ jobs:
 
       - name: NNUE data tests
         run: cargo test --manifest-path tools/nnue-data/Cargo.toml --locked
+
+      - name: NNUE trainer tests
+        if: runner.os == 'macOS'
+        run: cargo test --manifest-path tools/nnue-trainer/Cargo.toml --locked
 
       - name: Python test environment
         run: |

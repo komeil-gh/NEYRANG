@@ -8,7 +8,7 @@ description = "Scalar correctness oracle for NEYRANG NNUE experiments"
 
 [dependencies]
 neyrang = { path = "../.." }
+neyrang-nnue-data = { path = "../nnue-data" }
 
 [lints.rust]
 unsafe_code = "forbid"
-

@@ -7,8 +7,16 @@ name = "neyrang"
 version = "0.2.0"
 
 [[package]]
+name = "neyrang-nnue-data"
+version = "0.2.0"
+dependencies = [
+ "neyrang",
+]
+
+[[package]]
 name = "neyrang-nnue-reference"
 version = "0.1.0"
 dependencies = [
  "neyrang",
+ "neyrang-nnue-data",
 ]

@@ -110,3 +110,60 @@ fn constructor_rejects_wrong_tensor_shapes() {
 
     assert!(matches!(result, Err(NetworkError::ShapeMismatch { .. })));
 }
+
+#[test]
+fn pinned_bullet_tensor_stream_imports_without_padding_ambiguity() {
+    let parameters = NetworkParameters {
+        activation_quant: 255,
+        output_quant: 64,
+        centipawn_scale: 400,
+    };
+    let bytes = fixture_bullet_quantised();
+
+    assert_eq!(
+        Network::from_bullet_quantised(&bytes, parameters),
+        Ok(fixture_network())
+    );
+}
+
+#[test]
+fn bullet_import_rejects_wrong_length_and_padding() {
+    let parameters = NetworkParameters {
+        activation_quant: 255,
+        output_quant: 64,
+        centipawn_scale: 400,
+    };
+    let bytes = fixture_bullet_quantised();
+
+    assert!(matches!(
+        Network::from_bullet_quantised(&bytes[..bytes.len() - 1], parameters),
+        Err(NetworkError::LengthMismatch { .. })
+    ));
+
+    let mut corrupt_padding = bytes;
+    let last = corrupt_padding.len() - 1;
+    corrupt_padding[last] ^= 1;
+    assert_eq!(
+        Network::from_bullet_quantised(&corrupt_padding, parameters),
+        Err(NetworkError::InvalidBulletPadding)
+    );
+}
+
+fn fixture_bullet_quantised() -> Vec<u8> {
+    let mut bytes = Vec::new();
+    for index in 0..INPUT_FEATURES * HIDDEN_SIZE {
+        bytes.extend_from_slice(&((index as i16 % 17) - 8).to_le_bytes());
+    }
+    for index in 0..HIDDEN_SIZE {
+        bytes.extend_from_slice(&((index as i16 % 11) - 5).to_le_bytes());
+    }
+    for index in 0..2 * HIDDEN_SIZE {
+        bytes.extend_from_slice(&((index as i16 % 7) - 3).to_le_bytes());
+    }
+    bytes.extend_from_slice(&23_i32.to_le_bytes());
+    let padding = 64 - bytes.len() % 64;
+    for index in 0..padding {
+        bytes.push(b"bullet"[index % 6]);
+    }
+    bytes
+}

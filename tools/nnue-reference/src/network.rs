@@ -61,6 +61,7 @@ pub enum NetworkError {
         expected: u32,
         actual: u32,
     },
+    InvalidBulletPadding,
 }
 
 impl fmt::Display for NetworkError {
@@ -104,6 +105,9 @@ impl fmt::Display for NetworkError {
                 formatter,
                 "network payload checksum {actual:08x} does not match {expected:08x}"
             ),
+            Self::InvalidBulletPadding => {
+                formatter.write_str("Bullet tensor stream has invalid 64-byte padding")
+            }
         }
     }
 }
@@ -205,6 +209,47 @@ impl Network {
         let output_weights = read_i16_values(payload, &mut cursor, OUTPUT_WEIGHT_COUNT);
         let output_bias = read_i32(payload, cursor);
 
+        Self::new(
+            parameters,
+            feature_weights,
+            feature_bias,
+            output_weights,
+            output_bias,
+        )
+    }
+
+    /// Import the exact padded tensor stream emitted by the pinned Bullet trainer.
+    ///
+    /// Tensor order is feature weights, feature bias, output weights and an `i32`
+    /// output bias. Bullet pads the combined stream to 64 bytes with a repeating
+    /// `bullet` marker; both the length and every padding byte are checked.
+    pub fn from_bullet_quantised(
+        bytes: &[u8],
+        parameters: NetworkParameters,
+    ) -> Result<Self, NetworkError> {
+        validate_parameters(parameters)?;
+        let expected_length = PAYLOAD_SIZE.div_ceil(64) * 64;
+        if bytes.len() != expected_length {
+            return Err(NetworkError::LengthMismatch {
+                expected: expected_length,
+                actual: bytes.len(),
+            });
+        }
+        let padding = &bytes[PAYLOAD_SIZE..];
+        if padding
+            .iter()
+            .enumerate()
+            .any(|(index, &byte)| byte != b"bullet"[index % 6])
+        {
+            return Err(NetworkError::InvalidBulletPadding);
+        }
+
+        let payload = &bytes[..PAYLOAD_SIZE];
+        let mut cursor = 0;
+        let feature_weights = read_i16_values(payload, &mut cursor, FEATURE_WEIGHT_COUNT);
+        let feature_bias = read_i16_values(payload, &mut cursor, FEATURE_BIAS_COUNT);
+        let output_weights = read_i16_values(payload, &mut cursor, OUTPUT_WEIGHT_COUNT);
+        let output_bias = read_i32(payload, cursor);
         Self::new(
             parameters,
             feature_weights,

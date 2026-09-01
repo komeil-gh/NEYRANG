@@ -1,0 +1,14 @@
+[package]
+name = "neyrang-nnue-trainer"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+publish = false
+description = "Pinned Bullet training entry point for NEYRANG NNUE experiments"
+
+[dependencies]
+bullet = { git = "https://github.com/jw1912/bullet", rev = "629ee50000b2afb7b3337595401c830d3b1e0f42", package = "bullet_lib", features = ["metal"] }
+bullet-trainer = { git = "https://github.com/jw1912/bullet", rev = "629ee50000b2afb7b3337595401c830d3b1e0f42" }
+
+[lints.rust]
+unsafe_code = "forbid"

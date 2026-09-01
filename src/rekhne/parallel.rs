@@ -3,25 +3,64 @@ use std::{
     time::Instant,
 };
 
-use crate::chess::{Move, Position};
+use crate::{
+    chess::{Move, Position},
+    sanj,
+};
 
 use super::{
     SearchInfo, SearchLimits, SearchResult, SearchStatistics, Searcher, driver::SearchProgress,
     tt::TranspositionTable,
 };
 
+pub(crate) struct ParallelOptions {
+    threads: usize,
+    evaluator: sanj::Evaluator,
+}
+
+impl ParallelOptions {
+    pub(crate) const fn new(threads: usize, evaluator: sanj::Evaluator) -> Self {
+        Self { threads, evaluator }
+    }
+}
+
+#[cfg(test)]
 pub(crate) fn search_parallel<F>(
     position: &Position,
     limits: &SearchLimits,
     game_hashes: &[u64],
     threads: usize,
     stop: &AtomicBool,
+    table: TranspositionTable,
+    on_info: F,
+) -> (SearchResult, TranspositionTable)
+where
+    F: FnMut(&SearchInfo),
+{
+    search_parallel_with_evaluator(
+        position,
+        limits,
+        game_hashes,
+        stop,
+        table,
+        ParallelOptions::new(threads, sanj::Evaluator::classical()),
+        on_info,
+    )
+}
+
+pub(crate) fn search_parallel_with_evaluator<F>(
+    position: &Position,
+    limits: &SearchLimits,
+    game_hashes: &[u64],
+    stop: &AtomicBool,
     mut table: TranspositionTable,
+    options: ParallelOptions,
     mut on_info: F,
 ) -> (SearchResult, TranspositionTable)
 where
     F: FnMut(&SearchInfo),
 {
+    let ParallelOptions { threads, evaluator } = options;
     assert!(threads > 1, "parallel search requires at least two workers");
     assert!(table.is_shared(), "parallel search requires a shared TT");
 
@@ -40,6 +79,7 @@ where
             let mut worker_position = position.clone();
             let worker_table = table.shared_handle();
             let worker_global_nodes = global_nodes.as_ref();
+            let worker_evaluator = evaluator.clone();
             let preferred = if root_moves.is_empty() {
                 None
             } else {
@@ -48,11 +88,12 @@ where
             helpers.push((
                 worker,
                 scope.spawn(move || {
-                    let mut searcher = Searcher::with_parallel_context(
+                    let mut searcher = Searcher::with_parallel_context_and_evaluator(
                         stop,
                         worker_table,
                         worker_global_nodes,
                         worker_progress,
+                        worker_evaluator,
                     );
                     searcher.search_prepared(
                         &mut worker_position,
@@ -67,8 +108,13 @@ where
         }
 
         let mut main_position = position.clone();
-        let mut main_searcher =
-            Searcher::with_parallel_context(stop, table, global_nodes.as_ref(), &progress[0]);
+        let mut main_searcher = Searcher::with_parallel_context_and_evaluator(
+            stop,
+            table,
+            global_nodes.as_ref(),
+            &progress[0],
+            evaluator,
+        );
         let main_result = main_searcher.search_prepared(
             &mut main_position,
             limits,

@@ -20,6 +20,27 @@ The compact formula-based PSQT is intentionally inspectable and avoids importing
 
 Known limitations include limited king attack modeling, no pawn hash, no threats/space/outposts, and no tuning against game data. The evaluator is a clean bootstrap for search, not a strength claim.
 
+## Experimental NNUE judgment
+
+The non-default `nnue` feature adds the first N2 engine path without changing
+classical SANJ as the default:
+
+```bash
+cargo build --release --features nnue
+target/release/neyrang bench-nnue /path/to/network.nnue 5
+```
+
+The feature exposes the UCI string option `EvalFile`. A non-empty path must be a
+complete version-1 `NEYRANG\0` Chess768 artifact; decoding is fail-closed. The
+loaded network is immutable and shared across Lazy-SMP workers, while every
+worker owns a move-delta accumulator stack. The engine scalar output is checked
+bit-for-bit against the independent reference crate on frozen FEN suites.
+
+This is an experimental playing path, not a retained network or an Elo claim.
+Network selection still requires a new untouched final holdout, fixed-node and
+equal-time games, a normalized SPRT, longer-time-control confirmation, and an
+independent artifact audit. An empty `EvalFile` value selects classical SANJ.
+
 ## Exact SANJ trace
 
 The development branch includes a feature-gated, streaming trace for dataset work. It is an independent reconstruction rather than instrumentation in the tournament hot path. The normal release remains byte-for-byte identical to the accepted G1 binary.

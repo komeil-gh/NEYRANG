@@ -1,3 +1,5 @@
+#[cfg(feature = "nnue")]
+use std::fs;
 use std::{
     io::{self, BufRead, Write},
     sync::{
@@ -12,8 +14,8 @@ use crate::{
     chess::{Color, Position, perft},
     engine::info::{ENGINE_AUTHOR, ENGINE_NAME, ENGINE_VERSION},
     rekhne::{
-        MAX_PLY, SearchInfo, SearchLimits, Searcher, VALUE_MATE, search_parallel,
-        time::TimeManager, tt::TranspositionTable,
+        MAX_PLY, ParallelOptions, SearchInfo, SearchLimits, Searcher, VALUE_MATE,
+        search_parallel_with_evaluator, time::TimeManager, tt::TranspositionTable,
     },
     sanj,
 };
@@ -53,6 +55,7 @@ struct UciEngine {
     move_overhead_ms: u64,
     active: Option<ActiveSearch>,
     table: Option<TranspositionTable>,
+    evaluator: sanj::Evaluator,
 }
 
 impl UciEngine {
@@ -67,6 +70,7 @@ impl UciEngine {
             move_overhead_ms: DEFAULT_MOVE_OVERHEAD_MS,
             active: None,
             table: Some(table_for(DEFAULT_HASH_MB, 1)),
+            evaluator: sanj::Evaluator::classical(),
         }
     }
 
@@ -110,7 +114,7 @@ impl UciEngine {
             Command::Evaluate => {
                 send_line(&format!(
                     "info string eval {} cp",
-                    sanj::evaluate(&self.position)
+                    self.evaluator.evaluate(&self.position)
                 ))?;
             }
             Command::Perft(depth) => {
@@ -138,6 +142,8 @@ impl UciEngine {
         send_line(&format!(
             "option name Move Overhead type spin default {DEFAULT_MOVE_OVERHEAD_MS} min 0 max 5000"
         ))?;
+        #[cfg(feature = "nnue")]
+        send_line("option name EvalFile type string default <empty>")?;
         send_line("uciok")
     }
 
@@ -194,6 +200,21 @@ impl UciEngine {
                 }
                 self.move_overhead_ms = parsed;
             }
+            #[cfg(feature = "nnue")]
+            "evalfile" => {
+                self.evaluator = if value.is_empty() || value == "<empty>" {
+                    sanj::Evaluator::classical()
+                } else {
+                    let bytes = fs::read(value)
+                        .map_err(|error| format!("cannot read EvalFile '{value}': {error}"))?;
+                    let network = sanj::nnue::Network::from_bytes(&bytes)
+                        .map_err(|error| format!("invalid EvalFile '{value}': {error}"))?;
+                    sanj::Evaluator::nnue(network)
+                };
+                if let Some(table) = &mut self.table {
+                    table.clear();
+                }
+            }
             _ => return Err(format!("unknown option '{name}'")),
         }
         Ok(())
@@ -207,6 +228,7 @@ impl UciEngine {
         let stop = Arc::new(AtomicBool::new(false));
         let worker_stop = Arc::clone(&stop);
         let threads = self.threads;
+        let evaluator = self.evaluator.clone();
         let table = self
             .table
             .take()
@@ -214,19 +236,20 @@ impl UciEngine {
         let handle = thread::spawn(move || {
             let (result, table) = if threads == 1 {
                 let mut position = position;
-                let mut searcher = Searcher::with_table(&worker_stop, table);
+                let mut searcher =
+                    Searcher::with_table_and_evaluator(&worker_stop, table, evaluator);
                 let result = searcher.search(&mut position, &limits, &game_hashes, |info| {
                     let _ = send_line(&format_info(info));
                 });
                 (result, searcher.into_table())
             } else {
-                search_parallel(
+                search_parallel_with_evaluator(
                     &position,
                     &limits,
                     &game_hashes,
-                    threads,
                     &worker_stop,
                     table,
+                    ParallelOptions::new(threads, evaluator),
                     |info| {
                         let _ = send_line(&format_info(info));
                     },

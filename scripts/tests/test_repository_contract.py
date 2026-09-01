@@ -68,7 +68,9 @@ class RepositoryContractTests(unittest.TestCase):
     def test_nnue_reference_is_isolated_and_documented(self) -> None:
         cargo = self.read("tools/nnue-reference/Cargo.toml")
         specification = self.read("docs/development/nnue-reference.md")
-        self.assertIn('neyrang = { path = "../.." }', cargo)
+        self.assertIn(
+            'neyrang = { path = "../..", features = ["nnue"] }', cargo
+        )
         self.assertIn('unsafe_code = "forbid"', cargo)
         self.assertIn(r"NEYRANG\0", specification)
         self.assertIn("No playing-strength claim", specification)

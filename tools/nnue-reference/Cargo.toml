@@ -7,7 +7,7 @@ publish = false
 description = "Scalar correctness oracle for NEYRANG NNUE experiments"
 
 [dependencies]
-neyrang = { path = "../.." }
+neyrang = { path = "../..", features = ["nnue"] }
 neyrang-nnue-data = { path = "../nnue-data" }
 
 [lints.rust]

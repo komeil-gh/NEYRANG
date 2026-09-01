@@ -19,6 +19,16 @@ into UCI or REKHNE. Historical byte-identity claims remain attached to their
 recorded pre-rename commits; the identity migration necessarily changes the
 binary bytes.
 
+The experimental N2 path is separately isolated behind the non-default `nnue`
+feature. The UCI engine starts with classical SANJ even in that build and only
+loads a network after an explicit `EvalFile` option passes the version-1
+`NEYRANG\0` decoder. Each searcher owns its accumulator stack; Lazy-SMP workers
+share only an immutable `Arc` network and never share mutable accumulator state.
+Ordinary moves, captures, en-passant, castling, promotions, re-searches, and
+null moves all preserve the scalar full-refresh oracle. The engine
+implementation is intentionally independent from `tools/nnue-reference`. SIMD
+and default activation remain later evidence gates.
+
 The engine has no runtime dependencies outside `std`. Strings, vectors, threads, and I/O remain at root/tool/protocol boundaries. A search node uses fixed move buffers and stack-based undo state.
 
 ## Position representation
@@ -72,4 +82,6 @@ replays the packed output through python-chess, verifies terminal WDL, and only
 then publishes a no-clobber corpus plus manifest. No training-data I/O or
 provenance branch enters the REKHNE hot path.
 
-No x86 or ARM intrinsics are currently required. CPU-specific NNUE or attack code must stay behind isolated platform modules when introduced.
+No x86 or ARM intrinsics are currently required. The N2 scalar NNUE path is the
+bit-exact fallback/oracle. CPU-specific NNUE or attack code must stay behind
+isolated platform modules when introduced.

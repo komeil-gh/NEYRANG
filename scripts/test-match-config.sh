@@ -197,6 +197,39 @@ fi
 
 echo "per-engine Threads configuration test passed"
 
+network_fixture="$repo_root/scripts/openings.epd"
+network_sha256="$(shasum -a 256 "$network_fixture" | awk '{print $1}')"
+nnue_meta_out="$scratch/nnue.meta.txt"
+nnue_output="$(
+    DRY_RUN=1 \
+    FASTCHESS_BIN=true \
+    ENGINE_A=/usr/bin/true \
+    ENGINE_B=/usr/bin/true \
+    ENGINE_A_EVAL_FILE="$network_fixture" \
+    OPENINGS_FILE="$repo_root/scripts/openings.epd" \
+    GAMES=10 \
+    META_OUT="$nnue_meta_out" \
+    PGN_OUT="$scratch/nnue.pgn" \
+    "$script_dir/match.sh"
+)"
+
+if [[ "$nnue_output" != *"name=NEYRANG-new option.EvalFile=$network_fixture"* ]]; then
+    echo "NNUE dry-run output is missing the candidate EvalFile" >&2
+    exit 1
+fi
+for expected in \
+    "engine_a_eval_file=$network_fixture" \
+    "engine_a_eval_file_sha256=$network_sha256" \
+    "engine_b_eval_file=" \
+    "engine_b_eval_file_sha256="; do
+    if ! grep -Fqx "$expected" "$nnue_meta_out"; then
+        echo "NNUE metadata is missing: $expected" >&2
+        exit 1
+    fi
+done
+
+echo "per-engine EvalFile configuration test passed"
+
 compat_meta_out="$scratch/compat.meta.txt"
 compat_output="$(
     DRY_RUN=1 \
@@ -237,6 +270,7 @@ sprt_output="$(
     FASTCHESS_BIN=true \
     ENGINE_A=/usr/bin/true \
     ENGINE_B=/usr/bin/true \
+    ENGINE_A_EVAL_FILE="$network_fixture" \
     ENGINE_A_GIT_SHA=candidate-sha \
     ENGINE_B_GIT_SHA=baseline-sha \
     OPENINGS_FILE="$repo_root/scripts/openings.epd" \
@@ -272,6 +306,11 @@ for expected in \
     fi
 done
 
+if [[ "$sprt_output" != *"name=NEYRANG-candidate option.EvalFile=$network_fixture"* ]]; then
+    echo "SPRT dry-run output is missing the candidate EvalFile" >&2
+    exit 1
+fi
+
 if [[ ! -f "$sprt_meta_out" ]]; then
     echo "SPRT metadata file was not created" >&2
     exit 1
@@ -280,6 +319,8 @@ fi
 for expected in \
     "engine_a_git_sha=candidate-sha" \
     "engine_b_git_sha=baseline-sha" \
+    "engine_a_eval_file=$network_fixture" \
+    "engine_a_eval_file_sha256=$network_sha256" \
     "opening_seed=20260829" \
     "sprt_model=normalized" \
     "rounds=20" \

@@ -8,6 +8,7 @@ Every change should pass:
 cargo fmt --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test
+cargo test --all-features
 cargo test --features stats
 cargo build --release
 ```
@@ -41,6 +42,17 @@ Expected nodes are 4,865,609; 4,085,603; and 674,624 respectively.
 ## Deterministic benchmark
 
 The benchmark searches five fixed positions at depth 5. Nodes and checksum must be identical for the same engine revision. Time and NPS are machine- and load-dependent; use `scripts/bench.sh` for repeated runs and compare medians under similar thermal/background conditions.
+
+Feature-gated NNUE correctness and end-to-end search checks use:
+
+```bash
+cargo test --features nnue --test nnue --test nnue_cli --test nnue_uci
+cargo run --release --features nnue -- \
+  bench-nnue /path/to/registered-network.nnue 5
+```
+
+The NNUE benchmark records its own semantic tree and checksum. It must not be
+compared with the classical tree as if the evaluator were a speed-only change.
 
 Legacy NEYRANG 0.1.0 ARM64 release baseline on the development Apple Silicon host:
 
@@ -169,6 +181,11 @@ The [0.3 timing audit](development/0.3.0-timing-audit.md) records the exact arch
 Run `scripts/test-match-config.sh` before comparative testing. Use `scripts/regression.sh` for paired parent-versus-candidate games, `scripts/match.sh` for fixed-size or node-limited comparisons, and `scripts/sprt.sh` for longer patch decisions. The runners expose a fixed opening seed and record binary/Git/opening/fastchess checksums, complete PGN telemetry, logs, and metadata beside the requested PGN.
 
 `match.sh` normally applies `THREADS` to both engines. A registered resource-scaling comparison may instead omit `THREADS` and set both `ENGINE_A_THREADS` and `ENGINE_B_THREADS`; partial or mixed shared/per-engine configuration is rejected. The runner records `thread_mode` and both effective values, so a same-binary Threads-2-versus-Threads-1 match remains independently auditable.
+
+For HCE-versus-NNUE matches built from the same feature-enabled binary, set
+`ENGINE_A_EVAL_FILE` only for the NNUE side. `match.sh` and `sprt.sh` pass that
+option only to the named engine and record the path plus full SHA-256 in match
+metadata. A feature build without an `EvalFile` remains classical.
 
 Keep engine settings equal, reverse colors, use an audited balanced opening suite, retain PGNs, and report games/W/D/L/score/Elo confidence intervals. The eight bundled openings are only a smoke/development set. The frozen 0.2.0 development configuration is recorded in [the baseline document](development/0.2.0-baseline.md), and feature outcomes belong in [the experiment ledger](development/experiments.md).
 
@@ -417,8 +434,9 @@ parent position. Train/validation quantized MSE is `0.064639433087` /
 Repeated Metal training is not bit-reproducible: the selected and repeat
 quantized artifacts differ in 2,453 bytes despite fixed input order and the same
 displayed loss trajectory. This is recorded as an open reproducibility limit,
-not hidden by selecting a favorable rerun. The network is not linked into the
-playing engine and no game or Elo claim follows from this gate.
+not hidden by selecting a favorable rerun. At that N1c boundary the network was
+not linked into the playing engine, and no game or Elo claim followed from the
+gate.
 
 N1d added a 45,000-opening campaign under the same frozen generator and split
 policy. Combining all three campaigns initially exposed two repeated canonical
@@ -463,8 +481,8 @@ registered game-bootstrap interval is
 
 Root/default, root/stats, data/reference/trainer and Python suites passed
 `88/101/17/31/4/83` tests. Formatter checks and warnings-denied Clippy passed for
-the root plus every NNUE crate. This remains offline evidence: no NNUE path
-entered the engine and no game or Elo result was produced.
+the root plus every NNUE crate. Those counts describe the N1e offline boundary:
+no NNUE path had entered the engine and no game or Elo result was produced.
 
 Run the deterministic Python gates with an environment containing the pinned dependencies:
 

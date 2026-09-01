@@ -7,7 +7,7 @@ line. The four names have distinct technical ownership:
 | --- | --- | --- |
 | **NEYRANG** | the chess engine | Cargo package/crate `neyrang`, executable `neyrang`, UCI identity `NEYRANG` |
 | **REKHNE** | the strategy it searches with | `src/rekhne`: iterative search, qsearch, TT, limits, time, and parallel coordination |
-| **SANJ** | the judgment it evaluates with | `src/sanj`: handcrafted evaluation and the optional exact trace boundary |
+| **SANJ** | the judgment it evaluates with | `src/sanj`: default handcrafted evaluation, optional exact trace, and feature-gated NNUE judgment |
 | **SHEGERD** | techniques that make it stronger | `src/shegerd`: staged move ordering, history heuristics, and SEE |
 
 These boundaries prevent the names from becoming aliases for the same layer.
@@ -20,6 +20,9 @@ tool boundaries around the four named concepts.
 - UCI name: `NEYRANG 0.3.0-dev`
 - evaluation evidence feature: `sanj-tools`
 - evaluation evidence command: `neyrang sanj-trace`
+- experimental evaluation feature: `nnue`
+- experimental UCI option: `EvalFile`
+- experimental benchmark: `neyrang bench-nnue`
 - current schema prefix: `neyrang-`
 - version-1 NNUE magic: the eight bytes `NEYRANG\0`
 - NNUE tool packages: `neyrang-nnue-data`, `neyrang-nnue-reference`, and

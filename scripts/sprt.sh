@@ -9,6 +9,8 @@ candidate="${ENGINE_A:-$repo_root/target/release/neyrang}"
 baseline="${ENGINE_B:-}"
 candidate_name="${ENGINE_A_NAME:-NEYRANG-candidate}"
 baseline_name="${ENGINE_B_NAME:-NEYRANG-parent}"
+candidate_eval_file="${ENGINE_A_EVAL_FILE:-}"
+baseline_eval_file="${ENGINE_B_EVAL_FILE:-}"
 rounds="${ROUNDS:-100000}"
 concurrency="${CONCURRENCY:-1}"
 time_control="${TC:-10+0.1}"
@@ -45,6 +47,16 @@ if [[ ! -x "$candidate" || ! -x "$baseline" ]]; then
     echo "Both ENGINE_A and ENGINE_B must be executable" >&2
     exit 2
 fi
+for eval_file in "$candidate_eval_file" "$baseline_eval_file"; do
+    if [[ -n "$eval_file" && ! -r "$eval_file" ]]; then
+        echo "EvalFile is not readable: $eval_file" >&2
+        exit 2
+    fi
+    if [[ "$eval_file" == *$'\n'* || "$eval_file" == *$'\r'* ]]; then
+        echo "EvalFile paths must be single-line values" >&2
+        exit 2
+    fi
+done
 if [[ "$fastchess_bin" == */* ]]; then
     fastchess_path="$fastchess_bin"
 else
@@ -101,6 +113,14 @@ fastchess_version="$("$fastchess_path" --version 2>/dev/null || true)"
 fastchess_version="${fastchess_version:-unknown}"
 candidate_sha256="$(sha256_file "$candidate")"
 baseline_sha256="$(sha256_file "$baseline")"
+candidate_eval_file_sha256=""
+baseline_eval_file_sha256=""
+if [[ -n "$candidate_eval_file" ]]; then
+    candidate_eval_file_sha256="$(sha256_file "$candidate_eval_file")"
+fi
+if [[ -n "$baseline_eval_file" ]]; then
+    baseline_eval_file_sha256="$(sha256_file "$baseline_eval_file")"
+fi
 openings_sha256="$(sha256_file "$openings_file")"
 fastchess_sha256="$(sha256_file "$fastchess_path")"
 
@@ -116,7 +136,15 @@ fi
 command=(
     "$fastchess_path"
     -engine "cmd=$candidate" "name=$candidate_name"
-    -engine "cmd=$baseline" "name=$baseline_name"
+)
+if [[ -n "$candidate_eval_file" ]]; then
+    command+=("option.EvalFile=$candidate_eval_file")
+fi
+command+=(-engine "cmd=$baseline" "name=$baseline_name")
+if [[ -n "$baseline_eval_file" ]]; then
+    command+=("option.EvalFile=$baseline_eval_file")
+fi
+command+=(
     -each "${time_options[@]}" "${engine_options[@]}"
     -openings "file=$openings_file" format=epd "order=$opening_order"
     -srand "$opening_seed"
@@ -144,10 +172,14 @@ fi
     echo "engine_a_name=$candidate_name"
     echo "engine_a_git_sha=$candidate_git_sha"
     echo "engine_a_sha256=$candidate_sha256"
+    echo "engine_a_eval_file=$candidate_eval_file"
+    echo "engine_a_eval_file_sha256=$candidate_eval_file_sha256"
     echo "engine_b=$baseline"
     echo "engine_b_name=$baseline_name"
     echo "engine_b_git_sha=$baseline_git_sha"
     echo "engine_b_sha256=$baseline_sha256"
+    echo "engine_b_eval_file=$baseline_eval_file"
+    echo "engine_b_eval_file_sha256=$baseline_eval_file_sha256"
     echo "fastchess=$fastchess_path"
     echo "fastchess_version=$fastchess_version"
     echo "fastchess_sha256=$fastchess_sha256"

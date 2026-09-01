@@ -8,6 +8,7 @@ use crate::rekhne::SearchStatistics;
 use crate::{
     chess::Position,
     rekhne::{SearchLimits, Searcher, tt::TranspositionTable},
+    sanj::Evaluator,
 };
 
 const POSITIONS: [&str; 5] = [
@@ -36,6 +37,10 @@ impl BenchmarkResult {
 }
 
 pub fn run(depth: u8) -> Result<BenchmarkResult, String> {
+    run_with_evaluator(depth, Evaluator::classical())
+}
+
+pub fn run_with_evaluator(depth: u8, evaluator: Evaluator) -> Result<BenchmarkResult, String> {
     let mut table = TranspositionTable::new(16);
     let started = Instant::now();
     let mut nodes = 0_u64;
@@ -46,7 +51,7 @@ pub fn run(depth: u8) -> Result<BenchmarkResult, String> {
         let mut position = Position::from_fen(fen).map_err(|error| error.to_string())?;
         let hashes = [position.hash()];
         let stop = AtomicBool::new(false);
-        let mut searcher = Searcher::with_table(&stop, table);
+        let mut searcher = Searcher::with_table_and_evaluator(&stop, table, evaluator.clone());
         let result = searcher.search(&mut position, &SearchLimits::depth(depth), &hashes, |_| {});
         nodes = nodes.saturating_add(result.nodes);
         let best = result.best_move.map_or(0, |mv| u64::from(mv.raw()));

@@ -5,6 +5,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[cfg(feature = "nnue")]
+use crate::sanj::nnue::AccumulatorPair;
 use crate::{
     chess::{Move, MoveList, PieceType, Position},
     sanj,
@@ -272,6 +274,9 @@ pub struct Searcher<'a> {
     tt: TranspositionTable,
     killers: [[Move; 2]; MAX_PLY],
     history: HistoryTable,
+    evaluator: sanj::Evaluator,
+    #[cfg(feature = "nnue")]
+    accumulators: Vec<AccumulatorPair>,
     statistics: SearchStatistics,
 }
 
@@ -288,13 +293,22 @@ impl<'a> Searcher<'a> {
         Self::with_context(stop, tt, None, None)
     }
 
-    pub(crate) fn with_parallel_context(
+    pub fn with_table_and_evaluator(
+        stop: &'a AtomicBool,
+        tt: TranspositionTable,
+        evaluator: sanj::Evaluator,
+    ) -> Self {
+        Self::with_evaluator_context(stop, tt, None, None, evaluator)
+    }
+
+    pub(crate) fn with_parallel_context_and_evaluator(
         stop: &'a AtomicBool,
         tt: TranspositionTable,
         global_nodes: Option<&'a AtomicU64>,
         progress: &'a SearchProgress,
+        evaluator: sanj::Evaluator,
     ) -> Self {
-        Self::with_context(stop, tt, global_nodes, Some(progress))
+        Self::with_evaluator_context(stop, tt, global_nodes, Some(progress), evaluator)
     }
 
     fn with_context(
@@ -302,6 +316,22 @@ impl<'a> Searcher<'a> {
         tt: TranspositionTable,
         global_nodes: Option<&'a AtomicU64>,
         progress: Option<&'a SearchProgress>,
+    ) -> Self {
+        Self::with_evaluator_context(
+            stop,
+            tt,
+            global_nodes,
+            progress,
+            sanj::Evaluator::classical(),
+        )
+    }
+
+    fn with_evaluator_context(
+        stop: &'a AtomicBool,
+        tt: TranspositionTable,
+        global_nodes: Option<&'a AtomicU64>,
+        progress: Option<&'a SearchProgress>,
+        evaluator: sanj::Evaluator,
     ) -> Self {
         Self {
             stop,
@@ -319,6 +349,9 @@ impl<'a> Searcher<'a> {
             tt,
             killers: [[Move::NONE; 2]; MAX_PLY],
             history: HistoryTable::default(),
+            evaluator,
+            #[cfg(feature = "nnue")]
+            accumulators: Vec::with_capacity(MAX_PLY),
             statistics: SearchStatistics::default(),
         }
     }
@@ -390,7 +423,7 @@ impl<'a> Searcher<'a> {
             .filter(|preferred| root_moves.iter().any(|&mv| mv == *preferred))
             .unwrap_or(fallback);
         let mut best_move = initial_preferred;
-        let mut best_score = sanj::evaluate(position);
+        let mut best_score = self.evaluate_position(position, 0);
         let mut best_depth = 0_u8;
         let mut best_pv = vec![initial_preferred];
         let max_depth = limits.depth.unwrap_or((MAX_PLY - 2) as u8).max(1);
@@ -506,6 +539,14 @@ impl<'a> Searcher<'a> {
             self.tt.new_search();
         }
         self.killers.fill([Move::NONE; 2]);
+        #[cfg(feature = "nnue")]
+        {
+            self.accumulators.clear();
+            if let Some(network) = self.evaluator.network() {
+                self.accumulators
+                    .push(AccumulatorPair::refresh(position, network));
+            }
+        }
         if let Some(progress) = self.progress {
             progress.reset();
         }
@@ -542,7 +583,7 @@ impl<'a> Searcher<'a> {
         context: SearchContext,
     ) -> i32 {
         if ply >= MAX_PLY - 1 {
-            return sanj::evaluate(position);
+            return self.evaluate_position(position, ply);
         }
         self.visit_node(false);
         self.seldepth = self.seldepth.max(ply);
@@ -623,12 +664,13 @@ impl<'a> Searcher<'a> {
             && beta > -mate_bound
             && beta < mate_bound
             && has_meaningful_non_pawn_material(position)
-            && sanj::evaluate(position) >= beta
+            && self.evaluate_position(position, ply) >= beta
         {
             #[cfg(feature = "stats")]
             {
                 self.statistics.null_move_attempts += 1;
             }
+            self.push_null_accumulator(ply);
             let undo = position.make_null_move();
             let score = -self.negamax(
                 position,
@@ -639,6 +681,7 @@ impl<'a> Searcher<'a> {
                 context.after_null(),
             );
             position.unmake_null_move(undo);
+            self.pop_accumulator(ply);
             if self.stopped {
                 return VALUE_DRAW;
             }
@@ -689,6 +732,7 @@ impl<'a> Searcher<'a> {
                 && tt_move != Some(mv)
                 && !self.killers[ply].contains(&mv)
                 && self.history.score(moving_color, mv) < HistoryTable::MAX_SCORE / 4;
+            self.push_move_accumulator(position, mv, ply);
             let undo = position.make_move(mv);
             let gives_check = can_reduce && position.is_in_check(position.side_to_move());
             if !context.in_null_subtree {
@@ -766,6 +810,7 @@ impl<'a> Searcher<'a> {
                 self.hashes.pop();
             }
             position.unmake_move(mv, undo);
+            self.pop_accumulator(ply);
 
             if self.stopped {
                 #[cfg(feature = "stats")]
@@ -831,7 +876,7 @@ impl<'a> Searcher<'a> {
         context: SearchContext,
     ) -> i32 {
         if ply >= MAX_PLY - 1 {
-            return sanj::evaluate(position);
+            return self.evaluate_position(position, ply);
         }
         self.visit_node(true);
         self.seldepth = self.seldepth.max(ply);
@@ -845,7 +890,7 @@ impl<'a> Searcher<'a> {
 
         let in_check = position.is_in_check(position.side_to_move());
         if !in_check {
-            let stand_pat = sanj::evaluate(position);
+            let stand_pat = self.evaluate_position(position, ply);
             if stand_pat >= beta {
                 return stand_pat;
             }
@@ -884,6 +929,7 @@ impl<'a> Searcher<'a> {
                     }
                 }
             }
+            self.push_move_accumulator(position, mv, ply);
             let undo = position.make_move(mv);
             if !context.in_null_subtree {
                 self.hashes.push(position.repetition_hash());
@@ -893,6 +939,7 @@ impl<'a> Searcher<'a> {
                 self.hashes.pop();
             }
             position.unmake_move(mv, undo);
+            self.pop_accumulator(ply);
 
             if self.stopped {
                 #[cfg(feature = "stats")]
@@ -919,6 +966,51 @@ impl<'a> Searcher<'a> {
             self.record_ordering_statistics(picker.statistics());
         }
         alpha
+    }
+
+    #[inline]
+    fn evaluate_position(&self, position: &Position, ply: usize) -> i32 {
+        #[cfg(feature = "nnue")]
+        if let Some(network) = self.evaluator.network() {
+            let accumulator = self
+                .accumulators
+                .get(ply)
+                .expect("NNUE accumulator stack must match the search ply");
+            return network.evaluate_accumulator(accumulator, position.side_to_move());
+        }
+        let _ = ply;
+        self.evaluator.evaluate(position)
+    }
+
+    #[inline]
+    fn push_move_accumulator(&mut self, position: &Position, mv: Move, ply: usize) {
+        #[cfg(feature = "nnue")]
+        if let Some(network) = self.evaluator.network() {
+            debug_assert_eq!(self.accumulators.len(), ply + 1);
+            let next = self.accumulators[ply].after_move(position, mv, network);
+            self.accumulators.push(next);
+        }
+        let _ = (position, mv, ply);
+    }
+
+    #[inline]
+    fn push_null_accumulator(&mut self, ply: usize) {
+        #[cfg(feature = "nnue")]
+        if self.evaluator.network().is_some() {
+            debug_assert_eq!(self.accumulators.len(), ply + 1);
+            self.accumulators.push(self.accumulators[ply].clone());
+        }
+        let _ = ply;
+    }
+
+    #[inline]
+    fn pop_accumulator(&mut self, ply: usize) {
+        #[cfg(feature = "nnue")]
+        if self.evaluator.network().is_some() {
+            debug_assert_eq!(self.accumulators.len(), ply + 2);
+            self.accumulators.pop();
+        }
+        let _ = ply;
     }
 
     fn update_pv(&mut self, ply: usize, mv: Move) {

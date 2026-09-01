@@ -11,4 +11,4 @@ pub use driver::{
     VALUE_MATE,
 };
 pub use limits::SearchLimits;
-pub(crate) use parallel::search_parallel;
+pub(crate) use parallel::{ParallelOptions, search_parallel_with_evaluator};

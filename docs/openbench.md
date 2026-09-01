@@ -136,8 +136,9 @@ N1a defines and independently audits the versioned, lossless
 sixteen-million-position fixed-validation gate, deterministic whole-game
 quarantine, pinned Bullet ingestion, bounded raw-float/quantized FEN parity,
 full-corpus diagnostics and paired game bootstrap. The 64M and larger scale
-points, final untouched holdout, engine inference parity and any playing-engine
-integration remain unfinished and require separate registration.
+points and final untouched holdout remain unfinished. N2a now supplies
+bit-exact scalar engine parity and opt-in playing integration; SIMD, distributed
+NNUE games and any retention decision require separate registration.
 
 ## Primary references
 

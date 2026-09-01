@@ -48,6 +48,10 @@ Implemented:
   exact opening-sequence audits, checksummed result manifests, and coordinator replay
 - isolated scalar NNUE reference tooling with versioned fail-closed artifacts,
   dual-perspective feature mapping, and refresh/incremental accumulator oracles
+- feature-gated SANJ NNUE engine inference with an independent scalar
+  implementation, bit-exact engine/reference parity, move-delta accumulators,
+  explicit UCI `EvalFile` activation, Lazy-SMP worker ownership, and a separate
+  end-to-end NNUE benchmark
 - isolated lossless NNUE game records with legal replay, byte-exact upstream
   compatibility fixtures, special-move coverage, and an independent auditor
 - deterministic OpenBench `genfens` opening generation using every bit of the
@@ -65,7 +69,17 @@ Implemented:
   raw-float/quantized FEN parity, full-corpus diagnostics, and paired
   fixed-validation game bootstrap comparison
 
-Not implemented in the retained playing source: Syzygy, NNUE evaluation, LMP, futility pruning, continuation/capture history, or an optimized sliding-attack backend. The standalone NNUE lane now has an accepted experimental sixteen-million-position learning-curve artifact, but no NNUE code or network is linked into search and no NNUE Elo claim exists. The single pre-registered P3 Lazy-SMP design passed its correctness, scaling, deadline, and 2,000-game paired gates and is retained on the development branch. This is controlled development evidence, not a new release or a universal Elo claim. Capture History and 1-ply Continuation History were tested and reverted; the second conservative NMP experiment was retained on the development branch but has not earned a release.
+Not implemented in the default playing source: Syzygy, enabled-by-default NNUE,
+LMP, futility pruning, continuation/capture history, or an optimized
+sliding-attack backend. The NNUE lane has an accepted experimental
+sixteen-million-position learning-curve artifact and a feature-gated N2 scalar
+engine path, but the default evaluator remains classical and no NNUE network,
+game result, or Elo claim is part of a release. The single pre-registered P3
+Lazy-SMP design passed its correctness, scaling, deadline, and 2,000-game paired
+gates and is retained on the development branch. This is controlled development
+evidence, not a new release or a universal Elo claim. Capture History and 1-ply
+Continuation History were tested and reverted; the second conservative NMP
+experiment was retained on the development branch but has not earned a release.
 
 N1e has closed the 16M learning-curve gate: four frozen campaigns produced an
 18,140,767-position train corpus that is disjoint from the unchanged
@@ -99,6 +113,18 @@ Portable release binary:
 target/release/neyrang
 ```
 
+Experimental NNUE builds are opt-in and do not embed a network:
+
+```bash
+cargo build --release --features nnue
+target/release/neyrang bench-nnue /path/to/registered-network.nnue 5
+```
+
+In UCI, set `EvalFile` only to a separately audited `NEYRANG\0` artifact. An
+empty value restores classical SANJ. The loader rejects legacy magic,
+incompatible shape/version/quantization, truncation, trailing bytes, and CRC
+mismatch. Match runners record the full network SHA-256 independently.
+
 OpenBench-compatible build (the executable is written at the repository root
 under the exact `EXE` name):
 
@@ -130,6 +156,8 @@ Options:
 - `Threads` (default 1; values above one enable the retained shared-TT
   Lazy-SMP path on the development branch)
 - `Move Overhead` (default 30 ms; configurable)
+- `EvalFile` (available only in an `nnue` feature build; empty/classical by
+  default)
 
 ## En Croissant
 
@@ -183,6 +211,7 @@ The `0.2.0` search visits 196,627 nodes with checksum `4a4c31e290740db3` on this
 cargo fmt --check
 cargo clippy --all-targets --all-features
 cargo test
+cargo test --all-features
 cargo test --features stats
 cargo test --manifest-path tools/nnue-reference/Cargo.toml --locked
 cargo test --manifest-path tools/nnue-data/Cargo.toml --locked
@@ -362,4 +391,4 @@ P3 subsequently retained one root-diversified Lazy-SMP design. Frozen Threads 2/
 
 H0/H1 then added byte-isolated evaluation evidence tooling and proved it on a 4,000-game historical pilot. H2b subsequently completed 4,000 fresh paired games without a timing, crash, legality, warning, or protocol failure. The first 9,000-game H2c expansion was rejected in full after one timeout; its deterministic H2d replacement completed and independently audited all 9,000 games at fixed per-engine node budgets. H2b+H2d first produced a conservative 9,959-record corpus, then H2e recovered 35,032 unique records through pre-registered gap-constrained, pair-balanced dense extraction without generating or accepting another game. Train and validation contain 28,040/3,564 rows from 4,146/538 opening groups, both 42-column designs have full rank, and a scale-only diagnostic is stable but statistically unresolved on validation. No evaluation weight changed. Because aggregate current-holdout summaries were accidentally exposed, any future fitter requires its own preregistration and a new disjoint untouched final holdout before a playing candidate can exist.
 
-N0a/N1a/N1b/N1c/N1d/N1e now cover the non-playing path from scalar `Chess768` inference and strict Viriformat games through deterministic corpus assembly, pinned Bullet ingestion, quantized export, fixed FEN parity and paired fixed-validation diagnostics. The 16M point retained 18,140,767 train positions and consumed an exact 16,008,492-position epoch against the unchanged 463,228-position validation corpus. The selected quantization stays within the preregistered `8 cp` maximum and `2 cp` mean error bounds, and all three N1e validation gates passed. The final holdout does not yet exist and no network is linked into the engine. N2 or any 64M extension requires a separate registration; no NNUE strength result exists.
+N0a/N1a/N1b/N1c/N1d/N1e cover the data and learning-curve path from scalar `Chess768` inference and strict Viriformat games through deterministic corpus assembly, pinned Bullet ingestion, quantized export, fixed FEN parity and paired fixed-validation diagnostics. The 16M point retained 18,140,767 train positions and consumed an exact 16,008,492-position epoch against the unchanged 463,228-position validation corpus. The selected quantization stays within the preregistered `8 cp` maximum and `2 cp` mean error bounds, and all three N1e validation gates passed. N2a now adds an opt-in scalar engine bridge and worker-owned accumulator stack with bit-exact reference parity. The final holdout does not yet exist, the default engine remains classical, and no NNUE strength result exists. SIMD, games, or any 64M extension require separate evidence.

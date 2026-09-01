@@ -1,11 +1,15 @@
 use std::{env, process::ExitCode, time::Instant};
 
+#[cfg(feature = "nnue")]
+use std::fs;
 #[cfg(feature = "sanj-tools")]
 use std::{
     fs::File,
     io::{self, BufReader, BufWriter},
 };
 
+#[cfg(feature = "nnue")]
+use neyrang::sanj::{Evaluator, nnue::Network};
 #[cfg(feature = "sanj-tools")]
 use neyrang::tools::sanj_trace;
 use neyrang::{
@@ -94,6 +98,39 @@ fn run() -> Result<(), String> {
             #[cfg(feature = "stats")]
             print_benchmark_statistics(result.statistics);
             let _ = started;
+        }
+        #[cfg(feature = "nnue")]
+        "bench-nnue" => {
+            let path = arguments
+                .get(1)
+                .ok_or_else(|| "bench-nnue requires a network path".to_owned())?;
+            if arguments.len() > 3 {
+                return Err("bench-nnue accepts a network path and optional depth".to_owned());
+            }
+            let depth = arguments
+                .get(2)
+                .map(|value| {
+                    value
+                        .parse()
+                        .map_err(|_| "bench-nnue depth must be 1..127".to_owned())
+                })
+                .transpose()?
+                .unwrap_or(5_u8);
+            if depth == 0 || depth as usize >= neyrang::rekhne::MAX_PLY {
+                return Err("bench-nnue depth must be 1..127".to_owned());
+            }
+            let bytes = fs::read(path)
+                .map_err(|error| format!("cannot read NNUE network '{path}': {error}"))?;
+            let network = Network::from_bytes(&bytes)
+                .map_err(|error| format!("invalid NNUE network '{path}': {error}"))?;
+            let result = bench::run_with_evaluator(depth, Evaluator::nnue(network))?;
+            println!("positions: {}", result.positions);
+            println!("nodes: {}", result.nodes);
+            println!("time: {} ms", result.elapsed.as_millis());
+            println!("nps: {}", result.nps());
+            println!("checksum: {:016x}", result.checksum);
+            #[cfg(feature = "stats")]
+            print_benchmark_statistics(result.statistics);
         }
         "genfens" => {
             let stdout = std::io::stdout();
@@ -216,6 +253,8 @@ fn print_help() {
     println!("  neyrang divide <depth>          Per-move Perft from the initial position");
     println!("  neyrang perft-fen <FEN> <depth> Perft from a FEN");
     println!("  neyrang bench [depth]           Deterministic search benchmark");
+    #[cfg(feature = "nnue")]
+    println!("  neyrang bench-nnue <FILE> [d]   NNUE search benchmark");
     println!("  neyrang genfens ...             Seeded OpenBench opening generation");
     #[cfg(feature = "sanj-tools")]
     println!("  neyrang sanj-trace <TSV|->      Export exact SANJ features");

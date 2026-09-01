@@ -23,6 +23,8 @@ All notable changes to NEYRANG are documented here.
 - Per-engine thread counts in the fixed paired-match runner, with shared/per-engine exclusivity, range validation, dry-run regression coverage, and explicit metadata.
 - Deterministic OpenBench `genfens` support using the complete unsigned 64-bit seed, shard-invariant `seed + index` streams, legal two-ply HCE-filtered opening walks, exact line output, and fail-closed option parsing.
 - An independent `python-chess` opening-shard generator/auditor with the OpenBench 15-second stall rule, canonical-position deduplication, executable/source/compiler/license provenance, SHA-256 identities, manifest-first no-clobber EPD publication, and overwrite refusal.
+- An isolated fixed-node NNUE self-play recorder with white-relative parent scores, rules-only terminal WDL, score saturation, exact position-restoration checks, and per-reason completion/rejection accounting.
+- A partition-first scored-shard wrapper that binds audited opening manifests, keeps color-reversed groups together, monitors generator progress, independently verifies opening membership/legal replay/terminal WDL, and publishes content-addressed Viriformat plus provenance without overwrite.
 
 ### Changed
 

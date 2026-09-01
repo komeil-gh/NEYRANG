@@ -1,6 +1,6 @@
 [package]
 name = "neyrang-nnue-data"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.98"
 publish = false
@@ -11,4 +11,3 @@ neyrang = { path = "../.." }
 
 [lints.rust]
 unsafe_code = "forbid"
-

@@ -49,4 +49,14 @@ version supports only `book None` and emits one exact
 enforces the 15-second stall rule and publishes EPD plus provenance manifest
 only after complete validation.
 
+Scored self-play remains a one-way tool dependency. The standalone
+`tools/nnue-data` crate imports NEYRANG's public chess/search APIs, but neither the
+playing library nor UCI binary imports the recorder or codec. Its fixed-node
+single-thread driver stores white-relative parent scores and accepts only
+rules-complete games. A separate Python process validates the opening manifest,
+assigns color-reversal-stable groups before generation, monitors progress,
+replays the packed output through python-chess, verifies terminal WDL, and only
+then publishes a no-clobber corpus plus manifest. No training-data I/O or
+provenance branch enters the search hot path.
+
 No x86 or ARM intrinsics are currently required. CPU-specific NNUE or attack code must stay behind isolated platform modules when introduced.

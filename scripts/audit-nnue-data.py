@@ -76,7 +76,12 @@ def main() -> int:
     return 0
 
 
-def audit_file(path: Path) -> dict[str, Any]:
+def audit_file(
+    path: Path,
+    *,
+    require_completed_games: bool = False,
+    allowed_initial_positions: set[str] | None = None,
+) -> dict[str, Any]:
     data = path.read_bytes()
     digest = hashlib.sha256(data).hexdigest()
     offset = 0
@@ -89,6 +94,9 @@ def audit_file(path: Path) -> dict[str, Any]:
     castling_moves = 0
     en_passant_moves = 0
     promotion_moves = 0
+    completion_reasons: Counter[str] = Counter()
+    initial_positions: list[str] = []
+    seen_initial_positions: set[str] = set()
 
     while offset < len(data):
         game_offset = offset
@@ -97,6 +105,18 @@ def audit_file(path: Path) -> dict[str, Any]:
         header = data[offset : offset + HEADER_SIZE]
         offset += HEADER_SIZE
         board, result = decode_header(header, game_offset)
+        initial_fen = board.fen(en_passant="fen")
+        if allowed_initial_positions is not None:
+            if initial_fen not in allowed_initial_positions:
+                raise AuditError(
+                    f"game {game_count + 1} initial position is absent from opening source"
+                )
+            if initial_fen in seen_initial_positions:
+                raise AuditError(
+                    f"game {game_count + 1} repeats an opening source position"
+                )
+            seen_initial_positions.add(initial_fen)
+            initial_positions.append(initial_fen)
         result_counts[result] += 1
         game_count += 1
         game_plies = 0
@@ -138,6 +158,17 @@ def audit_file(path: Path) -> dict[str, Any]:
 
         if not terminated:
             raise AuditError(f"game at byte {game_offset} has no terminator")
+        if require_completed_games:
+            completed_result, completion_reason = completed_game(board)
+            if completed_result is None or completion_reason is None:
+                raise AuditError(
+                    f"game {game_count} does not end by a registered rules-only condition"
+                )
+            if result != completed_result:
+                raise AuditError(
+                    f"game {game_count} WDL is {result}, expected {completed_result}"
+                )
+            completion_reasons[completion_reason] += 1
         max_game_plies = max(max_game_plies, game_plies)
 
     if game_count == 0:
@@ -146,7 +177,7 @@ def audit_file(path: Path) -> dict[str, Any]:
     score_summary = None
     if score_min is not None and score_max is not None:
         score_summary = {"min": score_min, "max": score_max}
-    return {
+    summary = {
         "schema": "neyrang-nnue-data-audit-v1",
         "ok": True,
         "sha256": digest,
@@ -162,6 +193,27 @@ def audit_file(path: Path) -> dict[str, Any]:
             "promotion": promotion_moves,
         },
     }
+    if require_completed_games:
+        summary["completion_reasons"] = dict(sorted(completion_reasons.items()))
+    if allowed_initial_positions is not None:
+        initial_bytes = "".join(f"{fen}\n" for fen in initial_positions).encode("utf-8")
+        summary["initial_positions_sha256"] = hashlib.sha256(initial_bytes).hexdigest()
+    return summary
+
+
+def completed_game(board: chess.Board) -> tuple[str | None, str | None]:
+    if board.is_checkmate():
+        return (
+            "black_win" if board.turn == chess.WHITE else "white_win",
+            "checkmate",
+        )
+    if board.is_stalemate():
+        return "draw", "stalemate"
+    if board.halfmove_clock >= 100:
+        return "draw", "fifty_move_rule"
+    if board.is_repetition(3):
+        return "draw", "threefold_repetition"
+    return None, None
 
 
 def decode_header(header: bytes, offset: int) -> tuple[chess.Board, str]:

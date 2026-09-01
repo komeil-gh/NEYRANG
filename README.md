@@ -45,12 +45,16 @@ Implemented:
   unsigned 64-bit seed, with shard-invariant streams and exact protocol output
 - independently audited, content-addressed opening shards with executable,
   source, compiler, and license provenance in adjacent manifests
+- isolated fixed-node self-play recording with white-relative parent scores,
+  rules-only WDL, pre-generation opening-group splits, reason counts, immutable
+  scored-shard manifests, and independent terminal/WDL replay auditing
 
 Not implemented in the retained playing source: Syzygy, NNUE evaluation, LMP, futility pruning, continuation/capture history, or an optimized sliding-attack backend. The standalone NNUE scalar reference and lossless data codec are correctness infrastructure only: there is no trained network, neither tool is linked into search, and neither carries an Elo claim. The single pre-registered P3 Lazy-SMP design passed its correctness, scaling, deadline, and 2,000-game paired gates and is retained on the development branch. This is controlled development evidence, not a new release or a universal Elo claim. Capture History and 1-ply Continuation History were tested and reverted; the second conservative NMP experiment was retained on the development branch but has not earned a release.
 
-The first N1b opening-generation slice is implemented, but a production
-self-play scorer, million-position corpus, trainer, exported network, and NNUE
-playing integration still do not exist.
+The opening and rules-complete scored-self-play slices of N1b are implemented,
+but a production-scale million-position corpus, shard shuffle/interleave,
+trainer ingestion, exported network, and NNUE playing integration still do not
+exist.
 
 No project license has been selected yet.
 
@@ -203,6 +207,29 @@ manifest is written beside the EPD:
 
 The license value above is an explicit internal-data marker, not permission to
 redistribute a corpus. Select a real project/data license before publication.
+
+Scored self-play must likewise use the audited wrapper rather than invoking the
+Rust recorder as a retained-data shortcut:
+
+```bash
+cargo build --release --manifest-path tools/nnue-data/Cargo.toml \
+  --bin generate-selfplay
+.venv/bin/python scripts/generate-selfplay-shard.py \
+  --generator tools/nnue-data/target/release/generate-selfplay \
+  --openings testing/nnue/openings/shard-0000.epd \
+  --openings-manifest testing/nnue/openings/shard-0000.epd.manifest.json \
+  --output testing/nnue/selfplay/train-0000.vf \
+  --partition train \
+  --split-seed 20260901-n1b-v1 \
+  --nodes 2000 --hash-mb 16 --max-plies 512 \
+  --generator-source-commit FULL_GIT_SHA \
+  --compiler-identity "rustc VERSION" \
+  --source-license UNLICENSED-NEYRANG-INTERNAL
+```
+
+This command creates data infrastructure evidence, not Elo evidence. The
+one-million accepted-position pipeline gate and every training/network gate
+remain open.
 
 `OPENING_SEED`, `OPENING_ORDER`, `TC`, `HASH_MB`, `THREADS`, and `CONCURRENCY` are explicit inputs. Set `NODES` on `match.sh` for a node-limited comparison; omit it for a time-controlled match. Each run writes PGN telemetry plus adjacent `.log` and `.meta.txt` files containing engine, Git, binary, opening, and fastchess identities. Pass `ENGINE_A_GIT_SHA`, `ENGINE_B_GIT_SHA`, `OPENINGS_SOURCE`, and `OPENINGS_LICENSE` for an auditable experiment.
 

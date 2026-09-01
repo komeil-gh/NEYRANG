@@ -72,6 +72,60 @@ class NnueDataAuditorTests(unittest.TestCase):
             with self.assertRaisesRegex(self.auditor.AuditError, "truncated"):
                 self.auditor.audit_file(path)
 
+    def test_strict_selfplay_audit_requires_a_rules_complete_game(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "mate.vf"
+            path.write_bytes(forced_mate_fixture(result=0))
+
+            summary = self.auditor.audit_file(path, require_completed_games=True)
+
+        self.assertEqual(summary["results"], {"black_win": 1})
+        self.assertEqual(summary["completion_reasons"], {"checkmate": 1})
+
+    def test_strict_selfplay_audit_rejects_wdl_that_disagrees_with_board(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "wrong-wdl.vf"
+            path.write_bytes(forced_mate_fixture(result=2))
+
+            with self.assertRaisesRegex(self.auditor.AuditError, "WDL"):
+                self.auditor.audit_file(path, require_completed_games=True)
+
+    def test_strict_selfplay_audit_binds_each_game_to_an_allowed_opening(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "mate.vf"
+            path.write_bytes(forced_mate_fixture(result=0))
+
+            summary = self.auditor.audit_file(
+                path,
+                require_completed_games=True,
+                allowed_initial_positions={"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"},
+            )
+            with self.assertRaisesRegex(self.auditor.AuditError, "opening source"):
+                self.auditor.audit_file(
+                    path,
+                    require_completed_games=True,
+                    allowed_initial_positions={"7k/5K2/6Q1/8/8/8/8/8 w - - 0 1"},
+                )
+
+        self.assertRegex(summary["initial_positions_sha256"], r"^[0-9a-f]{64}$")
+
+
+def forced_mate_fixture(result: int) -> bytes:
+    header = bytearray(OFFICIAL_FIXTURE[:32])
+    header[28:30] = (0).to_bytes(2, "little", signed=True)
+    header[30] = result
+    header[31] = 0
+    records = bytearray()
+    for source, destination, score in [
+        (13, 21, 11),  # f2f3
+        (52, 36, -22),  # e7e5
+        (14, 30, -33),  # g2g4
+        (59, 31, -29_999),  # d8h4#
+    ]:
+        records.extend((source | (destination << 6)).to_bytes(2, "little"))
+        records.extend(score.to_bytes(2, "little", signed=True))
+    return bytes(header + records + b"\0\0\0\0")
+
 
 if __name__ == "__main__":
     unittest.main()

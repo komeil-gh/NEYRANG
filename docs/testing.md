@@ -356,11 +356,26 @@ H2e deterministically selects at most eight quiet positions per game with an eig
 
 The train/validation-only analyzer reconstructs all 42 effective evaluation columns and weights every opening pair equally. Both designs have full rank and no dead column. Scale-only fits are stable around `0.80-0.83`, and all validation point estimates improve slightly, but the registered 10,000-replicate group-bootstrap intervals include zero. H2e is retained as evidence infrastructure; no evaluation weight or playing source changes.
 
-## N0a/N1a NNUE foundation evidence
+## N0a/N1a/N1b NNUE foundation evidence
 
 `tools/nnue-reference` remains the scalar `Chess768` and network-artifact oracle. The following `tools/nnue-data` crate adds the canonical lossless game boundary without linking either crate into the playing engine. Its tests decode and re-encode the upstream Viriformat example byte for byte, replay every encoded move, cover castling/en-passant/underpromotion and concatenated games, and fail closed on corruption, truncation, illegal play or state that the strict subset cannot preserve.
 
-`scripts/audit-nnue-data.py` is a second implementation over python-chess. It independently reconstructs the packed board, converts special moves, requires legality at each ply and reports content identity/count evidence. `write-smoke` generates three deterministic synthetic games that exercise all special-move types; these are codec evidence only, never a training or Elo sample. The exact record, provenance and geometric 1M/4M/16M/64M/256M gates are frozen in the [NNUE data contract](development/nnue-data.md).
+`scripts/audit-nnue-data.py` is a second implementation over python-chess. It independently reconstructs the packed board, converts special moves, requires legality at each ply and reports content identity/count evidence. In strict self-play mode it also binds every packed initial position to the selected opening set, requires a registered terminal condition, and rejects WDL that disagrees with the final board. `write-smoke` generates three deterministic synthetic games that exercise all special-move types; these are codec evidence only, never a training or Elo sample.
+
+The N1b recorder tests force checkmate and threefold trajectories, exercise score perspective/saturation, reject unfinished games at the maximum-ply boundary, validate every summary counter, and invoke the actual fixed-node NEYRANG search in a subprocess. The wrapper tests independently cover opening-manifest identity, partitioning of color-reversed groups, process progress, immutable publication, bad WDL, bad source counts/hashes, and overwrite refusal.
+
+Run these layers with:
+
+```bash
+cargo fmt --manifest-path tools/nnue-data/Cargo.toml --check
+cargo clippy --manifest-path tools/nnue-data/Cargo.toml --all-targets -- -D warnings
+cargo test --manifest-path tools/nnue-data/Cargo.toml --locked
+.venv/bin/python -m unittest \
+  scripts.tests.test_audit_nnue_data \
+  scripts.tests.test_generate_selfplay_shard
+```
+
+The exact record, provenance, rules-only completion policy and geometric 1M/4M/16M/64M/256M gates are frozen in the [NNUE data contract](development/nnue-data.md). A small self-play shard proves process and replay mechanics only; fixed-node data generation is not strength testing.
 
 Run the deterministic Python gates with an environment containing the pinned dependencies:
 
@@ -370,4 +385,4 @@ python3 -m venv .venv-eval
 .venv-eval/bin/python -m unittest discover -s scripts/tests -p 'test_*.py'
 ```
 
-The repository Python suite currently has 58 tests covering match/corpus auditing, corpus construction, dense pair balancing, legacy-manifest compatibility, opening selection, fixed 38-to-42 feature mapping, complete-group learning subsets, scale fitting, deterministic group bootstrap, repository contracts and independent NNUE-record replay. Exact campaign, corpus, feature, diagnostic, and script hashes are recorded in the experiment ledger.
+The repository Python suite currently has 73 tests covering match/corpus auditing, corpus construction, dense pair balancing, legacy-manifest compatibility, opening selection, fixed 38-to-42 feature mapping, complete-group learning subsets, scale fitting, deterministic group bootstrap, repository contracts, scored-shard orchestration and independent NNUE-record/terminal replay. Exact campaign, corpus, feature, diagnostic, and script hashes are recorded in the experiment ledger.

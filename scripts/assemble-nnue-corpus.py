@@ -167,36 +167,43 @@ def assemble_corpus(config: CorpusConfig) -> dict[str, Any]:
 
     disjoint_identities: list[dict[str, Any]] = []
     bound_position_keys: set[bytes] = set()
+    bound_opening_groups: set[str] = set()
     for path in sorted(config.disjoint_from, key=lambda item: relative(item, config.repo_root)):
         identity, position_keys, disjoint_opening_groups = load_disjoint_corpus(
             path, config.repo_root, config.partition, auditor
         )
-        opening_overlap = opening_groups.intersection(disjoint_opening_groups)
-        if opening_overlap:
-            raise AssemblyError(
-                f"cross-partition opening group leakage: {len(opening_overlap)} groups"
-            )
         bound_position_keys.update(position_keys)
+        bound_opening_groups.update(disjoint_opening_groups)
         disjoint_identities.append(identity)
 
-    all_current_position_keys = {
-        key for game in games for key in game.position_keys
-    }
+    conflicting_opening_groups = opening_groups.intersection(bound_opening_groups)
+    opening_conflicting_games = [
+        game for game in games if game.opening_group in bound_opening_groups
+    ]
+    all_current_position_keys = {key for game in games for key in game.position_keys}
     conflicting_position_keys = all_current_position_keys.intersection(
         bound_position_keys
     )
-    conflicting_games = [
+    position_conflicting_games = [
         game
         for game in games
         if any(key in bound_position_keys for key in game.position_keys)
     ]
-    if conflicting_games and not config.quarantine_cross_partition_games:
+    if conflicting_opening_groups and not config.quarantine_cross_partition_games:
+        raise AssemblyError(
+            "cross-partition opening group leakage: "
+            f"{len(conflicting_opening_groups)} groups"
+        )
+    if position_conflicting_games and not config.quarantine_cross_partition_games:
         raise AssemblyError(
             f"cross-partition position leakage: {len(conflicting_position_keys)} "
-            f"canonical keys in {len(conflicting_games)} games"
+            f"canonical keys in {len(position_conflicting_games)} games"
         )
-    if conflicting_games:
-        conflicting_ids = {id(game) for game in conflicting_games}
+    conflicting_ids = {
+        id(game) for game in (*opening_conflicting_games, *position_conflicting_games)
+    }
+    conflicting_games = [game for game in games if id(game) in conflicting_ids]
+    if conflicting_ids:
         retained_games = [game for game in games if id(game) not in conflicting_ids]
     else:
         retained_games = games
@@ -225,6 +232,10 @@ def assemble_corpus(config: CorpusConfig) -> dict[str, Any]:
     residual_overlap = current_position_keys.intersection(bound_position_keys)
     if residual_overlap:
         raise AssemblyError("internal error: quarantine left cross-partition positions")
+    current_opening_groups = {game.opening_group for game in ordered}
+    residual_opening_overlap = current_opening_groups.intersection(bound_opening_groups)
+    if residual_opening_overlap:
+        raise AssemblyError("internal error: quarantine left cross-partition openings")
 
     output_bytes = b"".join(game.blob for game in ordered)
     artifact_sha256 = hashlib.sha256(output_bytes).hexdigest()
@@ -255,7 +266,10 @@ def assemble_corpus(config: CorpusConfig) -> dict[str, Any]:
             detected_duplicate_opening_groups,
             quarantined_duplicate_opening_games,
             quarantined_duplicate_opening_scored_positions,
+            len(conflicting_opening_groups),
+            len(opening_conflicting_games),
             len(conflicting_position_keys),
+            len(position_conflicting_games),
             len(conflicting_games),
             quarantined_scored_positions,
             audit,
@@ -526,7 +540,10 @@ def build_manifest(
     detected_duplicate_opening_groups: int,
     quarantined_duplicate_opening_games: int,
     quarantined_duplicate_opening_scored_positions: int,
+    detected_conflicting_opening_groups: int,
+    quarantined_opening_games: int,
     detected_conflicting_position_keys: int,
+    quarantined_position_games: int,
     quarantined_games: int,
     quarantined_scored_positions: int,
     audit: dict[str, Any],
@@ -587,6 +604,11 @@ def build_manifest(
                 if config.quarantine_duplicate_opening_games
                 else "reject"
             ),
+            "cross_partition_opening_groups": 0,
+            "detected_conflicting_opening_groups": (
+                detected_conflicting_opening_groups
+            ),
+            "quarantined_opening_games": quarantined_opening_games,
             "cross_partition_position_keys": 0,
             "policy": (
                 "drop-conflicting-complete-game"
@@ -594,6 +616,7 @@ def build_manifest(
                 else "reject"
             ),
             "detected_conflicting_position_keys": detected_conflicting_position_keys,
+            "quarantined_position_games": quarantined_position_games,
             "quarantined_games": quarantined_games,
             "quarantined_scored_positions": quarantined_scored_positions,
             "disjoint_from": disjoint_identities,

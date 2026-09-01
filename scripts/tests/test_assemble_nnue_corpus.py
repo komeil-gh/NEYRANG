@@ -190,6 +190,57 @@ class NnueCorpusAssemblerTests(unittest.TestCase):
 
             self.assertFalse(validation.exists())
 
+    def test_opt_in_quarantine_drops_cross_partition_opening_game(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            shared = mate_in_one(
+                "7k/5K2/6Q1/8/8/8/8/8 w - - 0 1", "g6g7"
+            )
+            clean = mate_in_one(
+                "7k/5K2/4Q3/8/8/8/8/8 w - - 0 1", "e6h6"
+            )
+            validation_shard = write_shard(
+                root,
+                "validation.vf",
+                [shared],
+                self.auditor,
+                partition="validation",
+            )
+            validation = root / "validation-corpus.vf"
+            self.assembler.assemble_corpus(
+                make_config(
+                    self.assembler,
+                    root,
+                    (validation_shard,),
+                    validation,
+                    partition="validation",
+                )
+            )
+            train_shard = write_shard(
+                root, "train.vf", [shared, clean], self.auditor
+            )
+            train = root / "train-corpus.vf"
+
+            manifest = self.assembler.assemble_corpus(
+                make_config(
+                    self.assembler,
+                    root,
+                    (train_shard,),
+                    train,
+                    disjoint_from=(validation,),
+                    quarantine_cross_partition_games=True,
+                )
+            )
+
+            self.assertEqual(manifest["artifact"]["games"], 1)
+            self.assertEqual(
+                manifest["separation"]["detected_conflicting_opening_groups"], 1
+            )
+            self.assertEqual(manifest["separation"]["cross_partition_opening_groups"], 0)
+            self.assertEqual(manifest["separation"]["quarantined_opening_games"], 1)
+            self.assertEqual(manifest["separation"]["quarantined_games"], 1)
+            self.assertEqual(manifest["separation"]["quarantined_scored_positions"], 1)
+
     def test_cross_partition_position_key_is_rejected_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

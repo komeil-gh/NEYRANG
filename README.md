@@ -69,7 +69,8 @@ Implemented:
   raw-float/quantized FEN parity, full-corpus diagnostics, and paired
   fixed-validation game bootstrap comparison
 - independent dual-perspective king-square exposure analysis for data-backed
-  king-bucket architecture registration
+  king-bucket architecture registration, plus version-2 `Chess768x3hm`
+  reference/engine/trainer support and factoriser-aware float export
 
 Not implemented in the default playing source: Syzygy, enabled-by-default NNUE,
 LMP, futility pruning, continuation/capture history, or an optimized
@@ -98,6 +99,14 @@ holdout. This is data/training evidence, not a playing-strength result; exact
 identities are in the
 [NNUE data contract](docs/development/nnue-data.md) and
 [N1e evidence manifest](docs/evidence/nnue-n1e-16m.json).
+
+N2b's score-only network and N2c's three-bank king-relative network were both
+rejected by their binding evidence gates. N2c passed quantization and exact
+engine/reference parity, improved selection MAE, and had a wholly negative
+paired-loss interval, but search-score sign agreement `0.904318802` missed its
+registered `0.904808319` floor. No N2c holdout was generated and zero games were
+run. The reusable infrastructure remains opt-in; classical SANJ is still the
+only default evaluator.
 
 No project license has been selected yet.
 

@@ -34,6 +34,9 @@ All notable changes to NEYRANG, formerly NEYRANG, are documented here.
 - Final-holdout assembly as a first-class partition, including whole-game train/validation leakage quarantine and hash-verified compatibility with registered historical opening, split and corpus identities.
 - Independent NNUE king-bucket exposure analysis over both oriented
   perspectives, used to bound the N2c representation before training.
+- Version-2 `Chess768x3hm` artifact, scalar reference, SANJ inference and
+  factorised trainer support, including king-move accumulator refresh and a
+  no-clobber merged-float exporter for Bullet factoriser checkpoints.
 
 ### Changed
 
@@ -66,6 +69,12 @@ All notable changes to NEYRANG, formerly NEYRANG, are documented here.
 - The first committed N1b recorder campaign completed and independently replayed 3,683/3,683 fixed-node train/validation games with zero rejection and 320,947 white-relative scored positions; 413 partitioned holdout openings were not played. This is data-pipeline evidence only, not training or Elo evidence, and remains below the one-million-position gate.
 - N1e completed 160,109/160,109 new train games with zero rejection and assembled 18,140,767 train positions disjoint from the unchanged 463,228-position validation corpus. One exact 16,008,492-position Metal epoch passed both raw/quantized parity gates and lowered fixed-validation MSE from `0.076680656365` to `0.074149893964`; the pre-registered paired game bootstrap interval is wholly negative. This retains the 16M network as offline learning-curve evidence only—there is no engine integration, game result or Elo claim.
 - N2a's N1e network lost its strict 1,000-game fixed-node screen `177/633/190` and was rejected for play with no runtime anomaly. N2b then trained a score-only replacement that passed parity and search-facing holdout metrics on a new zero-overlap 22,205-game corpus, but its registered paired bootstrap interval `[-0.000633537, 0.000026689]` crossed zero. It was rejected before games; classical SANJ remains default and neither N2 result is release Elo evidence.
+- N2c trained the single registered three-bank king-relative candidate. It
+  passed merged raw/quantized and engine/reference parity, improved selection
+  MAE and produced a wholly negative paired-loss interval, but its search-score
+  sign agreement `0.904318802` missed the frozen `0.904808319` floor. The
+  candidate was rejected before holdout generation with zero games and no Elo
+  claim.
 
 ## [0.2.0] - 2026-08-29
 

@@ -536,3 +536,17 @@ target MSE, but its registered equal-game bootstrap interval
 campaign before fixed-node games. N2b provides no Elo claim; exact identities
 and every retained/rejected boundary are in the
 [N2b evidence manifest](evidence/nnue-n2b-diagnosis.json).
+
+## N2c king-bucket selection evidence
+
+N2c adds a version-2 three-bank horizontally mirrored feature contract across
+the trainer, float/reference oracle and independent SANJ decoder. Factorised
+checkpoints must first export a merged float tensor because Bullet's ordinary
+`raw.bin` omits save-format transforms. The candidate passed curated and
+4,096-position `8/2 cp` parity plus zero-delta engine/reference comparison.
+
+Selection-validation MAE and paired mixed-target loss improved over N2b, but
+search-score sign agreement was `0.904318802`, below the preregistered
+`0.904808319` floor. The binding failure stopped new holdout generation and all
+games. Exact identities and gate outcomes are in the
+[N2c result manifest](evidence/nnue-n2c-result.json).

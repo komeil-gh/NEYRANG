@@ -1,18 +1,21 @@
 # Changelog
 
-All notable changes to NEYRANG are documented here.
+All notable changes to NEYRANG, formerly NEYRANG, are documented here.
 
 ## [Unreleased]
 
 ### Added
 
+- The NEYRANG identity and explicit REKHNE search, SANJ evaluation, and SHEGERD
+  strength-technique module boundaries, with a fail-closed migration contract
+  for binaries, packages, schemas, and NNUE artifacts.
 - An OpenBench-compatible root Makefile honoring `EXE=`, plus a contract test that builds the named executable, checks three sequential and three concurrent 180,591-node benches, requires positive parsable NPS, and verifies UCI `Hash`/`Threads` readiness.
 - Cross-platform GitHub CI for formatting, Clippy, default/all-feature Rust tests, Python infrastructure tests, match-runner checks, release Perft gates, and the OpenBench contract on Linux and macOS.
 - Evidence-first engine-regression and experiment issue forms, a playing-change pull-request template, contribution/security policies, an OpenBench deployment guide, and a source-backed competitive roadmap.
 - A reusable paired-match auditor that independently parses PGNs, reconstructs W/D/L and pentanomial counts, verifies opening/color pairs and complete telemetry, audits metadata, and scans strict logs for failure classes.
 - A 100,000-position exact-list/order legality oracle covering checks, double checks, pins, en passant, castling, and promotions.
 - A test-only immutable pre-G1 SEE oracle, exercised over 100,000 legal positions, 336,083 tactical moves, and 7,393,826 threshold queries.
-- A feature-gated `neyrang-eval-trace-v1` coefficient schema and streaming TSV exporter, verified against production evaluation over 100,000 legal positions.
+- A feature-gated `neyrang-sanj-trace-v1` coefficient schema and streaming TSV exporter, verified against production SANJ evaluation over 100,000 legal positions.
 - A deterministic pair-first evaluation-corpus builder with provenance manifests, opening-group splits, quiet-position sampling, cross-partition leakage removal, and independently replayable records.
 - An independent corpus auditor that reconstructs every sampled position from PGN and rejects content tampering even when manifest hashes are rewritten.
 - A deterministic fresh-opening selector with PGN/EPD exclusion sets, canonical-FEN deduplication, fixed hash ranking, provenance output, and fail-closed capacity/overwrite checks.
@@ -30,11 +33,17 @@ All notable changes to NEYRANG are documented here.
 
 ### Changed
 
+- The development version is now `NEYRANG 0.3.0-dev`; the executable and Rust
+  crate are `neyrang`, and the legacy `NEYRANG 0.2.0` tag remains historical
+  provenance rather than being rewritten.
 - Development legal move generation now avoids make/check/unmake in the common path and validates exceptional moves against simulated final occupancy. The deterministic search tree and checksum are unchanged.
 - The retained F1 candidate reduced median depth-8 wall time by 33.99% and raised median NPS by 51.50% across 15 interleaved runs per frozen binary.
 - Exact SEE now carries color occupancy and target attackers through the exchange, reveals slider x-rays incrementally, prepares each accepted legal LVA state once, and preserves every prior score, threshold answer, exchange-step count, search tree, and checksum.
 - The retained G1 candidate reduced median depth-8 wall time by a further 4.44% and raised median NPS by 4.62% across 15 interleaved runs per frozen binary.
-- H0 keeps the default release byte-for-byte identical to G1 while isolating evaluation evidence tooling behind the non-default `eval-tools` feature.
+- H0 kept its historical default release byte-for-byte identical to G1 while
+  isolating evaluation evidence tooling. The renamed development tree exposes
+  that tooling through the non-default `sanj-tools` feature; identity migration
+  necessarily changes binary bytes.
 - The paired-match auditor now distinguishes nonzero fastchess timeout/crash summary counters from clean zero counters, with regression coverage for both summaries and free-form failures.
 - H2d replaces H2c's wall-clock allocation with pre-registered 30,000/29,200-node G1/F1 limits derived from 732,065 plies of rejected-run telemetry; no playing code or evaluation weight changes.
 - The fixed match runner records the selected warning policy and refuses to combine the immutable-baseline compatibility policy with fastchess strict mode.

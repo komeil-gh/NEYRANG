@@ -1,10 +1,13 @@
-# NEYRANG logo
+# NEYRANG legacy mark
 
-The NEYRANG mark combines three ideas in a single silhouette:
+The current artwork is the inherited horse-and-star mark from the NEYRANG era. It
+is retained as a provisional NEYRANG asset so existing GUI integration paths do
+not break during the code-identity migration. It must not be described as a
+literal visual explanation of the word NEYRANG.
 
-- an eight-point star for the name NEYRANG and its celestial association
-- a chess knight for the engine's domain
-- a compact circuit-like move path for computation and search
+The mark combines a chess knight, an eight-point star, and a compact
+circuit-like move path. A future visual rebrand may replace it independently of
+the engine rename.
 
 The warm amber and midnight-navy palette is designed for strong contrast in dark chess interfaces. The mark has a transparent background and does not depend on a surrounding tile.
 

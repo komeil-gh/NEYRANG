@@ -1,4 +1,8 @@
-# Search
+# REKHNE
+
+REKHNE is the strategy NEYRANG searches with. Its code lives in `src/rekhne`;
+ordering, history, and SEE are supplied by SHEGERD rather than owned by the
+search driver.
 
 ## Current pipeline
 

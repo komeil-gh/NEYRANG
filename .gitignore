@@ -11,5 +11,7 @@ __pycache__/
 *.pgn
 *.epd
 !examples/*.pgn
+!examples/legacy/
+!examples/legacy/*.pgn
 !scripts/openings.epd
 !scripts/holdout-0.3.epd

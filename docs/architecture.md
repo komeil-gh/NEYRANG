@@ -2,9 +2,22 @@
 
 ## Boundaries
 
-`src/chess` owns architecture-independent rules: compact types, bitboards, FEN, attacks, move generation, make/unmake, Zobrist hashing, and Perft. `src/eval` evaluates a position without depending on search. `src/search` owns iterative deepening, qsearch, ordering, history, TT, time limits, and stop checks. `src/uci` is the protocol boundary. `src/tools` contains deterministic developer tooling, including the non-UCI OpenBench `genfens` command path.
+`NEYRANG` is the complete engine and UCI identity. `src/chess` owns
+architecture-independent rules: compact types, bitboards, FEN, attacks, move
+generation, make/unmake, Zobrist hashing, and Perft. `src/rekhne` owns the search
+strategy: iterative deepening, alpha-beta/PVS/qsearch, TT, time limits, parallel
+coordination, and stop checks. `src/sanj` judges positions without depending on
+REKHNE. `src/shegerd` owns reusable strength techniques currently comprising
+move ordering, history, and SEE. `src/uci` is the protocol boundary. `src/tools`
+contains deterministic developer tooling, including the non-UCI OpenBench
+`genfens` and SANJ trace command paths.
 
-Evaluation evidence code is isolated behind the non-default `eval-tools` feature. Its independent coefficient trace and TSV exporter do not enter the normal playing binary; the default H0 build is byte-identical to the frozen G1 executable. This boundary prevents corpus/training I/O and allocations from leaking into UCI or search.
+SANJ evidence code is isolated behind the non-default `sanj-tools` feature. Its
+independent coefficient trace and TSV exporter do not enter the normal playing
+binary. This boundary prevents corpus/training I/O and allocations from leaking
+into UCI or REKHNE. Historical byte-identity claims remain attached to their
+recorded pre-rename commits; the identity migration necessarily changes the
+binary bytes.
 
 The engine has no runtime dependencies outside `std`. Strings, vectors, threads, and I/O remain at root/tool/protocol boundaries. A search node uses fixed move buffers and stack-based undo state.
 
@@ -50,13 +63,13 @@ enforces the 15-second stall rule and publishes EPD plus provenance manifest
 only after complete validation.
 
 Scored self-play remains a one-way tool dependency. The standalone
-`tools/nnue-data` crate imports NEYRANG's public chess/search APIs, but neither the
+`tools/nnue-data` crate imports NEYRANG's public chess/REKHNE APIs, but neither the
 playing library nor UCI binary imports the recorder or codec. Its fixed-node
 single-thread driver stores white-relative parent scores and accepts only
 rules-complete games. A separate Python process validates the opening manifest,
 assigns color-reversal-stable groups before generation, monitors progress,
 replays the packed output through python-chess, verifies terminal WDL, and only
 then publishes a no-clobber corpus plus manifest. No training-data I/O or
-provenance branch enters the search hot path.
+provenance branch enters the REKHNE hot path.
 
 No x86 or ARM intrinsics are currently required. CPU-specific NNUE or attack code must stay behind isolated platform modules when introduced.

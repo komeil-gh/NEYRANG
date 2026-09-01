@@ -1,6 +1,9 @@
-# Evaluation
+# SANJ
 
-NEYRANG currently uses a deterministic tapered handcrafted evaluation. It calculates separate middlegame and endgame scores, derives phase from remaining non-pawn material, interpolates, then returns a side-to-move score with a 12-centipawn tempo term.
+SANJ is the judgment NEYRANG evaluates with. It currently uses a deterministic
+tapered handcrafted evaluation. It calculates separate middlegame and endgame
+scores, derives phase from remaining non-pawn material, interpolates, then
+returns a side-to-move score with a 12-centipawn tempo term.
 
 Implemented terms:
 
@@ -17,15 +20,15 @@ The compact formula-based PSQT is intentionally inspectable and avoids importing
 
 Known limitations include limited king attack modeling, no pawn hash, no threats/space/outposts, and no tuning against game data. The evaluator is a clean bootstrap for search, not a strength claim.
 
-## Exact evaluation trace
+## Exact SANJ trace
 
 The development branch includes a feature-gated, streaming trace for dataset work. It is an independent reconstruction rather than instrumentation in the tournament hot path. The normal release remains byte-for-byte identical to the accepted G1 binary.
 
 Build and run it explicitly:
 
 ```bash
-cargo build --release --features eval-tools
-target/release/neyrang eval-trace positions.tsv > features.tsv
+cargo build --release --features sanj-tools
+target/release/neyrang sanj-trace positions.tsv > features.tsv
 ```
 
 Use `-` instead of a path to read stdin. Each non-comment input row is exactly:
@@ -34,7 +37,7 @@ Use `-` instead of a path to read stdin. Each non-comment input row is exactly:
 record_id<TAB>target<TAB>FEN
 ```
 
-`target` is White-relative WDL space: `0` is a Black win, `0.5` is a draw, and `1` is a White win. Soft labels within `[0,1]` are accepted, but their provenance must be recorded. Output schema `neyrang-eval-trace-v1` canonicalizes the FEN and writes fixed-order White-minus-Black coefficients for:
+`target` is White-relative WDL space: `0` is a Black win, `0.5` is a draw, and `1` is a White win. Soft labels within `[0,1]` are accepted, but their provenance must be recorded. Output schema `neyrang-sanj-trace-v1` canonicalizes the FEN and writes fixed-order White-minus-Black coefficients for:
 
 - piece counts and all ten raw PSQT rank/edge/center bases
 - bishop pair

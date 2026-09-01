@@ -1,6 +1,15 @@
 # NEYRANG
 
-NEYRANG is an independent UCI chess engine written from scratch in stable Rust. Version `0.2.0` remains the latest release. The `dev/0.3-search` branch contains accepted but unreleased timing, staged-MovePicker, threshold-SEE, conservative-NMP, and non-mutating legal-generation work developed through isolated correctness gates, deterministic benchmarks, paired engine matches, and SPRT.
+NEYRANG is an independent UCI chess engine written from scratch in stable Rust.
+It is the new identity of the project formerly called NEYRANG. The latest tagged
+release remains the legacy `NEYRANG 0.2.0`; the current development identity is
+`NEYRANG 0.3.0-dev`. The `dev/0.3-search` branch contains accepted but
+unreleased timing, staged-MovePicker, threshold-SEE, conservative-NMP, and
+non-mutating legal-generation work developed through isolated correctness
+gates, deterministic benchmarks, paired engine matches, and SPRT.
+
+The four project names are executable architecture boundaries, not decorative
+labels: [NEYRANG, REKHNE, SANJ, and SHEGERD](docs/naming.md).
 
 NEYRANG does not wrap an existing chess library or engine. The runtime chess core uses only the Rust standard library.
 
@@ -52,7 +61,7 @@ Implemented:
   canonical position-key leakage detection, whole-game quarantine, immutable
   game shuffling, and independently replayed output manifests
 - a Bullet trainer pinned to an exact revision, a deterministic position reader,
-  fail-closed quantized export into the `NEYRANGNNUE` artifact, and independent
+  fail-closed quantized export into the `NEYRANG\0` artifact format, and independent
   raw-float/quantized FEN parity, full-corpus diagnostics, and paired
   fixed-validation game bootstrap comparison
 
@@ -130,7 +139,8 @@ NEYRANG can be loaded directly as a local UCI engine in En Croissant. On macOS, 
 scripts/en-croissant.sh prepare
 ```
 
-Select the printed path from En Croissant's **Engines** page. A bundled PGN of the complete paired smoke games can then be opened with:
+Select the printed path from En Croissant's **Engines** page. The preserved
+legacy NEYRANG protocol-smoke PGN can then be opened with:
 
 ```bash
 scripts/en-croissant.sh open
@@ -294,8 +304,9 @@ The bundled opening file is intentionally small; replace `OPENINGS_FILE` with a 
 ## Architecture
 
 - [Architecture](docs/architecture.md)
-- [Search](docs/search.md)
-- [Evaluation](docs/evaluation.md)
+- [Naming and migration contract](docs/naming.md)
+- [REKHNE search strategy](docs/rekhne.md)
+- [SANJ position judgment](docs/sanj.md)
 - [Testing and benchmarks](docs/testing.md)
 - [OpenBench integration](docs/openbench.md)
 - [En Croissant integration](docs/en-croissant.md)
@@ -310,7 +321,7 @@ The bundled opening file is intentionally small; replace `OPENINGS_FILE` with a 
 - [Competitive roadmap: OpenBench, H3, NNUE, and selective search](docs/development/competitive-roadmap.md)
 - [NNUE scalar reference and artifact contract](docs/development/nnue-reference.md)
 - [NNUE lossless game-record and provenance contract](docs/development/nnue-data.md)
-- [Evaluation corpus and tuning protocol](docs/development/evaluation-tuning.md)
+- [SANJ corpus and tuning protocol](docs/development/sanj-tuning.md)
 
 ## Contributing and security
 
@@ -322,7 +333,24 @@ license grant.
 
 ## Roadmap
 
-The 0.3 search order is evidence-driven. A completed 4,000-game retrospective found direct positive evidence for SEE ordering and qsearch pruning, an inconclusive isolated LMR result, and `+90.97 +/-18.38 Elo` for cumulative v0.2.0 against v0.1.0. A separate timing audit retained isolated hardening after a clean 1,000-game stress. The staged MovePicker then earned retention through 7,046 valid comparison games. The following lazy main-search `see_ge` caller passed deterministic and two 1,000-game screens, but its fresh 10,000-game SPRT capped inconclusively and was reverted; the verified threshold primitive remains. Capture History failed its binding deterministic efficiency rule, and 1-ply Continuation History was reverted after a strict candidate timeout. Conservative fixed-R2 NMP passed correctness, accepted H1 after 4,946 fresh SPRT games, and scored 54.95% over 1,000 clean games at `8+0.08`; it was retained after 7,946 valid comparison games. The cumulative 0.3 candidate was 8.16% smaller by nodes and 11.97% faster than v0.2.0 in the interleaved benchmark, but two strict primary-screen attempts were interrupted by reproducible repetition-PV defects in immutable v0.2.0. The pre-registered protocol allowed no third attempt, so NEYRANG remains version 0.2.0 and no v0.3.0 tag was created.
+The legacy NEYRANG 0.3 search order was evidence-driven. A completed 4,000-game
+retrospective found direct positive evidence for SEE ordering and qsearch
+pruning, an inconclusive isolated LMR result, and `+90.97 +/-18.38 Elo` for
+cumulative v0.2.0 against v0.1.0. A separate timing audit retained isolated
+hardening after a clean 1,000-game stress. The staged MovePicker then earned
+retention through 7,046 valid comparison games. The following lazy main-search
+`see_ge` caller passed deterministic and two 1,000-game screens, but its fresh
+10,000-game SPRT capped inconclusively and was reverted; the verified threshold
+primitive remains. Capture History failed its binding deterministic efficiency
+rule, and 1-ply Continuation History was reverted after a strict candidate
+timeout. Conservative fixed-R2 NMP passed correctness, accepted H1 after 4,946
+fresh SPRT games, and scored 54.95% over 1,000 clean games at `8+0.08`; it was
+retained after 7,946 valid comparison games. The cumulative candidate was 8.16%
+smaller by nodes and 11.97% faster than v0.2.0 in the interleaved benchmark, but
+two strict primary-screen attempts were interrupted by reproducible
+repetition-PV defects in immutable v0.2.0. The protocol allowed no third attempt,
+so no legacy v0.3.0 tag was created. The renamed development identity is
+`NEYRANG 0.3.0-dev`; this rename itself carries no new strength claim.
 
 Post-campaign F1 removed make/unmake from the common legality-filtering path without changing the legal list, move order, benchmark tree, or checksum. Its 15-run interleaved depth-8 benchmark reduced median wall time by 33.99% and raised median NPS by 51.50%. A separately scored strict 2,000-game match then finished `958/572/470` from the candidate perspective, 62.20%, with no timing, legality, crash, or protocol anomaly.
 

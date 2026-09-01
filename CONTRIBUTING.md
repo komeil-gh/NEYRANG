@@ -20,8 +20,9 @@ Do not copy another engine's code or tuned constants. Primary sources may justif
 ## Code boundaries
 
 - `src/chess`: rules, representation, move generation, make/unmake, hashing, Perft
-- `src/eval`: search-independent evaluation
-- `src/search`: search, ordering, history, TT, time and parallel control
+- `src/rekhne`: REKHNE search strategy, TT, time, limits, and parallel control
+- `src/sanj`: SANJ search-independent position judgment
+- `src/shegerd`: SHEGERD move ordering, history heuristics, and SEE
 - `src/uci`: protocol parsing and engine boundary
 - `src/tools` and `scripts`: deterministic developer and evidence tooling
 

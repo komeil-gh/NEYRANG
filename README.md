@@ -53,20 +53,22 @@ Implemented:
   game shuffling, and independently replayed output manifests
 - a Bullet trainer pinned to an exact revision, a deterministic position reader,
   fail-closed quantized export into the `NEYRANGNNUE` artifact, and independent
-  full-corpus train/validation diagnostics
+  raw-float/quantized FEN parity plus full-corpus train/validation diagnostics
 
-Not implemented in the retained playing source: Syzygy, NNUE evaluation, LMP, futility pruning, continuation/capture history, or an optimized sliding-attack backend. The standalone NNUE lane now has one experimental million-position network, but no NNUE code or network is linked into search and no NNUE Elo claim exists. The single pre-registered P3 Lazy-SMP design passed its correctness, scaling, deadline, and 2,000-game paired gates and is retained on the development branch. This is controlled development evidence, not a new release or a universal Elo claim. Capture History and 1-ply Continuation History were tested and reverted; the second conservative NMP experiment was retained on the development branch but has not earned a release.
+Not implemented in the retained playing source: Syzygy, NNUE evaluation, LMP, futility pruning, continuation/capture history, or an optimized sliding-attack backend. The standalone NNUE lane now has an experimental four-million-position train artifact, but no NNUE code or network is linked into search and no NNUE Elo claim exists. The single pre-registered P3 Lazy-SMP design passed its correctness, scaling, deadline, and 2,000-game paired gates and is retained on the development branch. This is controlled development evidence, not a new release or a universal Elo claim. Capture History and 1-ply Continuation History were tested and reverted; the second conservative NMP experiment was retained on the development branch but has not earned a release.
 
-N1c has closed the first pipeline gate: two frozen campaigns produced an
-assembled 980,256-position train corpus and a disjoint 111,830-position
-validation corpus. Together they contain 1,092,086 scored positions and
-1,060,366 unique canonical position keys from 12,596 retained complete games.
-Cross-partition overlap is zero after 87 entire validation games were quarantined;
-1,413 assigned holdout openings were never sent to self-play. One exact Bullet
-epoch produced a versioned experimental network and independent diagnostics.
-This is data/training infrastructure evidence, not a playing-strength result;
-exact identities are in the [NNUE data contract](docs/development/nnue-data.md)
-and [N1c evidence manifest](docs/evidence/nnue-n1c-1m.json).
+N1d has closed the 4M pilot gate: three frozen campaigns produced an assembled
+4,125,798-position train corpus and a disjoint 463,228-position validation
+corpus. Together they contain 4,589,026 scored positions and 4,434,481 unique
+canonical position keys from 52,709 retained complete games. Two duplicated
+train openings and 419 train-overlapping validation games were quarantined as
+whole games; residual opening and cross-partition position overlap are zero.
+All 5,966 assigned holdout openings remain unplayed. One exact Bullet epoch
+produced a versioned experimental network that passes fixed raw-float versus
+quantized parity gates. This is data/training infrastructure evidence, not a
+playing-strength result; exact identities are in the
+[NNUE data contract](docs/development/nnue-data.md) and
+[N1d evidence manifest](docs/evidence/nnue-n1d-4m.json).
 
 No project license has been selected yet.
 
@@ -255,22 +257,33 @@ Assemble complete games only after every input shard is frozen and audited:
 Validation adds `--disjoint-from testing/nnue/corpus/train.vf`; an explicit
 `--quarantine-cross-partition-games` removes the complete conflicting validation
 game and records every removed game/position. It never removes an individual
-position or tolerates a repeated opening group.
+position. Duplicate opening groups fail closed by default; the explicit
+`--quarantine-duplicate-opening-games` policy deterministically retains one
+complete game per group and records every whole-game removal.
 
-The first retained Metal epoch uses the pinned trainer crate, exact complete-batch
+The retained 4M Metal epoch uses the pinned trainer crate, exact complete-batch
 geometry and the already shuffled/audited corpus:
 
 ```bash
 cargo run --release --manifest-path tools/nnue-trainer/Cargo.toml -- \
   --train testing/nnue/corpus/train.vf \
   --output-dir testing/nnue/checkpoints \
-  --net-id neyrang-n1c-1m \
-  --positions 980256 --batch-size 10211 --buffer-mb 8 --threads 1
+  --net-id neyrang-n1d-4m \
+  --positions 4125798 --batch-size 9894 --buffer-mb 8 --threads 1
+```
+
+Import and compare the exact raw/quantized tensors with explicit scale values:
+
+```bash
+cargo run --release --manifest-path tools/nnue-reference/Cargo.toml \
+  --bin import-bullet -- BULLET_QUANTISED.bin NEYRANG_NETWORK.nnue 511 768 400
+cargo run --release --manifest-path tools/nnue-reference/Cargo.toml \
+  --bin verify-parity -- BULLET_RAW.bin NEYRANG_NETWORK.nnue FENS.txt 8 2 --summary-only
 ```
 
 These commands create data and offline-learning evidence, not Elo evidence. The
-4M/16M/64M/256M scale points, final model-selection holdout, trainer/reference
-FEN parity, playing integration, speed tests and all game gates remain open.
+16M/64M/256M scale points, final model-selection holdout, engine parity, playing
+integration, speed tests and all game gates remain open.
 
 `OPENING_SEED`, `OPENING_ORDER`, `TC`, `HASH_MB`, `THREADS`, and `CONCURRENCY` are explicit inputs. Set `NODES` on `match.sh` for a node-limited comparison; omit it for a time-controlled match. Each run writes PGN telemetry plus adjacent `.log` and `.meta.txt` files containing engine, Git, binary, opening, and fastchess identities. Pass `ENGINE_A_GIT_SHA`, `ENGINE_B_GIT_SHA`, `OPENINGS_SOURCE`, and `OPENINGS_LICENSE` for an auditable experiment.
 
@@ -319,4 +332,4 @@ P3 subsequently retained one root-diversified Lazy-SMP design. Frozen Threads 2/
 
 H0/H1 then added byte-isolated evaluation evidence tooling and proved it on a 4,000-game historical pilot. H2b subsequently completed 4,000 fresh paired games without a timing, crash, legality, warning, or protocol failure. The first 9,000-game H2c expansion was rejected in full after one timeout; its deterministic H2d replacement completed and independently audited all 9,000 games at fixed per-engine node budgets. H2b+H2d first produced a conservative 9,959-record corpus, then H2e recovered 35,032 unique records through pre-registered gap-constrained, pair-balanced dense extraction without generating or accepting another game. Train and validation contain 28,040/3,564 rows from 4,146/538 opening groups, both 42-column designs have full rank, and a scale-only diagnostic is stable but statistically unresolved on validation. No evaluation weight changed. Because aggregate current-holdout summaries were accidentally exposed, any future fitter requires its own preregistration and a new disjoint untouched final holdout before a playing candidate can exist.
 
-N0a/N1a/N1b/N1c now cover the non-playing path from scalar `Chess768` inference and strict Viriformat games through deterministic corpus assembly, pinned Bullet ingestion, quantized export and independent offline diagnostics. The 1M pipeline point passed with 1,092,086 retained scored positions, but the selected Metal run is not bit-reproducible across repeated floating-point updates, the final holdout does not yet exist, and no network is linked into the engine. The next evidence point is 4M; no strength result exists.
+N0a/N1a/N1b/N1c/N1d now cover the non-playing path from scalar `Chess768` inference and strict Viriformat games through deterministic corpus assembly, pinned Bullet ingestion, quantized export, fixed FEN parity and independent offline diagnostics. The 4M train point passed with 4,125,798 retained train positions plus 463,228 disjoint validation positions. The selected quantization stays within the preregistered `8 cp` maximum and `2 cp` mean error bounds, but the final holdout does not yet exist and no network is linked into the engine. The next geometric evidence point is 16M; no NNUE strength result exists.

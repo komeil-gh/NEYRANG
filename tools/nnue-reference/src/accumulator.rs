@@ -55,6 +55,17 @@ impl AccumulatorPair {
         }
     }
 
+    /// Minimum and maximum hidden values across both perspectives.
+    #[must_use]
+    pub fn range(&self) -> (i32, i32) {
+        self.white
+            .iter()
+            .chain(&self.black)
+            .fold((i32::MAX, i32::MIN), |(minimum, maximum), &value| {
+                (minimum.min(value), maximum.max(value))
+            })
+    }
+
     fn add_piece(
         &mut self,
         color: Color,

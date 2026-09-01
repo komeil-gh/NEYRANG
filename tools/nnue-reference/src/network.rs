@@ -115,6 +115,12 @@ impl fmt::Display for NetworkError {
 impl std::error::Error for NetworkError {}
 
 impl Network {
+    /// Quantization and centipawn scaling validated by the artifact decoder.
+    #[must_use]
+    pub const fn parameters(&self) -> NetworkParameters {
+        self.parameters
+    }
+
     /// Construct a network from trainer/exporter tensors after exact shape validation.
     pub fn new(
         parameters: NetworkParameters,

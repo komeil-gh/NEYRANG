@@ -10,6 +10,9 @@ use bullet::game::formats::{bulletformat::ChessBoard, viriformat::dataformat::Ga
 use bullet_trainer::reader::DataReader;
 
 pub const POSITION_SHUFFLE_SEED: u64 = 2_026_090_111;
+pub const ACTIVATION_QUANT: i16 = 511;
+pub const OUTPUT_QUANT: i16 = 768;
+pub const OUTPUT_BIAS_QUANT: i32 = ACTIVATION_QUANT as i32 * OUTPUT_QUANT as i32;
 
 /// The exact number of complete batches consumed by one bounded epoch.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -159,7 +162,17 @@ fn deterministic_shuffle<T>(values: &mut [T], seed: u64) {
 
 #[cfg(test)]
 mod tests {
-    use super::{EpochPlan, PlanError, deterministic_shuffle};
+    use super::{
+        ACTIVATION_QUANT, EpochPlan, OUTPUT_BIAS_QUANT, OUTPUT_QUANT, PlanError,
+        deterministic_shuffle,
+    };
+
+    #[test]
+    fn n1d_quantization_contract_matches_the_passing_parity_candidate() {
+        assert_eq!(ACTIVATION_QUANT, 511);
+        assert_eq!(OUTPUT_QUANT, 768);
+        assert_eq!(OUTPUT_BIAS_QUANT, 511 * 768);
+    }
 
     #[test]
     fn million_gate_geometry_is_one_exact_pass() {

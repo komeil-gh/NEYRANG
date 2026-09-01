@@ -20,6 +20,7 @@ import chess
 
 SCHEMA = "neyrang-nnue-corpus-v1"
 SHUFFLE_SCHEMA = "neyrang-nnue-game-shuffle-v1"
+OPENING_DEDUP_SCHEMA = "neyrang-nnue-opening-dedup-v1"
 SHARD_SCHEMA = "neyrang-nnue-selfplay-shard-v1"
 CONTRACT = "neyrang-viriformat-strict-v1"
 PARTITIONS = ("train", "validation")
@@ -42,6 +43,7 @@ class CorpusConfig:
     minimum_scored_positions: int
     disjoint_from: tuple[Path, ...] = ()
     quarantine_cross_partition_games: bool = False
+    quarantine_duplicate_opening_games: bool = False
 
 
 @dataclass(frozen=True)
@@ -67,6 +69,14 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="drop complete games containing a position present in a bound partition",
     )
+    parser.add_argument(
+        "--quarantine-duplicate-opening-games",
+        action="store_true",
+        help=(
+            "retain one deterministic complete game per duplicated opening group "
+            "and quarantine the others"
+        ),
+    )
     return parser.parse_args()
 
 
@@ -89,6 +99,9 @@ def main() -> int:
                 for path in args.disjoint_from
             ),
             quarantine_cross_partition_games=args.quarantine_cross_partition_games,
+            quarantine_duplicate_opening_games=(
+                args.quarantine_duplicate_opening_games
+            ),
         )
         manifest = assemble_corpus(config)
         manifest_path = manifest_path_for(config.output)
@@ -136,16 +149,21 @@ def assemble_corpus(config: CorpusConfig) -> dict[str, Any]:
 
     source_records.sort(key=lambda item: (item[3], relative(item[0], config.repo_root)))
     games: list[GameEntry] = []
-    opening_groups: set[str] = set()
     for path, _, _, source_sha256, expected_games in source_records:
         parsed = parse_games(path.read_bytes(), source_sha256, auditor)
         if len(parsed) != expected_games:
             raise AssemblyError(f"parsed game count differs from manifest: {path}")
-        for game in parsed:
-            if game.opening_group in opening_groups:
-                raise AssemblyError("an opening group appears in more than one source game")
-            opening_groups.add(game.opening_group)
-            games.append(game)
+        games.extend(parsed)
+
+    (
+        games,
+        detected_duplicate_opening_groups,
+        quarantined_duplicate_opening_games,
+        quarantined_duplicate_opening_scored_positions,
+    ) = quarantine_duplicate_openings(
+        games, enabled=config.quarantine_duplicate_opening_games
+    )
+    opening_groups = {game.opening_group for game in games}
 
     disjoint_identities: list[dict[str, Any]] = []
     bound_position_keys: set[bytes] = set()
@@ -234,6 +252,9 @@ def assemble_corpus(config: CorpusConfig) -> dict[str, Any]:
             len(current_position_keys),
             position_keys_sha256,
             disjoint_identities,
+            detected_duplicate_opening_groups,
+            quarantined_duplicate_opening_games,
+            quarantined_duplicate_opening_scored_positions,
             len(conflicting_position_keys),
             len(conflicting_games),
             quarantined_scored_positions,
@@ -382,6 +403,32 @@ def parse_games(data: bytes, source_sha256: str, auditor) -> list[GameEntry]:
     return entries
 
 
+def quarantine_duplicate_openings(
+    games: list[GameEntry], *, enabled: bool
+) -> tuple[list[GameEntry], int, int, int]:
+    by_opening: dict[str, list[GameEntry]] = {}
+    for game in games:
+        by_opening.setdefault(game.opening_group, []).append(game)
+    duplicate_groups = {
+        opening: entries for opening, entries in by_opening.items() if len(entries) > 1
+    }
+    if duplicate_groups and not enabled:
+        raise AssemblyError("an opening group appears in more than one source game")
+
+    retained: list[GameEntry] = []
+    quarantined: list[GameEntry] = []
+    for opening in sorted(by_opening):
+        entries = sorted(by_opening[opening], key=opening_dedup_key)
+        retained.append(entries[0])
+        quarantined.extend(entries[1:])
+    return (
+        retained,
+        len(duplicate_groups),
+        len(quarantined),
+        sum(len(game.position_keys) for game in quarantined),
+    )
+
+
 def opening_group_key(board: chess.Board) -> str:
     canonical = canonical_fen(board)
     mirrored = canonical_fen(board.mirror())
@@ -400,6 +447,15 @@ def shuffle_key(seed: str, game: GameEntry) -> bytes:
     return stable_digest(
         SHUFFLE_SCHEMA,
         seed,
+        game.source_sha256,
+        str(game.source_game_index),
+        hashlib.sha256(game.blob).hexdigest(),
+    )
+
+
+def opening_dedup_key(game: GameEntry) -> bytes:
+    return stable_digest(
+        OPENING_DEDUP_SCHEMA,
         game.source_sha256,
         str(game.source_game_index),
         hashlib.sha256(game.blob).hexdigest(),
@@ -467,6 +523,9 @@ def build_manifest(
     unique_position_keys: int,
     position_keys_sha256: str,
     disjoint_identities: list[dict[str, Any]],
+    detected_duplicate_opening_groups: int,
+    quarantined_duplicate_opening_games: int,
+    quarantined_duplicate_opening_scored_positions: int,
     detected_conflicting_position_keys: int,
     quarantined_games: int,
     quarantined_scored_positions: int,
@@ -516,6 +575,18 @@ def build_manifest(
         },
         "separation": {
             "duplicate_opening_groups": 0,
+            "detected_duplicate_opening_groups": detected_duplicate_opening_groups,
+            "quarantined_duplicate_opening_games": (
+                quarantined_duplicate_opening_games
+            ),
+            "quarantined_duplicate_opening_scored_positions": (
+                quarantined_duplicate_opening_scored_positions
+            ),
+            "opening_group_policy": (
+                "retain-deterministic-winner-drop-other-complete-games"
+                if config.quarantine_duplicate_opening_games
+                else "reject"
+            ),
             "cross_partition_position_keys": 0,
             "policy": (
                 "drop-conflicting-complete-game"

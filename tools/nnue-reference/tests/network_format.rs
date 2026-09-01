@@ -127,6 +127,20 @@ fn pinned_bullet_tensor_stream_imports_without_padding_ambiguity() {
 }
 
 #[test]
+fn decoded_network_exposes_validated_quantization_parameters() {
+    let network = fixture_network();
+
+    assert_eq!(
+        network.parameters(),
+        NetworkParameters {
+            activation_quant: 255,
+            output_quant: 64,
+            centipawn_scale: 400,
+        }
+    );
+}
+
+#[test]
 fn bullet_import_rejects_wrong_length_and_padding() {
     let parameters = NetworkParameters {
         activation_quant: 255,

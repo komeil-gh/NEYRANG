@@ -1,6 +1,9 @@
 use std::{env, path::Path, process::ExitCode};
 
-use neyrang_nnue_trainer::{DeterministicViriLoader, EpochPlan, POSITION_SHUFFLE_SEED};
+use neyrang_nnue_trainer::{
+    ACTIVATION_QUANT, DeterministicViriLoader, EpochPlan, OUTPUT_BIAS_QUANT, OUTPUT_QUANT,
+    POSITION_SHUFFLE_SEED,
+};
 use bullet::{
     game::{formats::bulletformat::ChessBoard, inputs::Chess768},
     nn::optimiser::AdamW,
@@ -14,8 +17,6 @@ use bullet::{
 
 const HIDDEN_SIZE: usize = 128;
 const EVAL_SCALE: i32 = 400;
-const ACTIVATION_QUANT: i16 = 255;
-const OUTPUT_QUANT: i16 = 64;
 const INITIAL_LR: f32 = 0.001;
 const WDL_PROPORTION: f32 = 0.75;
 const NETWORK_SEED: u64 = 20_260_901;
@@ -72,7 +73,7 @@ fn run(args: Args) -> Result<(), String> {
             SavedFormat::id("l1w").round().quantise::<i16>(OUTPUT_QUANT),
             SavedFormat::id("l1b")
                 .round()
-                .quantise::<i32>(i32::from(ACTIVATION_QUANT) * i32::from(OUTPUT_QUANT)),
+                .quantise::<i32>(OUTPUT_BIAS_QUANT),
         ])
         .loss_fn(|output, target| output.sigmoid().squared_error(target))
         .build(|builder, stm_inputs, ntm_inputs| {
@@ -113,8 +114,14 @@ fn run(args: Args) -> Result<(), String> {
         .map_err(|error| error.to_string())?;
 
     println!(
-        "NEYRANG epoch contract: positions={} batch_size={} batches={} network_seed={} position_shuffle_seed={} bullet_rev=629ee50000b2afb7b3337595401c830d3b1e0f42",
-        plan.positions, plan.batch_size, plan.batches, NETWORK_SEED, POSITION_SHUFFLE_SEED,
+        "NEYRANG epoch contract: positions={} batch_size={} batches={} network_seed={} position_shuffle_seed={} activation_quant={} output_quant={} bullet_rev=629ee50000b2afb7b3337595401c830d3b1e0f42",
+        plan.positions,
+        plan.batch_size,
+        plan.batches,
+        NETWORK_SEED,
+        POSITION_SHUFFLE_SEED,
+        ACTIVATION_QUANT,
+        OUTPUT_QUANT,
     );
     trainer.run(&schedule, &settings, &loader);
     println!(

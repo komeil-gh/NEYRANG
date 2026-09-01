@@ -22,8 +22,20 @@ fn run() -> Result<(), String> {
     let mut args = env::args_os().skip(1);
     let input = PathBuf::from(args.next().ok_or("missing Bullet quantised input path")?);
     let output = PathBuf::from(args.next().ok_or("missing NEYRANG output path")?);
+    let activation_quant = parse_u16(
+        "activation quantization",
+        args.next().ok_or("missing activation quantization")?,
+    )?;
+    let output_quant = parse_u16(
+        "output quantization",
+        args.next().ok_or("missing output quantization")?,
+    )?;
+    let centipawn_scale = parse_i32(
+        "centipawn scale",
+        args.next().ok_or("missing centipawn scale")?,
+    )?;
     if args.next().is_some() {
-        return Err("expected exactly two paths".to_string());
+        return Err("expected exactly two paths and three numeric parameters".to_string());
     }
     if !input.is_file() {
         return Err(format!("input is not a file: {}", input.display()));
@@ -36,9 +48,9 @@ fn run() -> Result<(), String> {
     let network = Network::from_bullet_quantised(
         &bytes,
         NetworkParameters {
-            activation_quant: 255,
-            output_quant: 64,
-            centipawn_scale: 400,
+            activation_quant,
+            output_quant,
+            centipawn_scale,
         },
     )
     .map_err(|error| format!("invalid Bullet tensor stream: {error}"))?;
@@ -51,6 +63,24 @@ fn run() -> Result<(), String> {
         output.display()
     );
     Ok(())
+}
+
+fn parse_u16(name: &str, value: std::ffi::OsString) -> Result<u16, String> {
+    let value = value
+        .into_string()
+        .map_err(|_| format!("{name} is not UTF-8"))?;
+    value
+        .parse()
+        .map_err(|_| format!("{name} is not an unsigned 16-bit integer: {value:?}"))
+}
+
+fn parse_i32(name: &str, value: std::ffi::OsString) -> Result<i32, String> {
+    let value = value
+        .into_string()
+        .map_err(|_| format!("{name} is not UTF-8"))?;
+    value
+        .parse()
+        .map_err(|_| format!("{name} is not a signed 32-bit integer: {value:?}"))
 }
 
 fn write_exclusive(path: &Path, bytes: &[u8]) -> Result<(), String> {

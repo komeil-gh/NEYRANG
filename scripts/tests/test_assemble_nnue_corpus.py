@@ -107,6 +107,57 @@ class NnueCorpusAssemblerTests(unittest.TestCase):
 
             self.assertFalse(output.exists())
 
+    def test_opt_in_opening_quarantine_is_complete_and_input_order_independent(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            duplicate = mate_in_one(
+                "7k/5K2/6Q1/8/8/8/8/8 w - - 0 1", "g6g7"
+            )
+            clean = mate_in_one(
+                "7k/5K2/4Q3/8/8/8/8/8 w - - 0 1", "e6h6"
+            )
+            shard_a = write_shard(root, "train-a.vf", [duplicate], self.auditor)
+            shard_b = write_shard(
+                root, "train-b.vf", [duplicate, clean], self.auditor
+            )
+            output_ab = root / "corpus-ab.vf"
+            output_ba = root / "corpus-ba.vf"
+
+            manifest_ab = self.assembler.assemble_corpus(
+                make_config(
+                    self.assembler,
+                    root,
+                    (shard_a, shard_b),
+                    output_ab,
+                    quarantine_duplicate_opening_games=True,
+                )
+            )
+            manifest_ba = self.assembler.assemble_corpus(
+                make_config(
+                    self.assembler,
+                    root,
+                    (shard_b, shard_a),
+                    output_ba,
+                    quarantine_duplicate_opening_games=True,
+                )
+            )
+
+            self.assertEqual(output_ab.read_bytes(), output_ba.read_bytes())
+            self.assertEqual(manifest_ab["artifact"]["games"], 2)
+            self.assertEqual(
+                manifest_ab["separation"]["detected_duplicate_opening_groups"], 1
+            )
+            self.assertEqual(
+                manifest_ab["separation"]["quarantined_duplicate_opening_games"],
+                1,
+            )
+            self.assertEqual(
+                manifest_ab["separation"]
+                ["quarantined_duplicate_opening_scored_positions"],
+                1,
+            )
+            self.assertEqual(manifest_ab["separation"]["duplicate_opening_groups"], 0)
+
     def test_cross_partition_opening_group_is_always_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -260,6 +311,7 @@ def make_config(assembler, root: Path, inputs: tuple[Path, ...], output: Path, *
         "minimum_scored_positions": 1,
         "disjoint_from": (),
         "quarantine_cross_partition_games": False,
+        "quarantine_duplicate_opening_games": False,
     }
     values.update(overrides)
     return assembler.CorpusConfig(**values)

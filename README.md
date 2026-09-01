@@ -327,10 +327,13 @@ cargo run --release --manifest-path tools/nnue-reference/Cargo.toml \
   --bin verify-parity -- BULLET_RAW.bin NEYRANG_NETWORK.nnue FENS.txt 8 2 --summary-only
 ```
 
-The N2c king-relative candidate uses the same commands with
-`--feature-set chess768x3hm`; pass the same option to `import-bullet` and
-`screen-quantization`. `verify-parity` derives the feature contract from the
-versioned artifact and fails closed if the raw tensor shape disagrees.
+The N2c king-relative candidate uses `--feature-set chess768x3hm`. Bullet's
+checkpoint `raw.bin` intentionally omits save-format transforms, so factorised
+runs first export `merged-raw.bin` from `optimiser_state/weights.bin` with
+`export-factorised-raw`; quantization screening and parity must use that merged
+file. Pass the feature option to `import-bullet` and `screen-quantization`.
+`verify-parity` derives the feature contract from the versioned artifact and
+fails closed if the raw tensor shape disagrees.
 
 These commands create data and offline-learning evidence, not Elo evidence. The
 64M/256M scale points, final model-selection holdout, engine parity, playing

@@ -14,6 +14,113 @@ pub const ACTIVATION_QUANT: i16 = 511;
 pub const OUTPUT_QUANT: i16 = 768;
 pub const OUTPUT_BIAS_QUANT: i32 = ACTIVATION_QUANT as i32 * OUTPUT_QUANT as i32;
 
+/// Invalid checkpoint tensors for a factorised raw export.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum FactorisedRawError {
+    InvalidGeometry,
+    MissingTensor(&'static str),
+    DuplicateTensor(&'static str),
+    ShapeMismatch {
+        tensor: &'static str,
+        expected: usize,
+        actual: usize,
+    },
+    NonFiniteTensor(&'static str),
+}
+
+impl fmt::Display for FactorisedRawError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidGeometry => {
+                formatter.write_str("factorised raw geometry must be positive")
+            }
+            Self::MissingTensor(tensor) => write!(formatter, "missing checkpoint tensor {tensor}"),
+            Self::DuplicateTensor(tensor) => {
+                write!(formatter, "duplicate checkpoint tensor {tensor}")
+            }
+            Self::ShapeMismatch {
+                tensor,
+                expected,
+                actual,
+            } => write!(
+                formatter,
+                "checkpoint tensor {tensor} has {actual} values; expected {expected}"
+            ),
+            Self::NonFiniteTensor(tensor) => {
+                write!(
+                    formatter,
+                    "checkpoint tensor {tensor} contains non-finite values"
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for FactorisedRawError {}
+
+/// Merge a shared base feature transformer into every input bank and emit the
+/// float tensor order consumed by the NEYRANG scalar reference.
+pub fn merge_factorised_raw_tensors(
+    tensors: &[(String, Vec<f32>)],
+    buckets: usize,
+    hidden_size: usize,
+    base_features: usize,
+) -> Result<Vec<f32>, FactorisedRawError> {
+    if buckets == 0 || hidden_size == 0 || base_features == 0 {
+        return Err(FactorisedRawError::InvalidGeometry);
+    }
+
+    let get = |name: &'static str, expected: usize| -> Result<&[f32], FactorisedRawError> {
+        let mut matches = tensors
+            .iter()
+            .filter(|(tensor_name, _)| tensor_name == name);
+        let values = matches
+            .next()
+            .ok_or(FactorisedRawError::MissingTensor(name))?
+            .1
+            .as_slice();
+        if matches.next().is_some() {
+            return Err(FactorisedRawError::DuplicateTensor(name));
+        }
+        if values.len() != expected {
+            return Err(FactorisedRawError::ShapeMismatch {
+                tensor: name,
+                expected,
+                actual: values.len(),
+            });
+        }
+        if values.iter().any(|value| !value.is_finite()) {
+            return Err(FactorisedRawError::NonFiniteTensor(name));
+        }
+        Ok(values)
+    };
+
+    let bank_values = base_features
+        .checked_mul(hidden_size)
+        .ok_or(FactorisedRawError::InvalidGeometry)?;
+    let bucket_values = bank_values
+        .checked_mul(buckets)
+        .ok_or(FactorisedRawError::InvalidGeometry)?;
+    let l0w = get("l0w", bucket_values)?;
+    let l0f = get("l0f", bank_values)?;
+    let l0b = get("l0b", hidden_size)?;
+    let l1w = get("l1w", 2 * hidden_size)?;
+    let l1b = get("l1b", 1)?;
+
+    let mut merged = Vec::with_capacity(bucket_values + hidden_size + 2 * hidden_size + 1);
+    for bank in l0w.chunks_exact(bank_values) {
+        merged.extend(
+            bank.iter()
+                .zip(l0f)
+                .map(|(specific, shared)| specific + shared),
+        );
+    }
+    merged.extend_from_slice(l0b);
+    merged.extend_from_slice(l1w);
+    merged.extend_from_slice(l1b);
+    Ok(merged)
+}
+
 /// Stable position-filter choices admitted by the NEYRANG training contract.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum PositionFilter {
@@ -233,7 +340,7 @@ fn deterministic_shuffle<T>(values: &mut [T], seed: u64) {
 mod tests {
     use super::{
         ACTIVATION_QUANT, EpochPlan, FilterFacts, OUTPUT_BIAS_QUANT, OUTPUT_QUANT, PlanError,
-        PositionFilter, deterministic_shuffle,
+        PositionFilter, deterministic_shuffle, merge_factorised_raw_tensors,
     };
 
     #[test]
@@ -325,5 +432,22 @@ mod tests {
             assert!(PositionFilter::BulletDefault.rejects(rejected));
             assert!(!PositionFilter::None.rejects(rejected));
         }
+    }
+
+    #[test]
+    fn factorised_raw_export_merges_shared_weights_in_bullet_save_order() {
+        let tensors = vec![
+            ("l0w".to_string(), vec![1.0, 2.0, 3.0, 4.0]),
+            ("l0f".to_string(), vec![10.0, 20.0]),
+            ("l0b".to_string(), vec![30.0]),
+            ("l1w".to_string(), vec![40.0, 50.0]),
+            ("l1b".to_string(), vec![60.0]),
+        ];
+
+        assert_eq!(
+            merge_factorised_raw_tensors(&tensors, 2, 1, 2).unwrap(),
+            vec![11.0, 22.0, 13.0, 24.0, 30.0, 40.0, 50.0, 60.0]
+        );
+        assert!(merge_factorised_raw_tensors(&tensors[..4], 2, 1, 2).is_err());
     }
 }

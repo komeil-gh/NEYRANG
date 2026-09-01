@@ -24,6 +24,8 @@ import chess
 
 SCHEMA = "neyrang-nnue-selfplay-shard-v1"
 SPLIT_SCHEMA = "neyrang-nnue-selfplay-split-v1"
+LEGACY_SPLIT_SCHEMA = "neyrang-nnue-selfplay-split-v1"
+SPLIT_DIGEST_SCHEMAS = (SPLIT_SCHEMA, LEGACY_SPLIT_SCHEMA)
 PARTITIONS = ("train", "validation", "holdout")
 OPENING_MANIFEST_SCHEMAS = (
     "neyrang-genfens-shard-v1",
@@ -73,6 +75,7 @@ class ShardConfig:
     compiler_identity: str
     source_license: str
     stall_timeout_seconds: float = 60.0
+    split_digest_schema: str = SPLIT_SCHEMA
 
 
 @dataclass(frozen=True)
@@ -100,6 +103,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--compiler-identity", required=True)
     parser.add_argument("--source-license", required=True)
     parser.add_argument("--stall-timeout-seconds", type=float, default=60.0)
+    parser.add_argument(
+        "--split-digest-schema",
+        choices=SPLIT_DIGEST_SCHEMAS,
+        default=SPLIT_SCHEMA,
+    )
     return parser.parse_args()
 
 
@@ -126,6 +134,7 @@ def main() -> int:
             compiler_identity=args.compiler_identity,
             source_license=args.source_license,
             stall_timeout_seconds=args.stall_timeout_seconds,
+            split_digest_schema=args.split_digest_schema,
         )
         manifest = generate_shard(config)
         manifest_path = manifest_path_for(config.output)
@@ -266,6 +275,8 @@ def validate_config(config: ShardConfig) -> None:
         raise GenerationError(f"partition must be one of {', '.join(PARTITIONS)}")
     if not config.split_seed:
         raise GenerationError("split seed must not be empty")
+    if config.split_digest_schema not in SPLIT_DIGEST_SCHEMAS:
+        raise GenerationError("split digest schema is not registered")
     if config.train_percent <= 0 or config.validation_percent <= 0:
         raise GenerationError("split percentages must be positive")
     if config.train_percent + config.validation_percent >= 100:
@@ -354,9 +365,18 @@ def opening_group_key(fen: str) -> str:
 
 
 def partition_for_opening(
-    fen: str, split_seed: str, train_percent: int, validation_percent: int
+    fen: str,
+    split_seed: str,
+    train_percent: int,
+    validation_percent: int,
+    *,
+    split_digest_schema: str = SPLIT_SCHEMA,
 ) -> str:
-    digest = stable_digest(SPLIT_SCHEMA, split_seed, opening_group_key(fen), "partition")
+    if split_digest_schema not in SPLIT_DIGEST_SCHEMAS:
+        raise GenerationError("split digest schema is not registered")
+    digest = stable_digest(
+        split_digest_schema, split_seed, opening_group_key(fen), "partition"
+    )
     bucket = int.from_bytes(digest[:8], "big") % 100
     if bucket < train_percent:
         return "train"
@@ -376,6 +396,7 @@ def assign_partitions(fens: list[str], config: ShardConfig) -> list[OpeningAssig
                 config.split_seed,
                 config.train_percent,
                 config.validation_percent,
+                split_digest_schema=config.split_digest_schema,
             ),
         )
         for index, fen in enumerate(fens)
@@ -613,6 +634,7 @@ def build_manifest(
         },
         "split": {
             "schema": SPLIT_SCHEMA,
+            "assignment_digest_schema": config.split_digest_schema,
             "seed": config.split_seed,
             "group_key": "lexicographic minimum of canonical first-four-field FEN and color-reversed mirror",
             "train_percent": config.train_percent,

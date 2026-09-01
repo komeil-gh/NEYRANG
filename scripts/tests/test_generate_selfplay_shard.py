@@ -167,8 +167,13 @@ class SelfPlayShardGeneratorTests(unittest.TestCase):
             opening_manifest.write_text(json.dumps(payload), encoding="utf-8")
             binary = write_fake_generator(root / "generator", forced_mate_fixture(0))
             output = root / "holdout.vf"
+            legacy_split_schema = "neyrang-nnue-selfplay-split-v1"
             partition = self.generator.partition_for_opening(
-                opening, "split-seed", 80, 10
+                opening,
+                "split-seed",
+                80,
+                10,
+                split_digest_schema=legacy_split_schema,
             )
 
             manifest = self.generator.generate_shard(
@@ -181,6 +186,7 @@ class SelfPlayShardGeneratorTests(unittest.TestCase):
                     output,
                     partition=partition,
                     source_license="UNLICENSED-NEYRANG-INTERNAL",
+                    split_digest_schema=legacy_split_schema,
                 )
             )
 
@@ -188,6 +194,10 @@ class SelfPlayShardGeneratorTests(unittest.TestCase):
             self.assertEqual(
                 manifest["opening_source"]["license"],
                 "UNLICENSED-NEYRANG-INTERNAL",
+            )
+            self.assertEqual(
+                manifest["split"]["assignment_digest_schema"],
+                legacy_split_schema,
             )
 
     def test_generator_completion_reason_counts_must_match_independent_replay(self) -> None:

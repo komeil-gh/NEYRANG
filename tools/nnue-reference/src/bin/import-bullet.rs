@@ -6,7 +6,7 @@ use std::{
     process::ExitCode,
 };
 
-use neyrang_nnue_reference::{Network, NetworkParameters};
+use neyrang_nnue_reference::{FeatureSet, Network, NetworkParameters};
 
 fn main() -> ExitCode {
     match run() {
@@ -34,8 +34,15 @@ fn run() -> Result<(), String> {
         "centipawn scale",
         args.next().ok_or("missing centipawn scale")?,
     )?;
+    let feature_set = match args.next() {
+        None => FeatureSet::Chess768,
+        Some(flag) if flag == "--feature-set" => {
+            parse_feature_set(args.next().ok_or("missing value after --feature-set")?)?
+        }
+        Some(value) => return Err(format!("unknown argument: {value:?}")),
+    };
     if args.next().is_some() {
-        return Err("expected exactly two paths and three numeric parameters".to_string());
+        return Err("too many arguments".to_string());
     }
     if !input.is_file() {
         return Err(format!("input is not a file: {}", input.display()));
@@ -45,8 +52,9 @@ fn run() -> Result<(), String> {
     }
 
     let bytes = fs::read(&input).map_err(|error| format!("read input: {error}"))?;
-    let network = Network::from_bullet_quantised(
+    let network = Network::from_bullet_quantised_with_feature_set(
         &bytes,
+        feature_set,
         NetworkParameters {
             activation_quant,
             output_quant,
@@ -63,6 +71,15 @@ fn run() -> Result<(), String> {
         output.display()
     );
     Ok(())
+}
+
+fn parse_feature_set(value: std::ffi::OsString) -> Result<FeatureSet, String> {
+    match value.to_str() {
+        Some("chess768") => Ok(FeatureSet::Chess768),
+        Some("chess768x3hm") => Ok(FeatureSet::Chess768KingBucketsMirrored3),
+        Some(value) => Err(format!("unknown feature set: {value}")),
+        None => Err("feature set is not UTF-8".to_string()),
+    }
 }
 
 fn parse_u16(name: &str, value: std::ffi::OsString) -> Result<u16, String> {

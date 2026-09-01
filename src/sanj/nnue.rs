@@ -1,9 +1,8 @@
 //! Scalar NNUE inference owned by SANJ.
 //!
-//! This is the correctness path for the version-1 `NEYRANG\0` Chess768
-//! artifact. It deliberately performs a full accumulator refresh for every
-//! evaluation. Search integration and incremental/SIMD acceleration remain
-//! separate gates and must preserve this implementation as an oracle.
+//! This is the correctness path for the `NEYRANG\0` Chess768 and
+//! Chess768x3hm artifacts. King moves deliberately refresh king-bucket
+//! accumulators; other moves use the independently tested incremental path.
 
 use std::fmt;
 
@@ -11,21 +10,45 @@ use crate::chess::{Color, Move, MoveFlag, PieceType, Position, Square};
 
 /// Two colors, six piece kinds and 64 squares.
 pub const INPUT_FEATURES: usize = 2 * 6 * 64;
+/// Three horizontally mirrored own-king banks of Chess768 features.
+pub const INPUT_FEATURES_KING_BUCKETS_MIRRORED_3: usize = 3 * INPUT_FEATURES;
 /// Hidden width frozen by the version-1 artifact contract.
 pub const HIDDEN_SIZE: usize = 128;
 /// Version of the NEYRANG NNUE artifact contract.
 pub const FORMAT_VERSION: u16 = 1;
+/// Artifact version for the registered three-bank king-relative mapping.
+pub const FORMAT_VERSION_KING_BUCKETS: u16 = 2;
 /// Identifier for the dual-perspective Chess768 feature mapping.
 pub const FEATURE_SET_CHESS768: u16 = 1;
+/// Identifier for Chess768x3hm.
+pub const FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3: u16 = 2;
 /// Byte length of the fixed artifact header.
 pub const HEADER_SIZE: usize = 32;
 
 const MAGIC: &[u8; 8] = b"NEYRANG\0";
-const FEATURE_WEIGHT_COUNT: usize = INPUT_FEATURES * HIDDEN_SIZE;
 const FEATURE_BIAS_COUNT: usize = HIDDEN_SIZE;
 const OUTPUT_WEIGHT_COUNT: usize = 2 * HIDDEN_SIZE;
-const PAYLOAD_SIZE: usize =
-    (FEATURE_WEIGHT_COUNT + FEATURE_BIAS_COUNT + OUTPUT_WEIGHT_COUNT) * 2 + 4;
+const KING_BUCKET_LAYOUT_MIRRORED_3: [u8; 32] = [
+    1, 1, 1, 0, // home rank
+    1, 1, 1, 1, // second rank
+    2, 2, 2, 2, // active king ranks
+    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+];
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum FeatureSet {
+    Chess768,
+    Chess768KingBucketsMirrored3,
+}
+
+impl FeatureSet {
+    const fn input_features(self) -> usize {
+        match self {
+            Self::Chess768 => INPUT_FEATURES,
+            Self::Chess768KingBucketsMirrored3 => INPUT_FEATURES_KING_BUCKETS_MIRRORED_3,
+        }
+    }
+}
 
 /// Quantization values validated from the artifact header.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -38,6 +61,7 @@ pub struct NetworkParameters {
 /// A validated scalar network ready for full-refresh SANJ inference.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Network {
+    feature_set: FeatureSet,
     parameters: NetworkParameters,
     feature_weights: Box<[i16]>,
     feature_bias: Box<[i16]>,
@@ -73,7 +97,7 @@ impl AccumulatorPair {
         for index in 0_u8..64 {
             let square = Square::from_index(index).expect("board index is in range");
             if let Some((color, piece_type)) = position.piece_at(square) {
-                pair.add_piece(color, piece_type, square, network);
+                pair.add_piece(position, color, piece_type, square, network);
             }
         }
         pair
@@ -88,7 +112,15 @@ impl AccumulatorPair {
         let (moving_color, moving_type) = position
             .piece_at(from)
             .expect("a legal move source must contain a piece");
-        next.remove_piece(moving_color, moving_type, from, network);
+        if network.feature_set == FeatureSet::Chess768KingBucketsMirrored3
+            && moving_type == PieceType::King
+        {
+            let mut child = position.clone();
+            child.make_move(mv);
+            return Self::refresh(&child, network);
+        }
+
+        next.remove_piece(position, moving_color, moving_type, from, network);
 
         if mv.is_capture() {
             let capture_square = if mv.is_en_passant() {
@@ -100,16 +132,23 @@ impl AccumulatorPair {
             let (captured_color, captured_type) = position
                 .piece_at(capture_square)
                 .expect("a legal capture must identify the captured piece");
-            next.remove_piece(captured_color, captured_type, capture_square, network);
+            next.remove_piece(
+                position,
+                captured_color,
+                captured_type,
+                capture_square,
+                network,
+            );
         }
 
         if mv.is_castle() {
             let (rook_from, rook_to) = castle_rook_squares(moving_color, mv.flag());
-            next.remove_piece(moving_color, PieceType::Rook, rook_from, network);
-            next.add_piece(moving_color, PieceType::Rook, rook_to, network);
+            next.remove_piece(position, moving_color, PieceType::Rook, rook_from, network);
+            next.add_piece(position, moving_color, PieceType::Rook, rook_to, network);
         }
 
         next.add_piece(
+            position,
             moving_color,
             mv.promotion().unwrap_or(moving_type),
             to,
@@ -127,6 +166,7 @@ impl AccumulatorPair {
 
     fn add_piece(
         &mut self,
+        position: &Position,
         color: Color,
         piece_type: PieceType,
         square: Square,
@@ -134,16 +174,31 @@ impl AccumulatorPair {
     ) {
         network.add_feature(
             &mut self.white,
-            feature_index(color, piece_type, square, Color::White),
+            feature_index_for(
+                position,
+                color,
+                piece_type,
+                square,
+                Color::White,
+                network.feature_set,
+            ),
         );
         network.add_feature(
             &mut self.black,
-            feature_index(color, piece_type, square, Color::Black),
+            feature_index_for(
+                position,
+                color,
+                piece_type,
+                square,
+                Color::Black,
+                network.feature_set,
+            ),
         );
     }
 
     fn remove_piece(
         &mut self,
+        position: &Position,
         color: Color,
         piece_type: PieceType,
         square: Square,
@@ -151,11 +206,25 @@ impl AccumulatorPair {
     ) {
         network.remove_feature(
             &mut self.white,
-            feature_index(color, piece_type, square, Color::White),
+            feature_index_for(
+                position,
+                color,
+                piece_type,
+                square,
+                Color::White,
+                network.feature_set,
+            ),
         );
         network.remove_feature(
             &mut self.black,
-            feature_index(color, piece_type, square, Color::Black),
+            feature_index_for(
+                position,
+                color,
+                piece_type,
+                square,
+                Color::Black,
+                network.feature_set,
+            ),
         );
     }
 }
@@ -221,7 +290,7 @@ impl fmt::Display for NetworkError {
 impl std::error::Error for NetworkError {}
 
 impl Network {
-    /// Decode a complete version-1 NEYRANG artifact and reject any drift.
+    /// Decode a complete supported NEYRANG artifact and reject any drift.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, NetworkError> {
         if bytes.len() < HEADER_SIZE {
             return Err(NetworkError::LengthMismatch {
@@ -234,13 +303,17 @@ impl Network {
         }
 
         let version = read_u16(bytes, 8);
-        if version != FORMAT_VERSION {
-            return Err(NetworkError::UnsupportedVersion(version));
-        }
-        let feature_set = read_u16(bytes, 10);
-        if feature_set != FEATURE_SET_CHESS768 {
-            return Err(NetworkError::UnsupportedFeatureSet(feature_set));
-        }
+        let feature_set_id = read_u16(bytes, 10);
+        let feature_set = match (version, feature_set_id) {
+            (FORMAT_VERSION, FEATURE_SET_CHESS768) => FeatureSet::Chess768,
+            (FORMAT_VERSION_KING_BUCKETS, FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3) => {
+                FeatureSet::Chess768KingBucketsMirrored3
+            }
+            (FORMAT_VERSION | FORMAT_VERSION_KING_BUCKETS, feature_set) => {
+                return Err(NetworkError::UnsupportedFeatureSet(feature_set));
+            }
+            (version, _) => return Err(NetworkError::UnsupportedVersion(version)),
+        };
         let hidden_size = read_u16(bytes, 12);
         if usize::from(hidden_size) != HIDDEN_SIZE {
             return Err(NetworkError::UnsupportedHiddenSize(hidden_size));
@@ -266,9 +339,12 @@ impl Network {
         }
 
         let payload_length = read_u32(bytes, 24) as usize;
-        if payload_length != PAYLOAD_SIZE {
+        let feature_weight_count = feature_set.input_features() * HIDDEN_SIZE;
+        let payload_size =
+            (feature_weight_count + FEATURE_BIAS_COUNT + OUTPUT_WEIGHT_COUNT) * 2 + 4;
+        if payload_length != payload_size {
             return Err(NetworkError::LengthMismatch {
-                expected: PAYLOAD_SIZE,
+                expected: payload_size,
                 actual: payload_length,
             });
         }
@@ -291,12 +367,13 @@ impl Network {
         }
 
         let mut cursor = 0;
-        let feature_weights = read_i16_values(payload, &mut cursor, FEATURE_WEIGHT_COUNT);
+        let feature_weights = read_i16_values(payload, &mut cursor, feature_weight_count);
         let feature_bias = read_i16_values(payload, &mut cursor, FEATURE_BIAS_COUNT);
         let output_weights = read_i16_values(payload, &mut cursor, OUTPUT_WEIGHT_COUNT);
         let output_bias = read_i32(payload, cursor);
 
         Ok(Self {
+            feature_set,
             parameters,
             feature_weights: feature_weights.into_boxed_slice(),
             feature_bias: feature_bias.into_boxed_slice(),
@@ -393,6 +470,36 @@ const fn feature_index(
         Color::Black => square.index() ^ 56,
     };
     (relative_color * 6 + piece_type.index()) * 64 + oriented_square
+}
+
+#[inline]
+fn feature_index_for(
+    position: &Position,
+    piece_color: Color,
+    piece_type: PieceType,
+    square: Square,
+    perspective: Color,
+    feature_set: FeatureSet,
+) -> usize {
+    let base = feature_index(piece_color, piece_type, square, perspective);
+    match feature_set {
+        FeatureSet::Chess768 => base,
+        FeatureSet::Chess768KingBucketsMirrored3 => {
+            let king_square = position
+                .pieces(perspective, PieceType::King)
+                .trailing_zeros() as usize;
+            let oriented_king = match perspective {
+                Color::White => king_square,
+                Color::Black => king_square ^ 56,
+            };
+            let rank = oriented_king / 8;
+            let file = oriented_king % 8;
+            let mirrored_file = file.min(7 - file);
+            let bucket = usize::from(KING_BUCKET_LAYOUT_MIRRORED_3[rank * 4 + mirrored_file]);
+            let horizontal_flip = if file > 3 { 7 } else { 0 };
+            bucket * INPUT_FEATURES + (base ^ horizontal_flip)
+        }
+    }
 }
 
 #[inline]

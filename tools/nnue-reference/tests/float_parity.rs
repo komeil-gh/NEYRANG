@@ -1,7 +1,8 @@
 use neyrang::chess::{Color, PieceType, Position, Square};
 use neyrang_nnue_reference::{
-    FenSuiteError, FloatNetwork, FloatNetworkError, FloatQuantizationError, HIDDEN_SIZE,
-    INPUT_FEATURES, Network, NetworkParameters, active_features, evaluate_parity, parse_fen_suite,
+    FeatureSet, FenSuiteError, FloatNetwork, FloatNetworkError, FloatQuantizationError,
+    HIDDEN_SIZE, INPUT_FEATURES, INPUT_FEATURES_KING_BUCKETS_MIRRORED_3, Network,
+    NetworkParameters, ParityError, active_features, evaluate_parity, parse_fen_suite,
 };
 
 const FLOAT_COUNT: usize = INPUT_FEATURES * HIDDEN_SIZE + HIDDEN_SIZE + 2 * HIDDEN_SIZE + 1;
@@ -164,6 +165,61 @@ fn active_feature_fixture_really_distinguishes_the_two_perspectives() {
     let black = active_features(&position, Color::Black);
 
     assert_ne!(white, black);
+}
+
+#[test]
+fn king_bucket_raw_tensor_quantizes_with_the_same_feature_contract() {
+    let float_count =
+        INPUT_FEATURES_KING_BUCKETS_MIRRORED_3 * HIDDEN_SIZE + HIDDEN_SIZE + 2 * HIDDEN_SIZE + 1;
+    let raw = encode_f32(&vec![0.0; float_count]);
+    let float = FloatNetwork::from_bullet_raw_with_feature_set(
+        &raw,
+        400.0,
+        FeatureSet::Chess768KingBucketsMirrored3,
+    )
+    .unwrap();
+    let quantized = float
+        .quantize(NetworkParameters {
+            activation_quant: 511,
+            output_quant: 768,
+            centipawn_scale: 400,
+        })
+        .unwrap();
+
+    assert_eq!(
+        quantized.feature_set(),
+        FeatureSet::Chess768KingBucketsMirrored3
+    );
+    assert_eq!(float.evaluate(&Position::startpos()), 0.0);
+}
+
+#[test]
+fn parity_rejects_mismatched_feature_contracts() {
+    let float_count =
+        INPUT_FEATURES_KING_BUCKETS_MIRRORED_3 * HIDDEN_SIZE + HIDDEN_SIZE + 2 * HIDDEN_SIZE + 1;
+    let float = FloatNetwork::from_bullet_raw_with_feature_set(
+        &encode_f32(&vec![0.0; float_count]),
+        400.0,
+        FeatureSet::Chess768KingBucketsMirrored3,
+    )
+    .unwrap();
+    let quantized = Network::new(
+        NetworkParameters {
+            activation_quant: 511,
+            output_quant: 768,
+            centipawn_scale: 400,
+        },
+        vec![0; INPUT_FEATURES * HIDDEN_SIZE],
+        vec![0; HIDDEN_SIZE],
+        vec![0; 2 * HIDDEN_SIZE],
+        0,
+    )
+    .unwrap();
+
+    assert_eq!(
+        evaluate_parity(&float, &quantized, &[Position::startpos()]),
+        Err(ParityError::FeatureSetMismatch)
+    );
 }
 
 #[test]

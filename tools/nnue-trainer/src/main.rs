@@ -1,8 +1,14 @@
 use std::{env, path::Path, process::ExitCode};
 
 use bullet::{
-    game::{formats::bulletformat::ChessBoard, inputs::Chess768},
-    nn::optimiser::AdamW,
+    game::{
+        formats::bulletformat::ChessBoard,
+        inputs::{Chess768, ChessBucketsMirrored, get_num_buckets},
+    },
+    nn::{
+        InitSettings, Shape,
+        optimiser::{AdamW, AdamWParams},
+    },
     trainer::{
         save::SavedFormat,
         schedule::{TrainingSchedule, TrainingSteps, lr, wdl},
@@ -19,6 +25,33 @@ const HIDDEN_SIZE: usize = 128;
 const EVAL_SCALE: i32 = 400;
 const INITIAL_LR: f32 = 0.001;
 const NETWORK_SEED: u64 = 20_260_901;
+#[rustfmt::skip]
+const KING_BUCKET_LAYOUT_MIRRORED_3: [usize; 32] = [
+    1, 1, 1, 0,
+    1, 1, 1, 1,
+    2, 2, 2, 2,
+    2, 2, 2, 2,
+    2, 2, 2, 2,
+    2, 2, 2, 2,
+    2, 2, 2, 2,
+    2, 2, 2, 2,
+];
+const KING_BUCKET_COUNT: usize = get_num_buckets(&KING_BUCKET_LAYOUT_MIRRORED_3);
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TrainerFeatureSet {
+    Chess768,
+    Chess768KingBucketsMirrored3,
+}
+
+impl TrainerFeatureSet {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Chess768 => "chess768",
+            Self::Chess768KingBucketsMirrored3 => "chess768x3hm",
+        }
+    }
+}
 
 #[derive(Debug)]
 struct Args {
@@ -31,6 +64,7 @@ struct Args {
     threads: usize,
     position_filter: PositionFilter,
     wdl_proportion: f32,
+    feature_set: TrainerFeatureSet,
 }
 
 fn main() -> ExitCode {
@@ -58,32 +92,6 @@ fn run(args: Args) -> Result<(), String> {
     if args.buffer_megabytes == 0 || args.threads == 0 {
         return Err("buffer size and loader thread count must be positive".to_string());
     }
-
-    let mut trainer = ValueTrainerBuilder::default()
-        .seed(NETWORK_SEED)
-        .dual_perspective()
-        .optimiser(AdamW)
-        .inputs(Chess768)
-        .save_format(&[
-            SavedFormat::id("l0w")
-                .round()
-                .quantise::<i16>(ACTIVATION_QUANT),
-            SavedFormat::id("l0b")
-                .round()
-                .quantise::<i16>(ACTIVATION_QUANT),
-            SavedFormat::id("l1w").round().quantise::<i16>(OUTPUT_QUANT),
-            SavedFormat::id("l1b")
-                .round()
-                .quantise::<i32>(OUTPUT_BIAS_QUANT),
-        ])
-        .loss_fn(|output, target| output.sigmoid().squared_error(target))
-        .build(|builder, stm_inputs, ntm_inputs| {
-            let l0 = builder.new_affine("l0", 768, HIDDEN_SIZE);
-            let l1 = builder.new_affine("l1", 2 * HIDDEN_SIZE, 1);
-            let stm_hidden = l0.forward(stm_inputs).screlu();
-            let ntm_hidden = l0.forward(ntm_inputs).screlu();
-            l1.forward(stm_hidden.concat(ntm_hidden))
-        });
 
     let schedule = TrainingSchedule {
         net_id: args.net_id.clone(),
@@ -116,18 +124,102 @@ fn run(args: Args) -> Result<(), String> {
         .with_filter(args.position_filter);
 
     println!(
-        "NEYRANG epoch contract: positions={} batch_size={} batches={} position_filter={} wdl_proportion={} network_seed={} position_shuffle_seed={} activation_quant={} output_quant={} bullet_rev=629ee50000b2afb7b3337595401c830d3b1e0f42",
+        "NEYRANG epoch contract: positions={} batch_size={} batches={} position_filter={} wdl_proportion={} feature_set={} network_seed={} position_shuffle_seed={} activation_quant={} output_quant={} bullet_rev=629ee50000b2afb7b3337595401c830d3b1e0f42",
         plan.positions,
         plan.batch_size,
         plan.batches,
         args.position_filter.as_str(),
         args.wdl_proportion,
+        args.feature_set.as_str(),
         NETWORK_SEED,
         POSITION_SHUFFLE_SEED,
         ACTIVATION_QUANT,
         OUTPUT_QUANT,
     );
-    trainer.run(&schedule, &settings, &loader);
+    match args.feature_set {
+        TrainerFeatureSet::Chess768 => {
+            let mut trainer = ValueTrainerBuilder::default()
+                .seed(NETWORK_SEED)
+                .dual_perspective()
+                .optimiser(AdamW)
+                .inputs(Chess768)
+                .save_format(&[
+                    SavedFormat::id("l0w")
+                        .round()
+                        .quantise::<i16>(ACTIVATION_QUANT),
+                    SavedFormat::id("l0b")
+                        .round()
+                        .quantise::<i16>(ACTIVATION_QUANT),
+                    SavedFormat::id("l1w").round().quantise::<i16>(OUTPUT_QUANT),
+                    SavedFormat::id("l1b")
+                        .round()
+                        .quantise::<i32>(OUTPUT_BIAS_QUANT),
+                ])
+                .loss_fn(|output, target| output.sigmoid().squared_error(target))
+                .build(|builder, stm_inputs, ntm_inputs| {
+                    let l0 = builder.new_affine("l0", 768, HIDDEN_SIZE);
+                    let l1 = builder.new_affine("l1", 2 * HIDDEN_SIZE, 1);
+                    let stm_hidden = l0.forward(stm_inputs).screlu();
+                    let ntm_hidden = l0.forward(ntm_inputs).screlu();
+                    l1.forward(stm_hidden.concat(ntm_hidden))
+                });
+            trainer.run(&schedule, &settings, &loader);
+        }
+        TrainerFeatureSet::Chess768KingBucketsMirrored3 => {
+            let mut trainer = ValueTrainerBuilder::default()
+                .seed(NETWORK_SEED)
+                .dual_perspective()
+                .optimiser(AdamW)
+                .inputs(ChessBucketsMirrored::new(KING_BUCKET_LAYOUT_MIRRORED_3))
+                .save_format(&[
+                    SavedFormat::id("l0w")
+                        .transform(|store, weights| {
+                            let factoriser =
+                                store.get("l0f").values.f32().repeat(KING_BUCKET_COUNT);
+                            weights
+                                .into_iter()
+                                .zip(factoriser)
+                                .map(|(bucket, shared)| bucket + shared)
+                                .collect()
+                        })
+                        .round()
+                        .quantise::<i16>(ACTIVATION_QUANT),
+                    SavedFormat::id("l0b")
+                        .round()
+                        .quantise::<i16>(ACTIVATION_QUANT),
+                    SavedFormat::id("l1w").round().quantise::<i16>(OUTPUT_QUANT),
+                    SavedFormat::id("l1b")
+                        .round()
+                        .quantise::<i32>(OUTPUT_BIAS_QUANT),
+                ])
+                .loss_fn(|output, target| output.sigmoid().squared_error(target))
+                .build(|builder, stm_inputs, ntm_inputs| {
+                    let factoriser = builder.new_weights(
+                        "l0f",
+                        Shape::new(HIDDEN_SIZE, 768),
+                        InitSettings::Zeroed,
+                    );
+                    let mut l0 = builder.new_affine("l0", 768 * KING_BUCKET_COUNT, HIDDEN_SIZE);
+                    l0.weights = l0.weights + factoriser.repeat(KING_BUCKET_COUNT);
+                    let l1 = builder.new_affine("l1", 2 * HIDDEN_SIZE, 1);
+                    let stm_hidden = l0.forward(stm_inputs).screlu();
+                    let ntm_hidden = l0.forward(ntm_inputs).screlu();
+                    l1.forward(stm_hidden.concat(ntm_hidden))
+                });
+            let factorised_clip = AdamWParams {
+                max_weight: 0.99,
+                min_weight: -0.99,
+                ..Default::default()
+            };
+            trainer
+                .optimiser
+                .set_params_for_weight("l0w", factorised_clip);
+            trainer
+                .optimiser
+                .set_params_for_weight("l0f", factorised_clip);
+            trainer.run(&schedule, &settings, &loader);
+        }
+    }
     println!(
         "NEYRANG epoch complete: positions={} checkpoint={}/{}-1",
         plan.positions, args.output_directory, args.net_id
@@ -149,6 +241,7 @@ fn parse_args_from(mut values: impl Iterator<Item = String>) -> Result<Args, Str
     let mut threads = None;
     let mut position_filter = None;
     let mut wdl_proportion = None;
+    let mut feature_set = None;
     while let Some(flag) = values.next() {
         let value = values
             .next()
@@ -163,6 +256,7 @@ fn parse_args_from(mut values: impl Iterator<Item = String>) -> Result<Args, Str
             "--threads" => threads = Some(parse_usize(&flag, &value)?),
             "--position-filter" => position_filter = Some(value.parse()?),
             "--wdl-proportion" => wdl_proportion = Some(parse_probability(&flag, &value)?),
+            "--feature-set" => feature_set = Some(parse_feature_set(&value)?),
             _ => return Err(format!("unknown argument: {flag}")),
         }
     }
@@ -176,7 +270,16 @@ fn parse_args_from(mut values: impl Iterator<Item = String>) -> Result<Args, Str
         threads: threads.ok_or("missing --threads")?,
         position_filter: position_filter.ok_or("missing --position-filter")?,
         wdl_proportion: wdl_proportion.ok_or("missing --wdl-proportion")?,
+        feature_set: feature_set.ok_or("missing --feature-set")?,
     })
+}
+
+fn parse_feature_set(value: &str) -> Result<TrainerFeatureSet, String> {
+    match value {
+        "chess768" => Ok(TrainerFeatureSet::Chess768),
+        "chess768x3hm" => Ok(TrainerFeatureSet::Chess768KingBucketsMirrored3),
+        value => Err(format!("unknown feature set: {value}")),
+    }
 }
 
 fn parse_usize(flag: &str, value: &str) -> Result<usize, String> {
@@ -199,7 +302,7 @@ fn parse_probability(flag: &str, value: &str) -> Result<f32, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{PositionFilter, parse_args_from};
+    use super::{PositionFilter, TrainerFeatureSet, parse_args_from};
 
     #[test]
     fn trainer_cli_requires_an_explicit_supported_filter_name() {
@@ -223,6 +326,8 @@ mod tests {
                 "bullet-default",
                 "--wdl-proportion",
                 "0.0",
+                "--feature-set",
+                "chess768",
             ]
             .map(str::to_string)
             .into_iter(),
@@ -244,6 +349,47 @@ mod tests {
             parse_args_from(["--wdl-proportion", "1.01"].map(str::to_string).into_iter())
                 .unwrap_err()
                 .contains("between 0 and 1")
+        );
+    }
+
+    #[test]
+    fn trainer_cli_requires_the_registered_feature_set() {
+        let args = parse_args_from(
+            [
+                "--train",
+                "train.vf",
+                "--output-dir",
+                "checkpoints",
+                "--net-id",
+                "n2c-king-buckets",
+                "--positions",
+                "16008492",
+                "--batch-size",
+                "9894",
+                "--buffer-mb",
+                "256",
+                "--threads",
+                "4",
+                "--position-filter",
+                "none",
+                "--wdl-proportion",
+                "0.0",
+                "--feature-set",
+                "chess768x3hm",
+            ]
+            .map(str::to_string)
+            .into_iter(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            args.feature_set,
+            TrainerFeatureSet::Chess768KingBucketsMirrored3
+        );
+        assert!(
+            parse_args_from(["--feature-set", "halfka"].map(str::to_string).into_iter())
+                .unwrap_err()
+                .contains("unknown feature set")
         );
     }
 }

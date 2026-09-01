@@ -1,6 +1,6 @@
 use neyrang::chess::{Color, PieceType, Position, Square};
 
-use crate::{HIDDEN_SIZE, Network, feature_index};
+use crate::{FeatureSet, HIDDEN_SIZE, Network, feature_index_for};
 
 /// Both board-oriented hidden accumulators used by the scalar oracle.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -21,7 +21,7 @@ impl AccumulatorPair {
         for index in 0_u8..64 {
             let square = Square::from_index(index).expect("board index is in range");
             if let Some((color, piece_type)) = position.piece_at(square) {
-                pair.add_piece(color, piece_type, square, network);
+                pair.add_piece(position, color, piece_type, square, network);
             }
         }
         pair
@@ -29,6 +29,14 @@ impl AccumulatorPair {
 
     /// Apply the exact piece-square difference between two legal board states.
     pub fn update(&mut self, before: &Position, after: &Position, network: &Network) {
+        if network.feature_set == FeatureSet::Chess768KingBucketsMirrored3
+            && [Color::White, Color::Black].into_iter().any(|color| {
+                before.pieces(color, PieceType::King) != after.pieces(color, PieceType::King)
+            })
+        {
+            *self = Self::refresh(after, network);
+            return;
+        }
         for index in 0_u8..64 {
             let square = Square::from_index(index).expect("board index is in range");
             let old_piece = before.piece_at(square);
@@ -37,10 +45,10 @@ impl AccumulatorPair {
                 continue;
             }
             if let Some((color, piece_type)) = old_piece {
-                self.remove_piece(color, piece_type, square, network);
+                self.remove_piece(before, color, piece_type, square, network);
             }
             if let Some((color, piece_type)) = new_piece {
-                self.add_piece(color, piece_type, square, network);
+                self.add_piece(after, color, piece_type, square, network);
             }
         }
     }
@@ -68,6 +76,7 @@ impl AccumulatorPair {
 
     fn add_piece(
         &mut self,
+        position: &Position,
         color: Color,
         piece_type: PieceType,
         square: Square,
@@ -75,18 +84,33 @@ impl AccumulatorPair {
     ) {
         add_feature(
             &mut self.white,
-            feature_index(color, piece_type, square, Color::White),
+            feature_index_for(
+                position,
+                color,
+                piece_type,
+                square,
+                Color::White,
+                network.feature_set,
+            ),
             network,
         );
         add_feature(
             &mut self.black,
-            feature_index(color, piece_type, square, Color::Black),
+            feature_index_for(
+                position,
+                color,
+                piece_type,
+                square,
+                Color::Black,
+                network.feature_set,
+            ),
             network,
         );
     }
 
     fn remove_piece(
         &mut self,
+        position: &Position,
         color: Color,
         piece_type: PieceType,
         square: Square,
@@ -94,12 +118,26 @@ impl AccumulatorPair {
     ) {
         remove_feature(
             &mut self.white,
-            feature_index(color, piece_type, square, Color::White),
+            feature_index_for(
+                position,
+                color,
+                piece_type,
+                square,
+                Color::White,
+                network.feature_set,
+            ),
             network,
         );
         remove_feature(
             &mut self.black,
-            feature_index(color, piece_type, square, Color::Black),
+            feature_index_for(
+                position,
+                color,
+                piece_type,
+                square,
+                Color::Black,
+                network.feature_set,
+            ),
             network,
         );
     }

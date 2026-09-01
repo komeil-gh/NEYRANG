@@ -5,7 +5,10 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use neyrang_nnue_reference::{HIDDEN_SIZE, INPUT_FEATURES, Network, NetworkParameters};
+use neyrang_nnue_reference::{
+    FeatureSet, HIDDEN_SIZE, INPUT_FEATURES, INPUT_FEATURES_KING_BUCKETS_MIRRORED_3, Network,
+    NetworkParameters,
+};
 
 const FLOAT_COUNT: usize = INPUT_FEATURES * HIDDEN_SIZE + HIDDEN_SIZE + 2 * HIDDEN_SIZE + 1;
 
@@ -67,6 +70,53 @@ fn verify_parity_emits_machine_readable_evidence_and_enforces_thresholds() {
     fs::remove_dir_all(directory).unwrap();
 }
 
+#[test]
+fn verify_parity_infers_the_raw_feature_contract_from_the_artifact() {
+    let directory = unique_temp_directory();
+    fs::create_dir(&directory).unwrap();
+    let raw_path = directory.join("raw-x3.bin");
+    let network_path = directory.join("network-x3.nnue");
+    let fens_path = directory.join("suite-x3.fen");
+    fs::write(
+        &raw_path,
+        raw_fixture_with_inputs(INPUT_FEATURES_KING_BUCKETS_MIRRORED_3),
+    )
+    .unwrap();
+    let network = Network::new_with_feature_set(
+        FeatureSet::Chess768KingBucketsMirrored3,
+        NetworkParameters {
+            activation_quant: 511,
+            output_quant: 768,
+            centipawn_scale: 400,
+        },
+        vec![0; INPUT_FEATURES_KING_BUCKETS_MIRRORED_3 * HIDDEN_SIZE],
+        vec![0; HIDDEN_SIZE],
+        vec![0; 2 * HIDDEN_SIZE],
+        0,
+    )
+    .unwrap();
+    fs::write(&network_path, network.to_bytes()).unwrap();
+    fs::write(&fens_path, "4k3/8/8/8/8/8/8/4K3 w - - 0 1\n").unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_verify-parity"))
+        .arg(&raw_path)
+        .arg(&network_path)
+        .arg(&fens_path)
+        .arg("8")
+        .arg("2")
+        .arg("--summary-only")
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    assert!(
+        String::from_utf8(output.stdout)
+            .unwrap()
+            .contains("\"passed\":true")
+    );
+    fs::remove_dir_all(directory).unwrap();
+}
+
 fn raw_fixture() -> Vec<u8> {
     let mut values = vec![0.0_f32; FLOAT_COUNT];
     let feature_bias_offset = INPUT_FEATURES * HIDDEN_SIZE;
@@ -74,6 +124,14 @@ fn raw_fixture() -> Vec<u8> {
     values[feature_bias_offset..output_weight_offset].fill(1.0);
     values[output_weight_offset..output_weight_offset + 2 * HIDDEN_SIZE].fill(1.0 / 64.0);
     values
+        .iter()
+        .flat_map(|value| value.to_le_bytes())
+        .collect()
+}
+
+fn raw_fixture_with_inputs(inputs: usize) -> Vec<u8> {
+    let float_count = inputs * HIDDEN_SIZE + HIDDEN_SIZE + 2 * HIDDEN_SIZE + 1;
+    vec![0.0_f32; float_count]
         .iter()
         .flat_map(|value| value.to_le_bytes())
         .collect()

@@ -14,6 +14,7 @@ use neyrang::{
 
 const HIDDEN_SIZE: usize = 128;
 const INPUT_FEATURES: usize = 2 * 6 * 64;
+const KING_BUCKET_INPUT_FEATURES: usize = 3 * INPUT_FEATURES;
 
 #[test]
 fn scalar_network_decodes_and_evaluates_from_the_side_to_move() {
@@ -37,6 +38,42 @@ fn network_loader_rejects_legacy_magic_and_payload_corruption() {
         Network::from_bytes(&corrupt),
         Err(NetworkError::ChecksumMismatch { .. })
     ));
+}
+
+#[test]
+fn version_two_king_bucket_artifact_uses_the_registered_mapping() {
+    let home = Network::from_bytes(&king_bucket_probe_artifact(15))
+        .expect("version-two king-bucket artifact must decode");
+    let home_position = Position::from_fen("4k3/8/8/8/8/8/P7/4K3 w - - 0 1").unwrap();
+    assert_eq!(home.evaluate(&home_position), 25);
+
+    let castled = Network::from_bytes(&king_bucket_probe_artifact(INPUT_FEATURES + 15))
+        .expect("version-two king-bucket artifact must decode");
+    let castled_position = Position::from_fen("4k3/8/8/8/8/8/P7/5RK1 w - - 0 1").unwrap();
+    assert_eq!(castled.evaluate(&castled_position), 25);
+}
+
+#[test]
+fn version_two_accumulator_refreshes_after_king_moves() {
+    let network = Network::from_bytes(&deterministic_king_bucket_artifact())
+        .expect("version-two king-bucket artifact must decode");
+    let cases = [
+        ("4k3/8/8/8/8/8/8/4K3 w - - 0 1", "e1e2"),
+        ("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1", "e1g1"),
+    ];
+
+    for (fen, notation) in cases {
+        let mut position = Position::from_fen(fen).unwrap();
+        let mv = position.find_legal_move(notation).unwrap();
+        let accumulator = AccumulatorPair::refresh(&position, &network);
+        let next = accumulator.after_move(&position, mv, &network);
+        position.make_move(mv);
+        assert_eq!(
+            next,
+            AccumulatorPair::refresh(&position, &network),
+            "king-bucket accumulator drift after {notation}"
+        );
+    }
 }
 
 #[test]
@@ -208,6 +245,54 @@ fn deterministic_network_artifact() -> Vec<u8> {
     bytes.extend_from_slice(&0_u16.to_le_bytes());
     bytes.extend_from_slice(&400_i32.to_le_bytes());
     bytes.extend_from_slice(&(payload_size as u32).to_le_bytes());
+    bytes.extend_from_slice(&crc32(&payload).to_le_bytes());
+    bytes.extend_from_slice(&payload);
+    bytes
+}
+
+fn king_bucket_probe_artifact(active_feature: usize) -> Vec<u8> {
+    let feature_weight_count = KING_BUCKET_INPUT_FEATURES * HIDDEN_SIZE;
+    let feature_bias_count = HIDDEN_SIZE;
+    let output_weight_count = 2 * HIDDEN_SIZE;
+    let payload_size = (feature_weight_count + feature_bias_count + output_weight_count) * 2 + 4;
+    let mut payload = vec![0; payload_size];
+    let weight_offset = (active_feature * HIDDEN_SIZE) * 2;
+    payload[weight_offset..weight_offset + 2].copy_from_slice(&8_i16.to_le_bytes());
+    let output_offset = (feature_weight_count + feature_bias_count) * 2;
+    payload[output_offset..output_offset + 2].copy_from_slice(&16_i16.to_le_bytes());
+    version_two_artifact(payload)
+}
+
+fn deterministic_king_bucket_artifact() -> Vec<u8> {
+    let feature_weight_count = KING_BUCKET_INPUT_FEATURES * HIDDEN_SIZE;
+    let feature_bias_count = HIDDEN_SIZE;
+    let output_weight_count = 2 * HIDDEN_SIZE;
+    let payload_size = (feature_weight_count + feature_bias_count + output_weight_count) * 2 + 4;
+    let mut payload = Vec::with_capacity(payload_size);
+    for index in 0..feature_weight_count {
+        payload.extend_from_slice(&((index as i16 % 31) - 15).to_le_bytes());
+    }
+    for index in 0..feature_bias_count {
+        payload.extend_from_slice(&((index as i16 % 13) - 6).to_le_bytes());
+    }
+    for index in 0..output_weight_count {
+        payload.extend_from_slice(&((index as i16 % 17) - 8).to_le_bytes());
+    }
+    payload.extend_from_slice(&19_i32.to_le_bytes());
+    version_two_artifact(payload)
+}
+
+fn version_two_artifact(payload: Vec<u8>) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(32 + payload.len());
+    bytes.extend_from_slice(b"NEYRANG\0");
+    bytes.extend_from_slice(&2_u16.to_le_bytes());
+    bytes.extend_from_slice(&2_u16.to_le_bytes());
+    bytes.extend_from_slice(&(HIDDEN_SIZE as u16).to_le_bytes());
+    bytes.extend_from_slice(&32_u16.to_le_bytes());
+    bytes.extend_from_slice(&16_u16.to_le_bytes());
+    bytes.extend_from_slice(&0_u16.to_le_bytes());
+    bytes.extend_from_slice(&400_i32.to_le_bytes());
+    bytes.extend_from_slice(&(payload.len() as u32).to_le_bytes());
     bytes.extend_from_slice(&crc32(&payload).to_le_bytes());
     bytes.extend_from_slice(&payload);
     bytes

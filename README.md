@@ -314,7 +314,8 @@ cargo run --release --manifest-path tools/nnue-trainer/Cargo.toml -- \
   --train testing/nnue/corpus/train.vf \
   --output-dir testing/nnue/checkpoints \
   --net-id neyrang-n1e-16m \
-  --positions 16008492 --batch-size 9894 --buffer-mb 8 --threads 1
+  --positions 16008492 --batch-size 9894 --buffer-mb 8 --threads 1 \
+  --position-filter none --wdl-proportion 0.75 --feature-set chess768
 ```
 
 Import and compare the exact raw/quantized tensors with explicit scale values:
@@ -325,6 +326,11 @@ cargo run --release --manifest-path tools/nnue-reference/Cargo.toml \
 cargo run --release --manifest-path tools/nnue-reference/Cargo.toml \
   --bin verify-parity -- BULLET_RAW.bin NEYRANG_NETWORK.nnue FENS.txt 8 2 --summary-only
 ```
+
+The N2c king-relative candidate uses the same commands with
+`--feature-set chess768x3hm`; pass the same option to `import-bullet` and
+`screen-quantization`. `verify-parity` derives the feature contract from the
+versioned artifact and fails closed if the raw tensor shape disagrees.
 
 These commands create data and offline-learning evidence, not Elo evidence. The
 64M/256M scale points, final model-selection holdout, engine parity, playing

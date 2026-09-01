@@ -38,11 +38,19 @@ impl ParityReport {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ParityError {
     EmptySuite,
+    FeatureSetMismatch,
 }
 
 impl fmt::Display for ParityError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("parity suite must contain at least one position")
+        match self {
+            Self::EmptySuite => {
+                formatter.write_str("parity suite must contain at least one position")
+            }
+            Self::FeatureSetMismatch => {
+                formatter.write_str("raw and quantized feature sets differ")
+            }
+        }
     }
 }
 
@@ -55,6 +63,9 @@ pub fn evaluate_parity(
 ) -> Result<ParityReport, ParityError> {
     if positions.is_empty() {
         return Err(ParityError::EmptySuite);
+    }
+    if float_network.feature_set() != quantized_network.feature_set() {
+        return Err(ParityError::FeatureSetMismatch);
     }
 
     let mut samples = Vec::with_capacity(positions.len());

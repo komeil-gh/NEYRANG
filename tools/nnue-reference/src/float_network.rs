@@ -2,17 +2,15 @@ use std::fmt;
 
 use neyrang::chess::{Color, Position};
 
-use crate::{HIDDEN_SIZE, INPUT_FEATURES, Network, NetworkParameters, active_features};
+use crate::{FeatureSet, HIDDEN_SIZE, Network, NetworkParameters, active_features_for};
 
-const FEATURE_WEIGHT_COUNT: usize = INPUT_FEATURES * HIDDEN_SIZE;
 const FEATURE_BIAS_COUNT: usize = HIDDEN_SIZE;
 const OUTPUT_WEIGHT_COUNT: usize = 2 * HIDDEN_SIZE;
-const FLOAT_COUNT: usize = FEATURE_WEIGHT_COUNT + FEATURE_BIAS_COUNT + OUTPUT_WEIGHT_COUNT + 1;
-const RAW_BYTE_COUNT: usize = FLOAT_COUNT * size_of::<f32>();
 
 /// The unquantized `(Chess768 -> 128) x 2 -> 1` tensors saved by Bullet.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FloatNetwork {
+    feature_set: FeatureSet,
     feature_weights: Vec<f32>,
     feature_bias: Vec<f32>,
     output_weights: Vec<f32>,
@@ -92,11 +90,29 @@ impl fmt::Display for FloatQuantizationError {
 impl std::error::Error for FloatQuantizationError {}
 
 impl FloatNetwork {
+    /// Sparse feature contract carried by the raw trainer tensors.
+    #[must_use]
+    pub const fn feature_set(&self) -> FeatureSet {
+        self.feature_set
+    }
+
     /// Decode the exact unpadded f32 tensor order emitted by the pinned trainer.
     pub fn from_bullet_raw(bytes: &[u8], centipawn_scale: f32) -> Result<Self, FloatNetworkError> {
-        if bytes.len() != RAW_BYTE_COUNT {
+        Self::from_bullet_raw_with_feature_set(bytes, centipawn_scale, FeatureSet::Chess768)
+    }
+
+    /// Decode a pinned Bullet tensor stream with an explicit sparse feature set.
+    pub fn from_bullet_raw_with_feature_set(
+        bytes: &[u8],
+        centipawn_scale: f32,
+        feature_set: FeatureSet,
+    ) -> Result<Self, FloatNetworkError> {
+        let feature_weight_count = feature_set.input_features() * HIDDEN_SIZE;
+        let float_count = feature_weight_count + FEATURE_BIAS_COUNT + OUTPUT_WEIGHT_COUNT + 1;
+        let raw_byte_count = float_count * size_of::<f32>();
+        if bytes.len() != raw_byte_count {
             return Err(FloatNetworkError::LengthMismatch {
-                expected: RAW_BYTE_COUNT,
+                expected: raw_byte_count,
                 actual: bytes.len(),
             });
         }
@@ -106,7 +122,7 @@ impl FloatNetwork {
 
         let (chunks, remainder) = bytes.as_chunks::<4>();
         debug_assert!(remainder.is_empty());
-        let mut values = Vec::with_capacity(FLOAT_COUNT);
+        let mut values = Vec::with_capacity(float_count);
         for (index, bytes) in chunks.iter().enumerate() {
             let value = f32::from_le_bytes(*bytes);
             if !value.is_finite() {
@@ -115,10 +131,11 @@ impl FloatNetwork {
             values.push(value);
         }
 
-        let feature_bias_start = FEATURE_WEIGHT_COUNT;
+        let feature_bias_start = feature_weight_count;
         let output_weight_start = feature_bias_start + FEATURE_BIAS_COUNT;
         let output_bias_index = output_weight_start + OUTPUT_WEIGHT_COUNT;
         Ok(Self {
+            feature_set,
             feature_weights: values[..feature_bias_start].to_vec(),
             feature_bias: values[feature_bias_start..output_weight_start].to_vec(),
             output_weights: values[output_weight_start..output_bias_index].to_vec(),
@@ -178,7 +195,8 @@ impl FloatNetwork {
         let output_weights = quantize_i16("output_weights", &self.output_weights, output_quant)?;
         let output_bias = quantize_i32("output_bias", &[self.output_bias], bias_quant)?[0];
 
-        Ok(Network::new(
+        Ok(Network::new_with_feature_set(
+            self.feature_set,
             parameters,
             feature_weights,
             feature_bias,
@@ -191,7 +209,7 @@ impl FloatNetwork {
     fn hidden(&self, position: &Position, perspective: Color) -> [f32; HIDDEN_SIZE] {
         let mut hidden = [0.0; HIDDEN_SIZE];
         hidden.copy_from_slice(&self.feature_bias);
-        for feature in active_features(position, perspective) {
+        for feature in active_features_for(position, perspective, self.feature_set) {
             let start = feature * HIDDEN_SIZE;
             for (value, &weight) in hidden
                 .iter_mut()

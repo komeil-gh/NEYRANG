@@ -1,6 +1,8 @@
 use std::{env, fs, path::PathBuf, process::ExitCode};
 
-use neyrang_nnue_reference::{FloatNetwork, NetworkParameters, evaluate_parity, parse_fen_suite};
+use neyrang_nnue_reference::{
+    FeatureSet, FloatNetwork, NetworkParameters, evaluate_parity, parse_fen_suite,
+};
 
 const CENTIPAWN_SCALE: i32 = 400;
 
@@ -30,16 +32,32 @@ fn run() -> Result<(), String> {
         "mean error",
         args.next().ok_or("missing mean-error-cp threshold")?,
     )?;
-    let output_quants: Vec<_> = args
-        .map(|value| parse_positive_u16("output quantization", value))
-        .collect::<Result<_, _>>()?;
+    let mut feature_set = FeatureSet::Chess768;
+    let mut feature_set_seen = false;
+    let mut output_quants = Vec::new();
+    while let Some(value) = args.next() {
+        if value == "--feature-set" {
+            if feature_set_seen {
+                return Err("--feature-set may be specified only once".to_string());
+            }
+            feature_set =
+                parse_feature_set(args.next().ok_or("missing value after --feature-set")?)?;
+            feature_set_seen = true;
+        } else {
+            output_quants.push(parse_positive_u16("output quantization", value)?);
+        }
+    }
     if output_quants.is_empty() {
         return Err("at least one output quantization is required".to_string());
     }
 
     let raw_bytes = fs::read(&raw_path).map_err(|error| format!("read raw network: {error}"))?;
-    let float_network = FloatNetwork::from_bullet_raw(&raw_bytes, CENTIPAWN_SCALE as f32)
-        .map_err(|error| format!("invalid raw network: {error}"))?;
+    let float_network = FloatNetwork::from_bullet_raw_with_feature_set(
+        &raw_bytes,
+        CENTIPAWN_SCALE as f32,
+        feature_set,
+    )
+    .map_err(|error| format!("invalid raw network: {error}"))?;
     let suite_contents =
         fs::read_to_string(&suite_path).map_err(|error| format!("read FEN suite: {error}"))?;
     let positions: Vec<_> = parse_fen_suite(&suite_contents)
@@ -100,6 +118,15 @@ fn run() -> Result<(), String> {
         return Err("no quantization candidate passed thresholds".to_string());
     }
     Ok(())
+}
+
+fn parse_feature_set(value: std::ffi::OsString) -> Result<FeatureSet, String> {
+    match value.to_str() {
+        Some("chess768") => Ok(FeatureSet::Chess768),
+        Some("chess768x3hm") => Ok(FeatureSet::Chess768KingBucketsMirrored3),
+        Some(value) => Err(format!("unknown feature set: {value}")),
+        None => Err("feature set is not UTF-8".to_string()),
+    }
 }
 
 fn parse_positive_u16(name: &str, value: std::ffi::OsString) -> Result<u16, String> {

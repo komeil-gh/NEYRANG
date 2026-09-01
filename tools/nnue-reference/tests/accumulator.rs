@@ -1,6 +1,7 @@
 use neyrang::chess::{Color, Position};
 use neyrang_nnue_reference::{
-    AccumulatorPair, HIDDEN_SIZE, INPUT_FEATURES, Network, NetworkParameters, feature_index,
+    AccumulatorPair, FeatureSet, HIDDEN_SIZE, INPUT_FEATURES,
+    INPUT_FEATURES_KING_BUCKETS_MIRRORED_3, Network, NetworkParameters, feature_index,
 };
 
 fn deterministic_network() -> Network {
@@ -182,4 +183,32 @@ fn extreme_valid_quantization_values_have_defined_saturating_output() {
         network.evaluate(&accumulators, position.side_to_move()),
         i32::MAX
     );
+}
+
+#[test]
+fn king_bucket_accumulator_refreshes_when_the_king_changes_bank() {
+    let network = Network::new_with_feature_set(
+        FeatureSet::Chess768KingBucketsMirrored3,
+        NetworkParameters {
+            activation_quant: 511,
+            output_quant: 768,
+            centipawn_scale: 400,
+        },
+        (0..INPUT_FEATURES_KING_BUCKETS_MIRRORED_3 * HIDDEN_SIZE)
+            .map(|index| (index as i16 % 31) - 15)
+            .collect(),
+        vec![0; HIDDEN_SIZE],
+        vec![1; 2 * HIDDEN_SIZE],
+        0,
+    )
+    .unwrap();
+    let mut position = Position::from_fen("4k3/8/8/8/8/8/8/4K3 w - - 0 1").unwrap();
+    let before = position.clone();
+    let mut accumulator = AccumulatorPair::refresh(&position, &network);
+    let mv = position.find_legal_move("e1e2").unwrap();
+    position.make_move(mv);
+
+    accumulator.update(&before, &position, &network);
+
+    assert_eq!(accumulator, AccumulatorPair::refresh(&position, &network));
 }

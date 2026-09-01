@@ -517,7 +517,8 @@ does not authorize an equal-time run, SPRT, release selection or Elo claim.
 `diagnose-corpus` adds deterministic JSON evidence for NNUE/SANJ/search-score
 bias, MAE, RMSE, Pearson correlation, sign agreement, score/result/blended loss
 and Viriformat/Bullet filter exposure. Trainer tests freeze the exact default
-filter and require explicit `--position-filter` and `--wdl-proportion` values.
+filter and require explicit `--position-filter`, `--wdl-proportion` and
+`--feature-set` values.
 Self-play and assembly tests cover historical opening/corpus schemas, explicit
 legacy split-domain reproduction and holdout partition assembly without
 weakening hash, replay or no-clobber checks.

@@ -36,13 +36,17 @@ fn run() -> Result<(), String> {
         return Err("too many arguments".to_string());
     }
 
-    let raw_bytes = fs::read(&raw_path).map_err(|error| format!("read raw network: {error}"))?;
-    let float_network = FloatNetwork::from_bullet_raw(&raw_bytes, CENTIPAWN_SCALE)
-        .map_err(|error| format!("invalid raw network: {error}"))?;
     let network_bytes =
         fs::read(&network_path).map_err(|error| format!("read NEYRANG network: {error}"))?;
     let quantized_network = Network::from_bytes(&network_bytes)
         .map_err(|error| format!("invalid NEYRANG network: {error}"))?;
+    let raw_bytes = fs::read(&raw_path).map_err(|error| format!("read raw network: {error}"))?;
+    let float_network = FloatNetwork::from_bullet_raw_with_feature_set(
+        &raw_bytes,
+        CENTIPAWN_SCALE,
+        quantized_network.feature_set(),
+    )
+    .map_err(|error| format!("invalid raw network: {error}"))?;
     let suite_contents =
         fs::read_to_string(&suite_path).map_err(|error| format!("read FEN suite: {error}"))?;
     let frozen =

@@ -1,6 +1,7 @@
 use neyrang_nnue_reference::{
-    FEATURE_SET_CHESS768, HEADER_SIZE, HIDDEN_SIZE, INPUT_FEATURES, Network, NetworkError,
-    NetworkParameters,
+    FEATURE_SET_CHESS768, FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3,
+    FORMAT_VERSION_KING_BUCKETS, FeatureSet, HEADER_SIZE, HIDDEN_SIZE, INPUT_FEATURES,
+    INPUT_FEATURES_KING_BUCKETS_MIRRORED_3, Network, NetworkError, NetworkParameters,
 };
 
 fn fixture_network() -> Network {
@@ -54,10 +55,10 @@ fn loader_rejects_incompatible_headers_before_inference() {
     assert_eq!(Network::from_bytes(&bad_magic), Err(NetworkError::BadMagic));
 
     let mut bad_version = bytes.clone();
-    bad_version[8..10].copy_from_slice(&2_u16.to_le_bytes());
+    bad_version[8..10].copy_from_slice(&3_u16.to_le_bytes());
     assert_eq!(
         Network::from_bytes(&bad_version),
-        Err(NetworkError::UnsupportedVersion(2))
+        Err(NetworkError::UnsupportedVersion(3))
     );
 
     let mut zero_quant = bytes;
@@ -161,6 +162,38 @@ fn bullet_import_rejects_wrong_length_and_padding() {
         Network::from_bullet_quantised(&corrupt_padding, parameters),
         Err(NetworkError::InvalidBulletPadding)
     );
+}
+
+#[test]
+fn king_bucket_network_round_trips_through_version_two() {
+    let network = Network::new_with_feature_set(
+        FeatureSet::Chess768KingBucketsMirrored3,
+        NetworkParameters {
+            activation_quant: 511,
+            output_quant: 768,
+            centipawn_scale: 400,
+        },
+        vec![0; INPUT_FEATURES_KING_BUCKETS_MIRRORED_3 * HIDDEN_SIZE],
+        vec![0; HIDDEN_SIZE],
+        vec![0; 2 * HIDDEN_SIZE],
+        0,
+    )
+    .unwrap();
+
+    let bytes = network.to_bytes();
+    assert_eq!(
+        u16::from_le_bytes([bytes[8], bytes[9]]),
+        FORMAT_VERSION_KING_BUCKETS
+    );
+    assert_eq!(
+        u16::from_le_bytes([bytes[10], bytes[11]]),
+        FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3
+    );
+    assert_eq!(
+        network.feature_set(),
+        FeatureSet::Chess768KingBucketsMirrored3
+    );
+    assert_eq!(Network::from_bytes(&bytes), Ok(network));
 }
 
 fn fixture_bullet_quantised() -> Vec<u8> {

@@ -492,7 +492,7 @@ python3 -m venv .venv-sanj
 .venv-sanj/bin/python -m unittest discover -s scripts/tests -p 'test_*.py'
 ```
 
-The repository Python suite currently has 85 tests covering match/corpus auditing, concurrency-safe round pairing, corpus construction, dense pair balancing, legacy-manifest compatibility, opening selection, fixed 38-to-42 feature mapping, complete-group learning subsets, scale fitting, deterministic group bootstrap, repository contracts, scored-shard orchestration, duplicate opening-stream quarantine, complete-game NNUE assembly, duplicate-opening/cross-partition whole-game quarantine and independent NNUE-record/terminal replay. Exact campaign, corpus, network, parity and diagnostic identities are recorded in the experiment ledger and the [N1c](evidence/nnue-n1c-1m.json), [N1d](evidence/nnue-n1d-4m.json), [N1e](evidence/nnue-n1e-16m.json) and [N2a](evidence/nnue-n2a-engine-inference.json) evidence manifests.
+The repository Python suite currently has 88 tests covering match/corpus auditing, concurrency-safe round pairing, corpus construction, dense pair balancing, legacy-manifest compatibility, opening selection, fixed 38-to-42 feature mapping, complete-group learning subsets, scale fitting, deterministic group bootstrap, repository contracts, scored-shard orchestration, duplicate opening-stream quarantine, complete-game NNUE assembly, duplicate-opening/cross-partition whole-game quarantine and independent NNUE-record/terminal replay. Exact campaign, corpus, network, parity and diagnostic identities are recorded in the experiment ledger and the [N1c](evidence/nnue-n1c-1m.json), [N1d](evidence/nnue-n1d-4m.json), [N1e](evidence/nnue-n1e-16m.json), [N2a](evidence/nnue-n2a-engine-inference.json) and [N2b](evidence/nnue-n2b-diagnosis.json) evidence manifests.
 
 ## N2a engine-inference and playing-screen evidence
 
@@ -511,3 +511,27 @@ openings and seed `2026090201`. NNUE scored `177/633/190`, 27.20%, with reported
 terminations, 500 pairs, pentanomial `[195,117,143,39,6]`, 81,846 complete
 telemetry plies and zero runner anomaly. The screen rejects this network; it
 does not authorize an equal-time run, SPRT, release selection or Elo claim.
+
+## N2b diagnostic and final-holdout evidence
+
+`diagnose-corpus` adds deterministic JSON evidence for NNUE/SANJ/search-score
+bias, MAE, RMSE, Pearson correlation, sign agreement, score/result/blended loss
+and Viriformat/Bullet filter exposure. Trainer tests freeze the exact default
+filter and require explicit `--position-filter` and `--wdl-proportion` values.
+Self-play and assembly tests cover historical opening/corpus schemas, explicit
+legacy split-domain reproduction and holdout partition assembly without
+weakening hash, replay or no-clobber checks.
+
+The filter-only candidate stopped when its selection-validation paired interval
+crossed zero. The score-only candidate passed `8/2 cp` raw/quantized parity and
+the selection gate. The final holdout assembled all frozen N1e plus N1d holdout
+memberships, then quarantined 2,097 complete games containing 26,167 keys from
+train or selection validation. Its retained 22,205 games / 1,801,672 positions
+have zero residual opening/position overlap.
+
+On the final holdout the candidate improved search-score MAE, Pearson and mixed-
+target MSE, but its registered equal-game bootstrap interval
+`[-0.000633537, 0.000026689]` crossed zero. That binding failure stopped the
+campaign before fixed-node games. N2b provides no Elo claim; exact identities
+and every retained/rejected boundary are in the
+[N2b evidence manifest](evidence/nnue-n2b-diagnosis.json).

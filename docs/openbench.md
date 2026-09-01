@@ -125,17 +125,19 @@ Retained EPD shards must be created through:
 
 The wrapper independently enforces the 15-second OpenBench stall rule, exact
 stdout/stderr behavior, legal nonterminal FENs, no side-to-move check, canonical
-deduplication, engine SHA-256, source/compiler/license identity, manifest-first
+deduplication by default or explicit retain-first duplicate quarantine with
+exact index evidence, engine SHA-256, source/compiler/license identity, manifest-first
 no-clobber output publication, and overwrite refusal. Its adjacent
 `neyrang-genfens-shard-v1` manifest is an
 opening-input provenance record, not a scored NNUE corpus.
 
 N1a defines and independently audits the versioned, lossless
-[NNUE game-record contract](development/nnue-data.md). N1d now closes the
-four-million-position train gate, deterministic whole-game quarantine, pinned
-Bullet ingestion, bounded raw-float/quantized FEN parity and full-corpus
-diagnostics. The 16M and larger scale points, final untouched holdout, engine
-inference parity and any playing-engine integration remain unfinished.
+[NNUE game-record contract](development/nnue-data.md). N1e now closes the
+sixteen-million-position fixed-validation gate, deterministic whole-game
+quarantine, pinned Bullet ingestion, bounded raw-float/quantized FEN parity,
+full-corpus diagnostics and paired game bootstrap. The 64M and larger scale
+points, final untouched holdout, engine inference parity and any playing-engine
+integration remain unfinished and require separate registration.
 
 ## Primary references
 

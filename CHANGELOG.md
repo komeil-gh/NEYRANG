@@ -25,6 +25,8 @@ All notable changes to NEYRANG are documented here.
 - An independent `python-chess` opening-shard generator/auditor with the OpenBench 15-second stall rule, canonical-position deduplication, executable/source/compiler/license provenance, SHA-256 identities, manifest-first no-clobber EPD publication, and overwrite refusal.
 - An isolated fixed-node NNUE self-play recorder with white-relative parent scores, rules-only terminal WDL, score saturation, exact position-restoration checks, and per-reason completion/rejection accounting.
 - A partition-first scored-shard wrapper that binds audited opening manifests, keeps color-reversed groups together, monitors generator progress, independently verifies opening membership/legal replay/terminal WDL, and publishes content-addressed Viriformat plus provenance without overwrite.
+- Deterministic complete-game NNUE assembly with duplicate-opening and fixed-partition whole-game quarantine, plus parameter-checked paired network diagnostics and deterministic game bootstrap confidence bounds.
+- An opt-in opening-stream duplicate quarantine that preserves the registered seed range, retains first canonical occurrences and records every dropped index and digest while default generation remains fail-closed.
 
 ### Changed
 
@@ -49,6 +51,7 @@ All notable changes to NEYRANG are documented here.
 - A two-shard real-binary smoke completed 8/8 games and passed independent coordinator replay with exact aggregate W/D/L and pentanomial counts. This validates infrastructure only and is not strength evidence.
 - P3 passed its frozen scaling gate at `2.010776x / 3.956388x` aggregate NPS for Threads 2/4. Its binding same-binary 2,000-game Threads-2-versus-Threads-1 screen then completed `711/701/588` (53.075%, `+21.39 +/-10.90 Elo`) with pentanomial `[57,184,437,223,99]`. Independent replay verified all 1,000 pairs and 196,758 plies with no timing, legality, crash, warning, or protocol anomaly. This retains P3 on the development branch but does not change version `0.2.0` or replace a separately preregistered normalized SPRT.
 - The first committed N1b recorder campaign completed and independently replayed 3,683/3,683 fixed-node train/validation games with zero rejection and 320,947 white-relative scored positions; 413 partitioned holdout openings were not played. This is data-pipeline evidence only, not training or Elo evidence, and remains below the one-million-position gate.
+- N1e completed 160,109/160,109 new train games with zero rejection and assembled 18,140,767 train positions disjoint from the unchanged 463,228-position validation corpus. One exact 16,008,492-position Metal epoch passed both raw/quantized parity gates and lowered fixed-validation MSE from `0.076680656365` to `0.074149893964`; the pre-registered paired game bootstrap interval is wholly negative. This retains the 16M network as offline learning-curve evidence only—there is no engine integration, game result or Elo claim.
 
 ## [0.2.0] - 2026-08-29
 

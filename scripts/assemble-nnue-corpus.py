@@ -19,10 +19,16 @@ import chess
 
 
 SCHEMA = "neyrang-nnue-corpus-v1"
+LEGACY_SCHEMA = "neyrang-nnue-corpus-v1"
 SHUFFLE_SCHEMA = "neyrang-nnue-game-shuffle-v1"
 OPENING_DEDUP_SCHEMA = "neyrang-nnue-opening-dedup-v1"
 SHARD_SCHEMA = "neyrang-nnue-selfplay-shard-v1"
 CONTRACT = "neyrang-viriformat-strict-v1"
+LEGACY_CONTRACT = "neyrang-viriformat-strict-v1"
+REGISTERED_CORPUS_CONTRACTS = {
+    (SCHEMA, CONTRACT),
+    (LEGACY_SCHEMA, LEGACY_CONTRACT),
+}
 PARTITIONS = ("train", "validation", "holdout")
 HEADER_SIZE = 32
 RECORD_SIZE = 4
@@ -343,7 +349,8 @@ def load_disjoint_corpus(
 ) -> tuple[dict[str, Any], set[bytes], set[str]]:
     manifest_path = manifest_path_for(path)
     manifest = load_json_object(manifest_path, "corpus manifest")
-    if manifest.get("schema") != SCHEMA or manifest.get("contract") != CONTRACT:
+    identity = (manifest.get("schema"), manifest.get("contract"))
+    if identity not in REGISTERED_CORPUS_CONTRACTS:
         raise AssemblyError(f"invalid disjoint corpus manifest: {manifest_path}")
     if manifest.get("partition") == partition:
         raise AssemblyError("disjoint corpus must belong to another partition")

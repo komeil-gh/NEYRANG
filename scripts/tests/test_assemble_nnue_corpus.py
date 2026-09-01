@@ -215,6 +215,50 @@ class NnueCorpusAssemblerTests(unittest.TestCase):
 
             self.assertFalse(validation.exists())
 
+    def test_registered_legacy_disjoint_corpus_manifest_is_replayed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            train_shard = write_shard(
+                root,
+                "train.vf",
+                [mate_in_one("7k/5K2/6Q1/8/8/8/8/8 w - - 0 1", "g6g7")],
+                self.auditor,
+            )
+            train_corpus = root / "train-corpus.vf"
+            self.assembler.assemble_corpus(
+                make_config(self.assembler, root, (train_shard,), train_corpus)
+            )
+            train_manifest_path = Path(f"{train_corpus}.manifest.json")
+            train_manifest = json.loads(train_manifest_path.read_text())
+            train_manifest["schema"] = "neyrang-nnue-corpus-v1"
+            train_manifest["contract"] = "neyrang-viriformat-strict-v1"
+            train_manifest_path.write_text(json.dumps(train_manifest))
+
+            holdout_shard = write_shard(
+                root,
+                "holdout.vf",
+                [mate_in_one("7k/5K2/4Q3/8/8/8/8/8 w - - 0 1", "e6h6")],
+                self.auditor,
+                partition="holdout",
+            )
+            output = root / "final-holdout.vf"
+
+            manifest = self.assembler.assemble_corpus(
+                make_config(
+                    self.assembler,
+                    root,
+                    (holdout_shard,),
+                    output,
+                    partition="holdout",
+                    disjoint_from=(train_corpus,),
+                )
+            )
+
+            self.assertEqual(manifest["artifact"]["games"], 1)
+            self.assertEqual(
+                manifest["separation"]["cross_partition_position_keys"], 0
+            )
+
     def test_opt_in_quarantine_drops_cross_partition_opening_game(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

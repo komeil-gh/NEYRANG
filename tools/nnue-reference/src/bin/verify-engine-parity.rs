@@ -41,7 +41,8 @@ fn run() -> Result<(), String> {
         let actual = engine.evaluate(&fixture.position);
         if expected != actual {
             mismatches += 1;
-            maximum_absolute_delta = maximum_absolute_delta.max(i64::from(expected).abs_diff(i64::from(actual)) as i64);
+            maximum_absolute_delta =
+                maximum_absolute_delta.max(i64::from(expected).abs_diff(i64::from(actual)) as i64);
         }
     }
     let passed = mismatches == 0;

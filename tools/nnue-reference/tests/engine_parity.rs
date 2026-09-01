@@ -1,7 +1,7 @@
 use neyrang::{chess::Position, sanj::nnue::Network as EngineNetwork};
 use neyrang_nnue_reference::{
-    AccumulatorPair, HIDDEN_SIZE, INPUT_FEATURES, Network as ReferenceNetwork,
-    NetworkParameters, parse_fen_suite,
+    AccumulatorPair, HIDDEN_SIZE, INPUT_FEATURES, Network as ReferenceNetwork, NetworkParameters,
+    parse_fen_suite,
 };
 
 #[test]
@@ -29,12 +29,12 @@ fn engine_scalar_inference_is_bit_exact_with_the_reference_oracle() {
 #[test]
 fn engine_scalar_inference_preserves_side_to_move_orientation() {
     let reference = deterministic_network();
-    let engine = EngineNetwork::from_bytes(&reference.to_bytes())
-        .expect("reference artifact must load");
-    let white = Position::from_fen("4k3/8/8/8/8/8/8/3QK3 w - - 0 1")
-        .expect("fixture must be valid");
-    let black = Position::from_fen("4k3/8/8/8/8/8/8/3QK3 b - - 0 1")
-        .expect("fixture must be valid");
+    let engine =
+        EngineNetwork::from_bytes(&reference.to_bytes()).expect("reference artifact must load");
+    let white =
+        Position::from_fen("4k3/8/8/8/8/8/8/3QK3 w - - 0 1").expect("fixture must be valid");
+    let black =
+        Position::from_fen("4k3/8/8/8/8/8/8/3QK3 b - - 0 1").expect("fixture must be valid");
 
     for position in [white, black] {
         let expected = reference.evaluate(

@@ -10,7 +10,9 @@ mod parity;
 
 pub use accumulator::AccumulatorPair;
 pub use diagnostics::{
-    PairedComparisonError, PairedComparisonReport, blended_target, compare_networks, logistic_cp,
+    CorpusCompositionReport, NetworkDiagnosticError, NetworkDiagnosticReport,
+    PairedComparisonError, PairedComparisonReport, ScoreFitReport, blended_target,
+    compare_networks, diagnose_network, logistic_cp,
 };
 pub use features::{INPUT_FEATURES, active_features, feature_index};
 pub use fen_suite::{FenSuiteError, FrozenPosition, parse_fen_suite};

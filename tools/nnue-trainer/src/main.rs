@@ -12,13 +12,12 @@ use bullet::{
 };
 use neyrang_nnue_trainer::{
     ACTIVATION_QUANT, DeterministicViriLoader, EpochPlan, OUTPUT_BIAS_QUANT, OUTPUT_QUANT,
-    POSITION_SHUFFLE_SEED,
+    POSITION_SHUFFLE_SEED, PositionFilter,
 };
 
 const HIDDEN_SIZE: usize = 128;
 const EVAL_SCALE: i32 = 400;
 const INITIAL_LR: f32 = 0.001;
-const WDL_PROPORTION: f32 = 0.75;
 const NETWORK_SEED: u64 = 20_260_901;
 
 #[derive(Debug)]
@@ -30,6 +29,8 @@ struct Args {
     batch_size: usize,
     buffer_megabytes: usize,
     threads: usize,
+    position_filter: PositionFilter,
+    wdl_proportion: f32,
 }
 
 fn main() -> ExitCode {
@@ -94,7 +95,7 @@ fn run(args: Args) -> Result<(), String> {
             end_superbatch: 1,
         },
         wdl_scheduler: wdl::ConstantWDL {
-            value: WDL_PROPORTION,
+            value: args.wdl_proportion,
         },
         lr_scheduler: lr::ConstantLR { value: INITIAL_LR },
         save_rate: 1,
@@ -111,13 +112,16 @@ fn run(args: Args) -> Result<(), String> {
         .and_then(|bytes| bytes.checked_div(std::mem::size_of::<ChessBoard>()))
         .ok_or("loader buffer size overflow")?;
     let loader = DeterministicViriLoader::new(&args.train, chunk_positions)
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| error.to_string())?
+        .with_filter(args.position_filter);
 
     println!(
-        "NEYRANG epoch contract: positions={} batch_size={} batches={} network_seed={} position_shuffle_seed={} activation_quant={} output_quant={} bullet_rev=629ee50000b2afb7b3337595401c830d3b1e0f42",
+        "NEYRANG epoch contract: positions={} batch_size={} batches={} position_filter={} wdl_proportion={} network_seed={} position_shuffle_seed={} activation_quant={} output_quant={} bullet_rev=629ee50000b2afb7b3337595401c830d3b1e0f42",
         plan.positions,
         plan.batch_size,
         plan.batches,
+        args.position_filter.as_str(),
+        args.wdl_proportion,
         NETWORK_SEED,
         POSITION_SHUFFLE_SEED,
         ACTIVATION_QUANT,
@@ -132,7 +136,10 @@ fn run(args: Args) -> Result<(), String> {
 }
 
 fn parse_args() -> Result<Args, String> {
-    let mut values = env::args().skip(1);
+    parse_args_from(env::args().skip(1))
+}
+
+fn parse_args_from(mut values: impl Iterator<Item = String>) -> Result<Args, String> {
     let mut train = None;
     let mut output_directory = None;
     let mut net_id = None;
@@ -140,6 +147,8 @@ fn parse_args() -> Result<Args, String> {
     let mut batch_size = None;
     let mut buffer_megabytes = None;
     let mut threads = None;
+    let mut position_filter = None;
+    let mut wdl_proportion = None;
     while let Some(flag) = values.next() {
         let value = values
             .next()
@@ -152,6 +161,8 @@ fn parse_args() -> Result<Args, String> {
             "--batch-size" => batch_size = Some(parse_usize(&flag, &value)?),
             "--buffer-mb" => buffer_megabytes = Some(parse_usize(&flag, &value)?),
             "--threads" => threads = Some(parse_usize(&flag, &value)?),
+            "--position-filter" => position_filter = Some(value.parse()?),
+            "--wdl-proportion" => wdl_proportion = Some(parse_probability(&flag, &value)?),
             _ => return Err(format!("unknown argument: {flag}")),
         }
     }
@@ -163,6 +174,8 @@ fn parse_args() -> Result<Args, String> {
         batch_size: batch_size.ok_or("missing --batch-size")?,
         buffer_megabytes: buffer_megabytes.ok_or("missing --buffer-mb")?,
         threads: threads.ok_or("missing --threads")?,
+        position_filter: position_filter.ok_or("missing --position-filter")?,
+        wdl_proportion: wdl_proportion.ok_or("missing --wdl-proportion")?,
     })
 }
 
@@ -170,4 +183,67 @@ fn parse_usize(flag: &str, value: &str) -> Result<usize, String> {
     value
         .parse()
         .map_err(|_| format!("{flag} requires a positive integer, got {value:?}"))
+}
+
+fn parse_probability(flag: &str, value: &str) -> Result<f32, String> {
+    let parsed = value
+        .parse::<f32>()
+        .map_err(|_| format!("{flag} requires a number between 0 and 1, got {value:?}"))?;
+    if !parsed.is_finite() || !(0.0..=1.0).contains(&parsed) {
+        return Err(format!(
+            "{flag} requires a finite number between 0 and 1, got {value:?}"
+        ));
+    }
+    Ok(parsed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{PositionFilter, parse_args_from};
+
+    #[test]
+    fn trainer_cli_requires_an_explicit_supported_filter_name() {
+        let args = parse_args_from(
+            [
+                "--train",
+                "train.vf",
+                "--output-dir",
+                "checkpoints",
+                "--net-id",
+                "n2b-filtered",
+                "--positions",
+                "16008492",
+                "--batch-size",
+                "9894",
+                "--buffer-mb",
+                "256",
+                "--threads",
+                "4",
+                "--position-filter",
+                "bullet-default",
+                "--wdl-proportion",
+                "0.0",
+            ]
+            .map(str::to_string)
+            .into_iter(),
+        )
+        .unwrap();
+
+        assert_eq!(args.position_filter, PositionFilter::BulletDefault);
+        assert_eq!(args.wdl_proportion, 0.0);
+        assert!(
+            parse_args_from(
+                ["--position-filter", "mystery"]
+                    .map(str::to_string)
+                    .into_iter()
+            )
+            .unwrap_err()
+            .contains("unknown position filter")
+        );
+        assert!(
+            parse_args_from(["--wdl-proportion", "1.01"].map(str::to_string).into_iter())
+                .unwrap_err()
+                .contains("between 0 and 1")
+        );
+    }
 }

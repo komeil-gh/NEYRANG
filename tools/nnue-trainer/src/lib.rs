@@ -14,6 +14,60 @@ pub const ACTIVATION_QUANT: i16 = 511;
 pub const OUTPUT_QUANT: i16 = 768;
 pub const OUTPUT_BIAS_QUANT: i32 = ACTIVATION_QUANT as i32 * OUTPUT_QUANT as i32;
 
+/// Stable position-filter choices admitted by the NEYRANG training contract.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum PositionFilter {
+    #[default]
+    None,
+    BulletDefault,
+}
+
+impl PositionFilter {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::BulletDefault => "bullet-default",
+        }
+    }
+
+    pub const fn rejects(self, facts: FilterFacts) -> bool {
+        match self {
+            Self::None => false,
+            Self::BulletDefault => {
+                facts.ply < 16
+                    || facts.pieces < 4
+                    || facts.eval_cp.unsigned_abs() >= 31_339
+                    || facts.tactical
+                    || facts.in_check
+            }
+        }
+    }
+}
+
+impl std::str::FromStr for PositionFilter {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "none" => Ok(Self::None),
+            "bullet-default" => Ok(Self::BulletDefault),
+            _ => Err(format!(
+                "unknown position filter {value:?}; expected none or bullet-default"
+            )),
+        }
+    }
+}
+
+/// Minimal facts needed to reproduce Viriformat 2.0.1's deterministic default filter.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct FilterFacts {
+    pub ply: usize,
+    pub pieces: u32,
+    pub eval_cp: i32,
+    pub tactical: bool,
+    pub in_check: bool,
+}
+
 /// The exact number of complete batches consumed by one bounded epoch.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct EpochPlan {
@@ -79,6 +133,7 @@ impl EpochPlan {
 pub struct DeterministicViriLoader {
     path: PathBuf,
     chunk_positions: usize,
+    filter: PositionFilter,
 }
 
 impl DeterministicViriLoader {
@@ -89,7 +144,13 @@ impl DeterministicViriLoader {
         Ok(Self {
             path: path.into(),
             chunk_positions,
+            filter: PositionFilter::None,
         })
+    }
+
+    pub const fn with_filter(mut self, filter: PositionFilter) -> Self {
+        self.filter = filter;
+        self
     }
 }
 
@@ -122,7 +183,15 @@ impl DataReader<ChessBoard> for DeterministicViriLoader {
                         }
                         Ok(())
                     },
-                    |_, _, _, _, _| false,
+                    |mv, eval, board, _, _| {
+                        self.filter.rejects(FilterFacts {
+                            ply: board.ply(),
+                            pieces: board.pieces.occupied().count(),
+                            eval_cp: eval,
+                            tactical: board.is_tactical(mv),
+                            in_check: board.in_check(),
+                        })
+                    },
                 )
                 .expect("convert audited Viriformat game");
                 move_buffer = game.into_move_buffer();
@@ -163,8 +232,8 @@ fn deterministic_shuffle<T>(values: &mut [T], seed: u64) {
 #[cfg(test)]
 mod tests {
     use super::{
-        ACTIVATION_QUANT, EpochPlan, OUTPUT_BIAS_QUANT, OUTPUT_QUANT, PlanError,
-        deterministic_shuffle,
+        ACTIVATION_QUANT, EpochPlan, FilterFacts, OUTPUT_BIAS_QUANT, OUTPUT_QUANT, PlanError,
+        PositionFilter, deterministic_shuffle,
     };
 
     #[test]
@@ -213,5 +282,48 @@ mod tests {
         assert_ne!(first, another_seed);
         first.sort_unstable();
         assert_eq!(first, source);
+    }
+
+    #[test]
+    fn bullet_default_filter_matches_the_pinned_viriformat_contract() {
+        let accepted = FilterFacts {
+            ply: 16,
+            pieces: 4,
+            eval_cp: 31_338,
+            tactical: false,
+            in_check: false,
+        };
+        assert!(!PositionFilter::BulletDefault.rejects(accepted));
+        assert!(!PositionFilter::None.rejects(accepted));
+
+        for rejected in [
+            FilterFacts {
+                ply: 15,
+                ..accepted
+            },
+            FilterFacts {
+                pieces: 3,
+                ..accepted
+            },
+            FilterFacts {
+                eval_cp: 31_339,
+                ..accepted
+            },
+            FilterFacts {
+                eval_cp: -31_339,
+                ..accepted
+            },
+            FilterFacts {
+                tactical: true,
+                ..accepted
+            },
+            FilterFacts {
+                in_check: true,
+                ..accepted
+            },
+        ] {
+            assert!(PositionFilter::BulletDefault.rejects(rejected));
+            assert!(!PositionFilter::None.rejects(rejected));
+        }
     }
 }

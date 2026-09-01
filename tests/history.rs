@@ -1,6 +1,6 @@
 use neyrang::{
     chess::{Color, Move, MoveFlag, Square},
-    search::history::HistoryTable,
+    shegerd::history::HistoryTable,
 };
 
 #[test]

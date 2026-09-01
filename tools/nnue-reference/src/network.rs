@@ -13,7 +13,8 @@ pub const FEATURE_SET_CHESS768: u16 = 1;
 /// Byte length of the fixed network header.
 pub const HEADER_SIZE: usize = 32;
 
-const MAGIC: &[u8; 8] = b"NEYRANGNNUE";
+/// Eight-byte artifact marker: the engine name followed by a NUL terminator.
+const MAGIC: &[u8; 8] = b"NEYRANG\0";
 const FEATURE_WEIGHT_COUNT: usize = INPUT_FEATURES * HIDDEN_SIZE;
 const FEATURE_BIAS_COUNT: usize = HIDDEN_SIZE;
 const OUTPUT_WEIGHT_COUNT: usize = 2 * HIDDEN_SIZE;
@@ -69,13 +70,22 @@ impl fmt::Display for NetworkError {
         match self {
             Self::BadMagic => formatter.write_str("invalid NEYRANG NNUE magic"),
             Self::UnsupportedVersion(version) => {
-                write!(formatter, "unsupported NEYRANG NNUE format version {version}")
+                write!(
+                    formatter,
+                    "unsupported NEYRANG NNUE format version {version}"
+                )
             }
             Self::UnsupportedFeatureSet(feature_set) => {
-                write!(formatter, "unsupported NEYRANG NNUE feature set {feature_set}")
+                write!(
+                    formatter,
+                    "unsupported NEYRANG NNUE feature set {feature_set}"
+                )
             }
             Self::UnsupportedHiddenSize(hidden_size) => {
-                write!(formatter, "unsupported NEYRANG NNUE hidden size {hidden_size}")
+                write!(
+                    formatter,
+                    "unsupported NEYRANG NNUE hidden size {hidden_size}"
+                )
             }
             Self::InvalidQuantization => {
                 formatter.write_str("quantization scales must be non-zero")

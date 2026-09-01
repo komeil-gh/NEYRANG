@@ -5,7 +5,7 @@ use std::{
 
 use neyrang::{
     chess::{Color, Position},
-    eval,
+    sanj,
     tools::genfens::{GenerationSummary, run},
 };
 
@@ -56,7 +56,7 @@ fn deterministic_output_is_legal_balanced_and_diverse() {
             "odd-ply opening: {fen}"
         );
         assert!(
-            eval::evaluate(&position).abs() <= 180,
+            sanj::evaluate(&position).abs() <= 180,
             "opening exceeds the registered balance bound: {fen}"
         );
     }

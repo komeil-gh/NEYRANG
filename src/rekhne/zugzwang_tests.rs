@@ -1,7 +1,7 @@
 use std::sync::atomic::AtomicBool;
 
 use super::{SearchContext, SearchSetup, SearchStatistics, Searcher};
-use crate::{chess::Position, eval, search::SearchLimits};
+use crate::{chess::Position, rekhne::SearchLimits, sanj};
 
 fn search_window(
     mut position: Position,
@@ -68,7 +68,7 @@ fn sparse_major_piece_windows_keep_the_reference_bound_classification() {
         "8/8/8/4k3/8/3K4/3P4/3Q4 w - - 0 1",
     ] {
         let position = Position::from_fen(fen).expect("major-piece fixture must be valid");
-        let beta = eval::evaluate(&position) - 50;
+        let beta = sanj::evaluate(&position) - 50;
         let (reference, _) =
             search_window(position.clone(), 6, beta, SearchContext::without_null(None));
         let (candidate, candidate_stats) =

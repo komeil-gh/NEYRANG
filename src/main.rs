@@ -1,13 +1,13 @@
 use std::{env, process::ExitCode, time::Instant};
 
-#[cfg(feature = "eval-tools")]
+#[cfg(feature = "sanj-tools")]
 use std::{
     fs::File,
     io::{self, BufReader, BufWriter},
 };
 
-#[cfg(feature = "eval-tools")]
-use neyrang::tools::eval_trace;
+#[cfg(feature = "sanj-tools")]
+use neyrang::tools::sanj_trace;
 use neyrang::{
     chess::{Position, divide, perft},
     engine::info::{ENGINE_NAME, ENGINE_VERSION},
@@ -81,7 +81,7 @@ fn run() -> Result<(), String> {
                 })
                 .transpose()?
                 .unwrap_or(5_u8);
-            if depth == 0 || depth as usize >= neyrang::search::MAX_PLY {
+            if depth == 0 || depth as usize >= neyrang::rekhne::MAX_PLY {
                 return Err("bench depth must be 1..127".to_owned());
             }
             let started = Instant::now();
@@ -100,24 +100,24 @@ fn run() -> Result<(), String> {
             let mut output = stdout.lock();
             genfens::run(&arguments.join(" "), &mut output).map_err(|error| error.to_string())?;
         }
-        #[cfg(feature = "eval-tools")]
-        "eval-trace" => {
+        #[cfg(feature = "sanj-tools")]
+        "sanj-trace" => {
             let input = arguments
                 .get(1)
-                .ok_or_else(|| "eval-trace requires a TSV path or '-' for stdin".to_owned())?;
+                .ok_or_else(|| "sanj-trace requires a TSV path or '-' for stdin".to_owned())?;
             if arguments.len() != 2 {
-                return Err("eval-trace accepts exactly one TSV path or '-'".to_owned());
+                return Err("sanj-trace accepts exactly one TSV path or '-'".to_owned());
             }
 
             let stdout = io::stdout();
             let output = BufWriter::new(stdout.lock());
             if input == "-" {
                 let stdin = io::stdin();
-                eval_trace::export(stdin.lock(), output)?;
+                sanj_trace::export(stdin.lock(), output)?;
             } else {
                 let file = File::open(input)
-                    .map_err(|error| format!("cannot open eval-trace input '{input}': {error}"))?;
-                eval_trace::export(BufReader::new(file), output)?;
+                    .map_err(|error| format!("cannot open sanj-trace input '{input}': {error}"))?;
+                sanj_trace::export(BufReader::new(file), output)?;
             }
         }
         "--version" | "-V" => println!("{ENGINE_NAME} {ENGINE_VERSION}"),
@@ -128,7 +128,7 @@ fn run() -> Result<(), String> {
 }
 
 #[cfg(feature = "stats")]
-fn print_benchmark_statistics(statistics: neyrang::search::SearchStatistics) {
+fn print_benchmark_statistics(statistics: neyrang::rekhne::SearchStatistics) {
     println!(
         "stats.move_generation_calls: {}",
         statistics.move_generation_calls
@@ -202,7 +202,7 @@ fn parse_depth(value: Option<&String>) -> Result<u8, String> {
         .ok_or_else(|| "command requires a depth".to_owned())?
         .parse()
         .map_err(|_| "depth must be an unsigned 8-bit integer".to_owned())?;
-    if depth as usize >= neyrang::search::MAX_PLY {
+    if depth as usize >= neyrang::rekhne::MAX_PLY {
         return Err("depth must be below 128".to_owned());
     }
     Ok(depth)
@@ -217,6 +217,6 @@ fn print_help() {
     println!("  neyrang perft-fen <FEN> <depth> Perft from a FEN");
     println!("  neyrang bench [depth]           Deterministic search benchmark");
     println!("  neyrang genfens ...             Seeded OpenBench opening generation");
-    #[cfg(feature = "eval-tools")]
-    println!("  neyrang eval-trace <TSV|->      Export exact evaluation features");
+    #[cfg(feature = "sanj-tools")]
+    println!("  neyrang sanj-trace <TSV|->      Export exact SANJ features");
 }

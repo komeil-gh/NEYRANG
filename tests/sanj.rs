@@ -1,6 +1,6 @@
 use neyrang::{
     chess::Position,
-    eval::{TEMPO, evaluate},
+    sanj::{TEMPO, evaluate},
 };
 
 #[test]

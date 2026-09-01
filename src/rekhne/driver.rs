@@ -7,13 +7,12 @@ use std::{
 
 use crate::{
     chess::{Move, MoveList, PieceType, Position},
-    eval,
+    sanj,
+    shegerd::{history::HistoryTable, ordering},
 };
 
 use super::{
     SearchLimits,
-    history::HistoryTable,
-    ordering,
     tt::{Bound, TranspositionTable},
 };
 
@@ -391,7 +390,7 @@ impl<'a> Searcher<'a> {
             .filter(|preferred| root_moves.iter().any(|&mv| mv == *preferred))
             .unwrap_or(fallback);
         let mut best_move = initial_preferred;
-        let mut best_score = eval::evaluate(position);
+        let mut best_score = sanj::evaluate(position);
         let mut best_depth = 0_u8;
         let mut best_pv = vec![initial_preferred];
         let max_depth = limits.depth.unwrap_or((MAX_PLY - 2) as u8).max(1);
@@ -543,7 +542,7 @@ impl<'a> Searcher<'a> {
         context: SearchContext,
     ) -> i32 {
         if ply >= MAX_PLY - 1 {
-            return eval::evaluate(position);
+            return sanj::evaluate(position);
         }
         self.visit_node(false);
         self.seldepth = self.seldepth.max(ply);
@@ -624,7 +623,7 @@ impl<'a> Searcher<'a> {
             && beta > -mate_bound
             && beta < mate_bound
             && has_meaningful_non_pawn_material(position)
-            && eval::evaluate(position) >= beta
+            && sanj::evaluate(position) >= beta
         {
             #[cfg(feature = "stats")]
             {
@@ -832,7 +831,7 @@ impl<'a> Searcher<'a> {
         context: SearchContext,
     ) -> i32 {
         if ply >= MAX_PLY - 1 {
-            return eval::evaluate(position);
+            return sanj::evaluate(position);
         }
         self.visit_node(true);
         self.seldepth = self.seldepth.max(ply);
@@ -846,7 +845,7 @@ impl<'a> Searcher<'a> {
 
         let in_check = position.is_in_check(position.side_to_move());
         if !in_check {
-            let stand_pat = eval::evaluate(position);
+            let stand_pat = sanj::evaluate(position);
             if stand_pat >= beta {
                 return stand_pat;
             }
@@ -1068,7 +1067,7 @@ mod tests {
     use super::{SearchContext, SearchSetup, SearchStatistics};
     use crate::{
         chess::{Move, Position},
-        search::{SearchLimits, Searcher, VALUE_INFINITE, VALUE_MATE, tt::Bound},
+        rekhne::{SearchLimits, Searcher, VALUE_INFINITE, VALUE_MATE, tt::Bound},
     };
 
     #[test]

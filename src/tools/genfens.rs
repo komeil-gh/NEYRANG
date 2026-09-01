@@ -4,8 +4,8 @@ use std::{error::Error, fmt, io::Write};
 
 use crate::{
     chess::{Move, Position},
-    eval,
-    search::VALUE_MATE,
+    rekhne::VALUE_MATE,
+    sanj,
 };
 
 const DEFAULT_MIN_PLIES: u8 = 8;
@@ -185,7 +185,7 @@ fn generate_opening(seed: u64, config: Config) -> Result<Position, GenfensError>
         if complete
             && !position.is_in_check(position.side_to_move())
             && !position.legal_moves().is_empty()
-            && eval::evaluate(&position).abs() <= config.max_abs_eval_cp
+            && sanj::evaluate(&position).abs() <= config.max_abs_eval_cp
         {
             return Ok(position);
         }
@@ -220,7 +220,7 @@ fn choose_move(position: &mut Position, rng: &mut SplitMix64, margin: i32) -> Op
                     0
                 }
             } else {
-                eval::evaluate(position)
+                sanj::evaluate(position)
             };
             position.unmake_move(reply, reply_undo);
             worst_reply = worst_reply.min(score);

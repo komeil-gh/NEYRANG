@@ -2,7 +2,7 @@ use std::sync::atomic::AtomicBool;
 
 use neyrang::{
     chess::{Color, Move, Position},
-    search::{SearchLimits, Searcher},
+    rekhne::{SearchLimits, Searcher},
 };
 
 use crate::{Game, GameResult, ScoredMove};

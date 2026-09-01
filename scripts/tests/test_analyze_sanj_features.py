@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 
 
-SCRIPT = Path(__file__).resolve().parents[1] / "analyze-eval-features.py"
+SCRIPT = Path(__file__).resolve().parents[1] / "analyze-sanj-features.py"
 
 
 def load_analysis():
@@ -145,7 +145,7 @@ class EvalFeatureAnalysisTests(unittest.TestCase):
                 values = {name: "0" for name in header}
                 values.update(
                     {
-                        "schema": "neyrang-eval-trace-v1",
+                        "schema": "neyrang-sanj-trace-v1",
                         "record_id": f"source:pair-{index:06d}:game-1:ply-016",
                         "target": "0.5",
                         "fen": "8/8/8/8/8/8/8/K6k w - - 0 1",

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a deterministic, pair-first evaluation corpus from audited PGNs."""
+"""Build a deterministic, pair-first SANJ corpus from audited PGNs."""
 
 from __future__ import annotations
 
@@ -22,8 +22,8 @@ import chess
 import chess.pgn
 
 
-CORPUS_SCHEMA = "neyrang-eval-corpus-v1"
-DENSE_SAMPLING_SCHEMA = "neyrang-eval-dense-sampling-v1"
+CORPUS_SCHEMA = "neyrang-sanj-corpus-v1"
+DENSE_SAMPLING_SCHEMA = "neyrang-sanj-dense-sampling-v1"
 RESULT_TARGET = {"1-0": 1.0, "0-1": 0.0, "1/2-1/2": 0.5}
 PARTITIONS = ("train", "validation", "holdout")
 SOURCE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
@@ -108,7 +108,7 @@ def main() -> int:
         )
         manifest = build_corpus(config)
     except (CorpusError, OSError) as error:
-        print(f"build-eval-corpus: {error}", file=sys.stderr)
+        print(f"build-sanj-corpus: {error}", file=sys.stderr)
         return 1
 
     counts = manifest["records"]["partitions"]

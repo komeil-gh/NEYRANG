@@ -5,7 +5,7 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "$script_dir/.." && pwd)"
 release_binary="$repo_root/target/release/neyrang"
 artifact_dir="$repo_root/dist/en-croissant"
-default_pgn="$repo_root/examples/neyrang-vs-stockfish-smoke.pgn"
+default_pgn="$repo_root/examples/legacy/neyrang-vs-stockfish-smoke.pgn"
 
 usage() {
     cat <<'EOF'
@@ -14,7 +14,7 @@ Usage: scripts/en-croissant.sh <command> [PGN]
 Commands:
   prepare       Build NEYRANG and create a stable executable for En Croissant
   path          Print the prepared engine path (prepares it when missing)
-  open [PGN]    Open a PGN in En Croissant (defaults to the bundled smoke games)
+  open [PGN]    Open a PGN in En Croissant (defaults to the legacy smoke games)
   help          Show this message
 EOF
 }

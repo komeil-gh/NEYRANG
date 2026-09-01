@@ -2,7 +2,7 @@ use std::sync::atomic::AtomicBool;
 
 use neyrang::{
     chess::Position,
-    search::{SearchLimits, SearchResult, Searcher, VALUE_MATE},
+    rekhne::{SearchLimits, SearchResult, Searcher, VALUE_MATE},
 };
 
 fn search(fen: &str, depth: u8) -> (Position, SearchResult) {

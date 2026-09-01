@@ -1,6 +1,6 @@
 use neyrang::{
     chess::{Move, PieceType, Position, Square},
-    search::{see, see_ge},
+    shegerd::{see, see_ge},
 };
 
 const VALUE: [i32; 6] = [100, 320, 330, 500, 900, 20_000];

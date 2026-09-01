@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Analyze NEYRANG train/validation evaluation features without opening holdout."""
+"""Analyze NEYRANG train/validation SANJ features without opening holdout."""
 
 from __future__ import annotations
 
@@ -129,7 +129,7 @@ def load_partition(path: Path) -> Partition:
     record_ids: list[str] = []
     groups: list[str] = []
     for row in rows:
-        if row.get("schema") != "neyrang-eval-trace-v1":
+        if row.get("schema") != "neyrang-sanj-trace-v1":
             raise ValueError(f"{path}: unexpected trace schema")
         record_id = row["record_id"]
         match = RECORD_ID.fullmatch(record_id)
@@ -496,7 +496,7 @@ def analyze_partitions(
             }
         )
     return {
-        "schema": "neyrang-eval-train-validation-diagnostic-v1",
+        "schema": "neyrang-sanj-train-validation-diagnostic-v1",
         "protocol": {
             "sampling_unit": "opening-pair group",
             "baseline_scale": 1.0,

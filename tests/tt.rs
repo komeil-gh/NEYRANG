@@ -1,6 +1,6 @@
 use neyrang::{
     chess::{Move, MoveFlag, Square},
-    search::{
+    rekhne::{
         VALUE_MATE,
         tt::{Bound, TranspositionTable},
     },
@@ -43,7 +43,7 @@ fn shared_table_round_trips_fields_and_rejects_signature_collisions() {
 
     assert_eq!(
         table.probe(key, 3).expect("shared entry should exist"),
-        neyrang::search::tt::TtData {
+        neyrang::rekhne::tt::TtData {
             best_move: best,
             score: -321,
             depth: 17,

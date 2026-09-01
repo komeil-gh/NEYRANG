@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use neyrang::search::time::TimeManager;
+use neyrang::rekhne::time::TimeManager;
 
 #[test]
 fn clock_budget_keeps_a_hard_deadline_inside_remaining_time() {

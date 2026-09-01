@@ -11,11 +11,11 @@ use std::{
 use crate::{
     chess::{Color, Position, perft},
     engine::info::{ENGINE_AUTHOR, ENGINE_NAME, ENGINE_VERSION},
-    eval,
-    search::{
+    rekhne::{
         MAX_PLY, SearchInfo, SearchLimits, Searcher, VALUE_MATE, search_parallel,
         time::TimeManager, tt::TranspositionTable,
     },
+    sanj,
 };
 
 use super::parser::{Command, GoParameters, PositionSpecification, parse};
@@ -110,7 +110,7 @@ impl UciEngine {
             Command::Evaluate => {
                 send_line(&format!(
                     "info string eval {} cp",
-                    eval::evaluate(&self.position)
+                    sanj::evaluate(&self.position)
                 ))?;
             }
             Command::Perft(depth) => {

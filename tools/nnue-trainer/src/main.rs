@@ -1,9 +1,5 @@
 use std::{env, path::Path, process::ExitCode};
 
-use neyrang_nnue_trainer::{
-    ACTIVATION_QUANT, DeterministicViriLoader, EpochPlan, OUTPUT_BIAS_QUANT, OUTPUT_QUANT,
-    POSITION_SHUFFLE_SEED,
-};
 use bullet::{
     game::{formats::bulletformat::ChessBoard, inputs::Chess768},
     nn::optimiser::AdamW,
@@ -13,6 +9,10 @@ use bullet::{
         settings::LocalSettings,
     },
     value::ValueTrainerBuilder,
+};
+use neyrang_nnue_trainer::{
+    ACTIVATION_QUANT, DeterministicViriLoader, EpochPlan, OUTPUT_BIAS_QUANT, OUTPUT_QUANT,
+    POSITION_SHUFFLE_SEED,
 };
 
 const HIDDEN_SIZE: usize = 128;

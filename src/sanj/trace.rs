@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::chess::{Color, PieceType, Position, Square, attacks};
 
-pub const TRACE_SCHEMA: &str = "neyrang-eval-trace-v1";
+pub const TRACE_SCHEMA: &str = "neyrang-sanj-trace-v1";
 
 pub const TRACE_COLUMNS: &str = concat!(
     "stm\tphase\t",
@@ -28,7 +28,7 @@ const TEMPO: i32 = 12;
 
 /// Exact white-minus-black coefficients for the current classical evaluator.
 ///
-/// This type is compiled only for tests or the explicit `eval-tools` feature.
+/// This type is compiled only for tests or the explicit `sanj-tools` feature.
 /// The tournament evaluator remains an independent, unchanged implementation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct EvalTrace {
@@ -449,7 +449,7 @@ fn dot(left: [i32; 6], right: [i32; 6]) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::eval::evaluate;
+    use crate::sanj::evaluate;
 
     #[derive(Default)]
     struct Coverage {
@@ -467,7 +467,7 @@ mod tests {
     #[test]
     fn trace_header_and_row_have_stable_width() {
         let row = trace(&Position::startpos()).to_string();
-        assert_eq!(TRACE_SCHEMA, "neyrang-eval-trace-v1");
+        assert_eq!(TRACE_SCHEMA, "neyrang-sanj-trace-v1");
         assert_eq!(TRACE_COLUMNS.split('\t').count(), row.split('\t').count());
         assert_eq!(row.split('\t').count(), 34);
     }

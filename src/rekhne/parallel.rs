@@ -221,11 +221,11 @@ mod tests {
 
     use crate::{
         chess::Position,
-        search::{SearchLimits, tt::TranspositionTable},
+        rekhne::{SearchLimits, tt::TranspositionTable},
     };
 
     use super::{search_parallel, select_result};
-    use crate::search::{SearchResult, SearchStatistics};
+    use crate::rekhne::{SearchResult, SearchStatistics};
 
     #[test]
     fn depth_search_returns_a_legal_pv_and_exact_final_aggregate() {

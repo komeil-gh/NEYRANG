@@ -4,10 +4,10 @@ use std::{
 };
 
 #[cfg(feature = "stats")]
-use crate::search::SearchStatistics;
+use crate::rekhne::SearchStatistics;
 use crate::{
     chess::Position,
-    search::{SearchLimits, Searcher, tt::TranspositionTable},
+    rekhne::{SearchLimits, Searcher, tt::TranspositionTable},
 };
 
 const POSITIONS: [&str; 5] = [

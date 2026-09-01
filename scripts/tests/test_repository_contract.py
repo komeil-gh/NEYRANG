@@ -53,6 +53,9 @@ class RepositoryContractTests(unittest.TestCase):
         self.read("CONTRIBUTING.md")
         self.read("SECURITY.md")
         for link in [
+            "docs/naming.md",
+            "docs/rekhne.md",
+            "docs/sanj.md",
             "docs/openbench.md",
             "docs/development/competitive-roadmap.md",
             "docs/development/nnue-reference.md",
@@ -67,7 +70,7 @@ class RepositoryContractTests(unittest.TestCase):
         specification = self.read("docs/development/nnue-reference.md")
         self.assertIn('neyrang = { path = "../.." }', cargo)
         self.assertIn('unsafe_code = "forbid"', cargo)
-        self.assertIn("NEYRANGNNUE", specification)
+        self.assertIn(r"NEYRANG\0", specification)
         self.assertIn("No playing-strength claim", specification)
 
     def test_nnue_data_codec_is_isolated_lossless_and_documented(self) -> None:

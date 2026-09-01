@@ -1,4 +1,4 @@
-#![cfg(feature = "eval-tools")]
+#![cfg(feature = "sanj-tools")]
 
 use std::{
     io::Write,
@@ -6,9 +6,9 @@ use std::{
 };
 
 #[test]
-fn eval_trace_cli_streams_stdin_without_touching_uci() {
+fn sanj_trace_cli_streams_stdin_without_touching_uci() {
     let mut child = Command::new(env!("CARGO_BIN_EXE_neyrang"))
-        .args(["eval-trace", "-"])
+        .args(["sanj-trace", "-"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -28,6 +28,6 @@ fn eval_trace_cli_streams_stdin_without_touching_uci() {
     let lines: Vec<_> = stdout.lines().collect();
     assert_eq!(lines.len(), 2);
     assert!(lines[0].starts_with("schema\trecord_id\ttarget\tfen\tstm\tphase\t"));
-    assert!(lines[1].starts_with("neyrang-eval-trace-v1\tstart\t0.5\t"));
+    assert!(lines[1].starts_with("neyrang-sanj-trace-v1\tstart\t0.5\t"));
     assert_eq!(lines[0].split('\t').count(), lines[1].split('\t').count());
 }

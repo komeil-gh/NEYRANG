@@ -33,7 +33,7 @@ fn network_round_trips_through_versioned_little_endian_format() {
     let network = fixture_network();
     let bytes = network.to_bytes();
 
-    assert_eq!(&bytes[..8], b"NEYRANGNNUE");
+    assert_eq!(&bytes[..8], b"NEYRANG\0");
     assert_eq!(
         u16::from_le_bytes([bytes[10], bytes[11]]),
         FEATURE_SET_CHESS768

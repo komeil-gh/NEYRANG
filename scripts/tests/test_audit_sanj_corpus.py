@@ -13,8 +13,8 @@ import chess.pgn
 
 
 SCRIPTS = Path(__file__).resolve().parents[1]
-BUILDER_PATH = SCRIPTS / "build-eval-corpus.py"
-AUDITOR_PATH = SCRIPTS / "audit-eval-corpus.py"
+BUILDER_PATH = SCRIPTS / "build-sanj-corpus.py"
+AUDITOR_PATH = SCRIPTS / "audit-sanj-corpus.py"
 
 
 def load_module(name: str, path: Path):

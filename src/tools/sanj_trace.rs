@@ -2,7 +2,7 @@ use std::io::{BufRead, Write};
 
 use crate::{
     chess::Position,
-    eval::{TRACE_COLUMNS, TRACE_SCHEMA, trace},
+    sanj::{TRACE_COLUMNS, TRACE_SCHEMA, trace},
 };
 
 pub const EXPORT_HEADER: &str = "schema\trecord_id\ttarget\tfen";
@@ -10,12 +10,12 @@ pub const EXPORT_HEADER: &str = "schema\trecord_id\ttarget\tfen";
 /// Stream `record_id<TAB>target<TAB>FEN` records to the fixed trace schema.
 pub fn export<R: BufRead, W: Write>(reader: R, mut writer: W) -> Result<usize, String> {
     writeln!(writer, "{EXPORT_HEADER}\t{TRACE_COLUMNS}")
-        .map_err(|error| format!("cannot write eval-trace header: {error}"))?;
+        .map_err(|error| format!("cannot write sanj-trace header: {error}"))?;
 
     let mut exported = 0;
     for (index, line) in reader.lines().enumerate() {
         let line_number = index + 1;
-        let line = line.map_err(|error| format!("eval-trace line {line_number}: {error}"))?;
+        let line = line.map_err(|error| format!("sanj-trace line {line_number}: {error}"))?;
         if line.trim().is_empty() || line.trim_start().starts_with('#') {
             continue;
         }
@@ -26,37 +26,37 @@ pub fn export<R: BufRead, W: Write>(reader: R, mut writer: W) -> Result<usize, S
         let fen = required_field(fields.next(), line_number, "FEN")?;
         if fields.next().is_some() {
             return Err(format!(
-                "eval-trace line {line_number}: expected exactly three tab-separated fields"
+                "sanj-trace line {line_number}: expected exactly three tab-separated fields"
             ));
         }
         if record_id.trim() != record_id || target_text.trim() != target_text || fen.trim() != fen {
             return Err(format!(
-                "eval-trace line {line_number}: fields must not have leading or trailing whitespace"
+                "sanj-trace line {line_number}: fields must not have leading or trailing whitespace"
             ));
         }
 
         let target: f64 = target_text.parse().map_err(|_| {
-            format!("eval-trace line {line_number}: target must be a number within [0,1]")
+            format!("sanj-trace line {line_number}: target must be a number within [0,1]")
         })?;
         if !target.is_finite() || !(0.0..=1.0).contains(&target) {
             return Err(format!(
-                "eval-trace line {line_number}: target must be finite and within [0,1]"
+                "sanj-trace line {line_number}: target must be finite and within [0,1]"
             ));
         }
         let position = Position::from_fen(fen)
-            .map_err(|error| format!("eval-trace line {line_number}: invalid FEN: {error}"))?;
+            .map_err(|error| format!("sanj-trace line {line_number}: invalid FEN: {error}"))?;
         let canonical_fen = position.to_fen();
         let evaluation = trace(&position);
         writeln!(
             writer,
             "{TRACE_SCHEMA}\t{record_id}\t{target}\t{canonical_fen}\t{evaluation}"
         )
-        .map_err(|error| format!("cannot write eval-trace line {line_number}: {error}"))?;
+        .map_err(|error| format!("cannot write sanj-trace line {line_number}: {error}"))?;
         exported += 1;
     }
     writer
         .flush()
-        .map_err(|error| format!("cannot flush eval-trace output: {error}"))?;
+        .map_err(|error| format!("cannot flush sanj-trace output: {error}"))?;
     Ok(exported)
 }
 
@@ -68,7 +68,7 @@ fn required_field<'a>(
     match field {
         Some(value) if !value.is_empty() => Ok(value),
         _ => Err(format!(
-            "eval-trace line {line_number}: missing or empty {name}"
+            "sanj-trace line {line_number}: missing or empty {name}"
         )),
     }
 }
@@ -95,8 +95,8 @@ mod tests {
         assert_eq!(lines[0], format!("{EXPORT_HEADER}\t{TRACE_COLUMNS}"));
         let width = lines[0].split('\t').count();
         assert_eq!(width, 38);
-        assert!(lines[1].starts_with("neyrang-eval-trace-v1\tstart\t0.5\t"));
-        assert!(lines[2].starts_with("neyrang-eval-trace-v1\tqueen\t1\t"));
+        assert!(lines[1].starts_with("neyrang-sanj-trace-v1\tstart\t0.5\t"));
+        assert!(lines[2].starts_with("neyrang-sanj-trace-v1\tqueen\t1\t"));
         assert!(lines.iter().all(|line| line.split('\t').count() == width));
     }
 

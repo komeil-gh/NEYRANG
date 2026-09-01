@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use neyrang::{
     chess::Position,
-    search::{SearchLimits, Searcher, VALUE_MATE},
+    rekhne::{SearchLimits, Searcher, VALUE_MATE},
 };
 
 #[test]

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Independently replay and audit a deterministic NEYRANG evaluation corpus."""
+"""Independently replay and audit a deterministic NEYRANG SANJ corpus."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ import chess.pgn
 
 
 PARTITIONS = ("train", "validation", "holdout")
-DENSE_SAMPLING_SCHEMA = "neyrang-eval-dense-sampling-v1"
+DENSE_SAMPLING_SCHEMA = "neyrang-sanj-dense-sampling-v1"
 RESULT_TARGET = {"1-0": "1", "0-1": "0", "1/2-1/2": "0.5"}
 RECORD_ID = re.compile(
     r"^(?P<source>[A-Za-z0-9][A-Za-z0-9._-]*):"
@@ -57,7 +57,7 @@ def main() -> int:
         corpus_dir = inside_repo(args.corpus_dir, repo_root, "corpus directory")
         summary = audit_corpus(repo_root, corpus_dir)
     except (AuditError, OSError, ValueError, json.JSONDecodeError) as error:
-        print(f"audit-eval-corpus: {error}", file=sys.stderr)
+        print(f"audit-sanj-corpus: {error}", file=sys.stderr)
         return 1
     print(json.dumps(summary, sort_keys=True))
     return 0
@@ -67,7 +67,7 @@ def audit_corpus(repo_root: Path, corpus_dir: Path) -> dict[str, Any]:
     manifest_path = corpus_dir / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     schema = require_string(manifest, "schema")
-    if schema != "neyrang-eval-corpus-v1":
+    if schema != "neyrang-sanj-corpus-v1":
         raise AuditError(f"unsupported corpus schema {schema!r}")
 
     split = require_mapping(manifest, "split")

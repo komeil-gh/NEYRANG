@@ -3,14 +3,6 @@
 version = 4
 
 [[package]]
-name = "neyrang-nnue-trainer"
-version = "0.1.0"
-dependencies = [
- "bullet-trainer",
- "bullet_lib",
-]
-
-[[package]]
 name = "anyhow"
 version = "1.0.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -218,6 +210,14 @@ name = "montyformat"
 version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4caf9c718f831a8568f030576e6a6e6aa487ed5f8732ddb0ba79e9a3ea0421ca"
+
+[[package]]
+name = "neyrang-nnue-trainer"
+version = "0.1.0"
+dependencies = [
+ "bullet-trainer",
+ "bullet_lib",
+]
 
 [[package]]
 name = "num-traits"

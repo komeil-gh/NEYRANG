@@ -359,7 +359,7 @@ fn quiet_score(mv: Move, killers: [Move; 2], history: &HistoryTable, color: Colo
 mod tests {
     use crate::{
         chess::{Move, Position},
-        search::see,
+        shegerd::see,
     };
 
     use super::{HistoryTable, MovePicker, OrderingStatistics, quiet_score, tactical_score};

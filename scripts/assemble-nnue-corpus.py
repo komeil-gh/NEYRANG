@@ -23,7 +23,7 @@ SHUFFLE_SCHEMA = "neyrang-nnue-game-shuffle-v1"
 OPENING_DEDUP_SCHEMA = "neyrang-nnue-opening-dedup-v1"
 SHARD_SCHEMA = "neyrang-nnue-selfplay-shard-v1"
 CONTRACT = "neyrang-viriformat-strict-v1"
-PARTITIONS = ("train", "validation")
+PARTITIONS = ("train", "validation", "holdout")
 HEADER_SIZE = 32
 RECORD_SIZE = 4
 
@@ -291,7 +291,7 @@ def validate_config(config: CorpusConfig) -> None:
     if len(set(config.inputs)) != len(config.inputs):
         raise AssemblyError("input shard paths must be unique")
     if config.partition not in PARTITIONS:
-        raise AssemblyError("only train and validation corpora may be assembled")
+        raise AssemblyError("only train, validation and holdout corpora may be assembled")
     if not config.shuffle_seed:
         raise AssemblyError("shuffle seed must not be empty")
     if config.minimum_games < 1 or config.minimum_scored_positions < 1:

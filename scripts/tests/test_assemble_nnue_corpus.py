@@ -92,6 +92,31 @@ class NnueCorpusAssemblerTests(unittest.TestCase):
             self.assertFalse(output.exists())
             self.assertFalse(Path(f"{output}.manifest.json").exists())
 
+    def test_holdout_partition_is_assembled_without_changing_its_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            shard = write_shard(
+                root,
+                "holdout.vf",
+                [mate_in_one("7k/5K2/6Q1/8/8/8/8/8 w - - 0 1", "g6g7")],
+                self.auditor,
+                partition="holdout",
+            )
+            output = root / "final-holdout.vf"
+
+            manifest = self.assembler.assemble_corpus(
+                make_config(
+                    self.assembler,
+                    root,
+                    (shard,),
+                    output,
+                    partition="holdout",
+                )
+            )
+
+            self.assertEqual(manifest["partition"], "holdout")
+            self.assertEqual(manifest["artifact"]["games"], 1)
+
     def test_duplicate_opening_group_across_shards_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

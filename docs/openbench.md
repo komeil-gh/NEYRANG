@@ -131,9 +131,11 @@ no-clobber output publication, and overwrite refusal. Its adjacent
 opening-input provenance record, not a scored NNUE corpus.
 
 N1a defines and independently audits the versioned, lossless
-[NNUE game-record contract](development/nnue-data.md). Production self-play,
-search-score/WDL recording, scored-game shard manifests, Bullet ingestion, and
-the first one-million-position gate remain unfinished.
+[NNUE game-record contract](development/nnue-data.md). N1c now closes the first
+one-million-position corpus, deterministic assembly, Bullet ingestion, and
+full-corpus diagnostic gate. Production-scale generation, the final untouched
+holdout, independent FEN parity, and any playing-engine integration remain
+unfinished.
 
 ## Primary references
 

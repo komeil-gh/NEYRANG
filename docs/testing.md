@@ -356,7 +356,7 @@ H2e deterministically selects at most eight quiet positions per game with an eig
 
 The train/validation-only analyzer reconstructs all 42 effective evaluation columns and weights every opening pair equally. Both designs have full rank and no dead column. Scale-only fits are stable around `0.80-0.83`, and all validation point estimates improve slightly, but the registered 10,000-replicate group-bootstrap intervals include zero. H2e is retained as evidence infrastructure; no evaluation weight or playing source changes.
 
-## N0a/N1a/N1b NNUE foundation evidence
+## N0a/N1a/N1b/N1c NNUE foundation and pipeline evidence
 
 `tools/nnue-reference` remains the scalar `Chess768` and network-artifact oracle. The following `tools/nnue-data` crate adds the canonical lossless game boundary without linking either crate into the playing engine. Its tests decode and re-encode the upstream Viriformat example byte for byte, replay every encoded move, cover castling/en-passant/underpromotion and concatenated games, and fail closed on corruption, truncation, illegal play or state that the strict subset cannot preserve.
 
@@ -370,9 +370,13 @@ Run these layers with:
 cargo fmt --manifest-path tools/nnue-data/Cargo.toml --check
 cargo clippy --manifest-path tools/nnue-data/Cargo.toml --all-targets -- -D warnings
 cargo test --manifest-path tools/nnue-data/Cargo.toml --locked
+cargo fmt --manifest-path tools/nnue-trainer/Cargo.toml --check
+cargo clippy --manifest-path tools/nnue-trainer/Cargo.toml --all-targets -- -D warnings
+cargo test --manifest-path tools/nnue-trainer/Cargo.toml --locked
 .venv/bin/python -m unittest \
   scripts.tests.test_audit_nnue_data \
-  scripts.tests.test_generate_selfplay_shard
+  scripts.tests.test_generate_selfplay_shard \
+  scripts.tests.test_assemble_nnue_corpus
 ```
 
 The exact record, provenance, rules-only completion policy and geometric 1M/4M/16M/64M/256M gates are frozen in the [NNUE data contract](development/nnue-data.md). A small self-play shard proves process and replay mechanics only; fixed-node data generation is not strength testing.
@@ -383,8 +387,29 @@ The first multi-thousand-game N1b infrastructure campaign used committed source
 replayed all 3,683 attempted games with zero rejection, producing 320,947 scored
 positions; all 413 holdout groups remained unplayed. Exact artifact, manifest
 and membership hashes are recorded in the NNUE data contract. These games prove
-recorder throughput and data integrity only: they neither train nor strengthen
-the current engine and do not satisfy the one-million-position pipeline gate.
+recorder throughput and data integrity only. N1c then added a second 10,000
+opening campaign, assembled both campaigns by complete game, detected canonical
+position leakage, quarantined 87 complete validation games and independently
+replayed the retained output. Train/validation now contain 980,256/111,830
+scored positions and 950,363/110,003 unique position keys from 11,232/1,364
+games, with zero cross-partition key. All 1,413 assigned holdout openings across
+the two campaigns remained unplayed.
+
+The pinned Metal trainer consumes exactly 96 batches of 10,211 positions. Its
+custom reader applies a fixed seeded position shuffle because Bullet's builtin
+Viriformat loader uses a wall-clock seed. Tests freeze the epoch geometry,
+reader shuffle, Bullet padding/layout import, WDL/score orientation and corrupt
+artifact rejection. The selected quantized stream imports into the versioned
+scalar artifact, and `score-corpus` independently evaluates every retained
+parent position. Train/validation quantized MSE is `0.064639433087` /
+`0.083763232872`; the constant-0.5 baseline is `0.145866599885` /
+`0.154954401561`.
+
+Repeated Metal training is not bit-reproducible: the selected and repeat
+quantized artifacts differ in 2,453 bytes despite fixed input order and the same
+displayed loss trajectory. This is recorded as an open reproducibility limit,
+not hidden by selecting a favorable rerun. The network is not linked into the
+playing engine and no game or Elo claim follows from this gate.
 
 Run the deterministic Python gates with an environment containing the pinned dependencies:
 
@@ -394,4 +419,4 @@ python3 -m venv .venv-eval
 .venv-eval/bin/python -m unittest discover -s scripts/tests -p 'test_*.py'
 ```
 
-The repository Python suite currently has 73 tests covering match/corpus auditing, corpus construction, dense pair balancing, legacy-manifest compatibility, opening selection, fixed 38-to-42 feature mapping, complete-group learning subsets, scale fitting, deterministic group bootstrap, repository contracts, scored-shard orchestration and independent NNUE-record/terminal replay. Exact campaign, corpus, feature, diagnostic, and script hashes are recorded in the experiment ledger.
+The repository Python suite currently has 80 tests covering match/corpus auditing, corpus construction, dense pair balancing, legacy-manifest compatibility, opening selection, fixed 38-to-42 feature mapping, complete-group learning subsets, scale fitting, deterministic group bootstrap, repository contracts, scored-shard orchestration, complete-game NNUE assembly, cross-partition leakage/quarantine and independent NNUE-record/terminal replay. Exact campaign, corpus, network and diagnostic identities are recorded in the experiment ledger and [N1c evidence manifest](evidence/nnue-n1c-1m.json).

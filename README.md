@@ -48,19 +48,25 @@ Implemented:
 - isolated fixed-node self-play recording with white-relative parent scores,
   rules-only WDL, pre-generation opening-group splits, reason counts, immutable
   scored-shard manifests, and independent terminal/WDL replay auditing
+- deterministic complete-game NNUE corpus assembly with source-policy binding,
+  canonical position-key leakage detection, whole-game quarantine, immutable
+  game shuffling, and independently replayed output manifests
+- a Bullet trainer pinned to an exact revision, a deterministic position reader,
+  fail-closed quantized export into the `NEYRANGNNUE` artifact, and independent
+  full-corpus train/validation diagnostics
 
-Not implemented in the retained playing source: Syzygy, NNUE evaluation, LMP, futility pruning, continuation/capture history, or an optimized sliding-attack backend. The standalone NNUE scalar reference and lossless data codec are correctness infrastructure only: there is no trained network, neither tool is linked into search, and neither carries an Elo claim. The single pre-registered P3 Lazy-SMP design passed its correctness, scaling, deadline, and 2,000-game paired gates and is retained on the development branch. This is controlled development evidence, not a new release or a universal Elo claim. Capture History and 1-ply Continuation History were tested and reverted; the second conservative NMP experiment was retained on the development branch but has not earned a release.
+Not implemented in the retained playing source: Syzygy, NNUE evaluation, LMP, futility pruning, continuation/capture history, or an optimized sliding-attack backend. The standalone NNUE lane now has one experimental million-position network, but no NNUE code or network is linked into search and no NNUE Elo claim exists. The single pre-registered P3 Lazy-SMP design passed its correctness, scaling, deadline, and 2,000-game paired gates and is retained on the development branch. This is controlled development evidence, not a new release or a universal Elo claim. Capture History and 1-ply Continuation History were tested and reverted; the second conservative NMP experiment was retained on the development branch but has not earned a release.
 
-The opening and rules-complete scored-self-play slices of N1b are implemented,
-but a production-scale million-position corpus, shard shuffle/interleave,
-trainer ingestion, exported network, and NNUE playing integration still do not
-exist.
-
-The first committed recorder campaign independently replayed 3,683/3,683
-train/validation games and 320,947 scored positions with zero rejection while
-leaving 413 assigned holdout openings unplayed. This is infrastructure evidence,
-not a training result or playing-strength claim; exact identities are in the
-[NNUE data contract](docs/development/nnue-data.md).
+N1c has closed the first pipeline gate: two frozen campaigns produced an
+assembled 980,256-position train corpus and a disjoint 111,830-position
+validation corpus. Together they contain 1,092,086 scored positions and
+1,060,366 unique canonical position keys from 12,596 retained complete games.
+Cross-partition overlap is zero after 87 entire validation games were quarantined;
+1,413 assigned holdout openings were never sent to self-play. One exact Bullet
+epoch produced a versioned experimental network and independent diagnostics.
+This is data/training infrastructure evidence, not a playing-strength result;
+exact identities are in the [NNUE data contract](docs/development/nnue-data.md)
+and [N1c evidence manifest](docs/evidence/nnue-n1c-1m.json).
 
 No project license has been selected yet.
 
@@ -233,9 +239,38 @@ cargo build --release --manifest-path tools/nnue-data/Cargo.toml \
   --source-license UNLICENSED-NEYRANG-INTERNAL
 ```
 
-This command creates data infrastructure evidence, not Elo evidence. The
-one-million accepted-position pipeline gate and every training/network gate
-remain open.
+Assemble complete games only after every input shard is frozen and audited:
+
+```bash
+.venv/bin/python scripts/assemble-nnue-corpus.py \
+  --input testing/nnue/selfplay/train-0000.vf \
+  --input testing/nnue/selfplay/train-0001.vf \
+  --output testing/nnue/corpus/train.vf \
+  --partition train \
+  --shuffle-seed DATASET_SHUFFLE_SEED \
+  --min-games EXPECTED_GAMES \
+  --min-scored-positions EXPECTED_POSITIONS
+```
+
+Validation adds `--disjoint-from testing/nnue/corpus/train.vf`; an explicit
+`--quarantine-cross-partition-games` removes the complete conflicting validation
+game and records every removed game/position. It never removes an individual
+position or tolerates a repeated opening group.
+
+The first retained Metal epoch uses the pinned trainer crate, exact complete-batch
+geometry and the already shuffled/audited corpus:
+
+```bash
+cargo run --release --manifest-path tools/nnue-trainer/Cargo.toml -- \
+  --train testing/nnue/corpus/train.vf \
+  --output-dir testing/nnue/checkpoints \
+  --net-id neyrang-n1c-1m \
+  --positions 980256 --batch-size 10211 --buffer-mb 8 --threads 1
+```
+
+These commands create data and offline-learning evidence, not Elo evidence. The
+4M/16M/64M/256M scale points, final model-selection holdout, trainer/reference
+FEN parity, playing integration, speed tests and all game gates remain open.
 
 `OPENING_SEED`, `OPENING_ORDER`, `TC`, `HASH_MB`, `THREADS`, and `CONCURRENCY` are explicit inputs. Set `NODES` on `match.sh` for a node-limited comparison; omit it for a time-controlled match. Each run writes PGN telemetry plus adjacent `.log` and `.meta.txt` files containing engine, Git, binary, opening, and fastchess identities. Pass `ENGINE_A_GIT_SHA`, `ENGINE_B_GIT_SHA`, `OPENINGS_SOURCE`, and `OPENINGS_LICENSE` for an auditable experiment.
 
@@ -284,4 +319,4 @@ P3 subsequently retained one root-diversified Lazy-SMP design. Frozen Threads 2/
 
 H0/H1 then added byte-isolated evaluation evidence tooling and proved it on a 4,000-game historical pilot. H2b subsequently completed 4,000 fresh paired games without a timing, crash, legality, warning, or protocol failure. The first 9,000-game H2c expansion was rejected in full after one timeout; its deterministic H2d replacement completed and independently audited all 9,000 games at fixed per-engine node budgets. H2b+H2d first produced a conservative 9,959-record corpus, then H2e recovered 35,032 unique records through pre-registered gap-constrained, pair-balanced dense extraction without generating or accepting another game. Train and validation contain 28,040/3,564 rows from 4,146/538 opening groups, both 42-column designs have full rank, and a scale-only diagnostic is stable but statistically unresolved on validation. No evaluation weight changed. Because aggregate current-holdout summaries were accidentally exposed, any future fitter requires its own preregistration and a new disjoint untouched final holdout before a playing candidate can exist.
 
-N0a/N1a now add two one-way, non-playing crates: the scalar `Chess768`/artifact oracle and a strict Viriformat-compatible game codec. The data codec preserves complete classical position state, white-relative score/WDL targets and contiguous moves, rejects illegal or lossy input, and is cross-checked by an independent python-chess auditor. This is the foundation for geometric 1M/4M/16M/64M/256M data gates; no production corpus, trained network, search integration or strength result exists yet.
+N0a/N1a/N1b/N1c now cover the non-playing path from scalar `Chess768` inference and strict Viriformat games through deterministic corpus assembly, pinned Bullet ingestion, quantized export and independent offline diagnostics. The 1M pipeline point passed with 1,092,086 retained scored positions, but the selected Metal run is not bit-reproducible across repeated floating-point updates, the final holdout does not yet exist, and no network is linked into the engine. The next evidence point is 4M; no strength result exists.

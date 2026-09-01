@@ -214,7 +214,7 @@ impl MovePicker {
     }
 
     #[inline]
-    #[cfg(any(feature = "stats", test))]
+    #[cfg(feature = "stats")]
     pub(crate) const fn statistics(&self) -> OrderingStatistics {
         self.statistics
     }

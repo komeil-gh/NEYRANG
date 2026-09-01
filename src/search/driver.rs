@@ -40,7 +40,7 @@ impl SearchContext {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, feature = "stats"))]
     const fn without_null(preferred: Option<Move>) -> Self {
         Self {
             preferred,

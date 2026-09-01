@@ -25,6 +25,10 @@ import chess
 SCHEMA = "neyrang-nnue-selfplay-shard-v1"
 SPLIT_SCHEMA = "neyrang-nnue-selfplay-split-v1"
 PARTITIONS = ("train", "validation", "holdout")
+OPENING_MANIFEST_SCHEMAS = (
+    "neyrang-genfens-shard-v1",
+    "neyrang-genfens-shard-v1",
+)
 MAX_CAPTURED_STREAM_BYTES = 1 << 20
 PROGRESS = re.compile(
     r"^info string selfplay attempted ([0-9]+) accepted ([0-9]+) "
@@ -287,8 +291,11 @@ def verify_opening_manifest(
         payload = json.loads(config.openings_manifest.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError) as error:
         raise GenerationError(f"invalid openings manifest JSON: {error}") from error
-    if not isinstance(payload, dict) or payload.get("schema") != "neyrang-genfens-shard-v1":
-        raise GenerationError("openings manifest schema must be neyrang-genfens-shard-v1")
+    if not isinstance(payload, dict) or payload.get("schema") not in OPENING_MANIFEST_SCHEMAS:
+        raise GenerationError(
+            "openings manifest schema must be neyrang-genfens-shard-v1 "
+            "or the registered legacy neyrang-genfens-shard-v1"
+        )
     artifact = require_mapping(payload, "artifact")
     artifact_path = artifact.get("path")
     if not isinstance(artifact_path, str):

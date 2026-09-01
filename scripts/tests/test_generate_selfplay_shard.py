@@ -153,6 +153,43 @@ class SelfPlayShardGeneratorTests(unittest.TestCase):
 
             self.assertFalse(output.exists())
 
+    def test_registered_legacy_opening_manifest_keeps_original_provenance(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            opening = chess.STARTING_FEN
+            openings, opening_manifest = write_opening_shard(root, [opening])
+            payload = json.loads(opening_manifest.read_text())
+            payload["schema"] = "neyrang-genfens-shard-v1"
+            payload["source"] = {
+                "kind": "NEYRANG deterministic self-generated openings",
+                "license": "UNLICENSED-NEYRANG-INTERNAL",
+            }
+            opening_manifest.write_text(json.dumps(payload), encoding="utf-8")
+            binary = write_fake_generator(root / "generator", forced_mate_fixture(0))
+            output = root / "holdout.vf"
+            partition = self.generator.partition_for_opening(
+                opening, "split-seed", 80, 10
+            )
+
+            manifest = self.generator.generate_shard(
+                make_config(
+                    self.generator,
+                    root,
+                    binary,
+                    openings,
+                    opening_manifest,
+                    output,
+                    partition=partition,
+                    source_license="UNLICENSED-NEYRANG-INTERNAL",
+                )
+            )
+
+            self.assertEqual(manifest["schema"], "neyrang-nnue-selfplay-shard-v1")
+            self.assertEqual(
+                manifest["opening_source"]["license"],
+                "UNLICENSED-NEYRANG-INTERNAL",
+            )
+
     def test_generator_completion_reason_counts_must_match_independent_replay(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

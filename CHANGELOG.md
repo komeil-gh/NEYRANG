@@ -32,6 +32,8 @@ All notable changes to NEYRANG, formerly NEYRANG, are documented here.
 - An opt-in opening-stream duplicate quarantine that preserves the registered seed range, retains first canonical occurrences and records every dropped index and digest while default generation remains fail-closed.
 - Search-facing NNUE corpus diagnostics for score bias/error/correlation/sign agreement, target loss and deterministic filter exposure, plus explicit fail-closed trainer controls for position filtering and score/result target mixing.
 - Final-holdout assembly as a first-class partition, including whole-game train/validation leakage quarantine and hash-verified compatibility with registered historical opening, split and corpus identities.
+- Independent NNUE king-bucket exposure analysis over both oriented
+  perspectives, used to bound the N2c representation before training.
 
 ### Changed
 

@@ -5,6 +5,7 @@ mod diagnostics;
 mod features;
 mod fen_suite;
 mod float_network;
+mod king_buckets;
 mod network;
 mod parity;
 
@@ -17,6 +18,7 @@ pub use diagnostics::{
 pub use features::{INPUT_FEATURES, active_features, feature_index};
 pub use fen_suite::{FenSuiteError, FrozenPosition, parse_fen_suite};
 pub use float_network::{FloatNetwork, FloatNetworkError, FloatQuantizationError};
+pub use king_buckets::{KingBucketError, KingBucketReport, analyze_king_buckets};
 pub use network::{
     FEATURE_SET_CHESS768, FORMAT_VERSION, HEADER_SIZE, HIDDEN_SIZE, Network, NetworkError,
     NetworkParameters,

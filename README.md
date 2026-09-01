@@ -68,6 +68,8 @@ Implemented:
   fail-closed quantized export into the `NEYRANG\0` artifact format, and independent
   raw-float/quantized FEN parity, full-corpus diagnostics, and paired
   fixed-validation game bootstrap comparison
+- independent dual-perspective king-square exposure analysis for data-backed
+  king-bucket architecture registration
 
 Not implemented in the default playing source: Syzygy, enabled-by-default NNUE,
 LMP, futility pruning, continuation/capture history, or an optimized

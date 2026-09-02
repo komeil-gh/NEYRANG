@@ -48,32 +48,54 @@ fn adjacent_file_mask(file: u8) -> u64 {
     mask
 }
 
+#[inline]
 fn passed_pawn_mask(square: Square, color: Color) -> u64 {
-    let mut mask = 0_u64;
-    let start = match color {
-        Color::White => square.rank() + 1,
-        Color::Black => 0,
+    let files = file_mask(square.file()) | adjacent_file_mask(square.file());
+    let forward_ranks = match color {
+        Color::White if square.rank() < 7 => u64::MAX << ((square.rank() + 1) * 8),
+        Color::Black if square.rank() > 0 => (1_u64 << (square.rank() * 8)) - 1,
+        Color::White | Color::Black => 0,
     };
-    let end = match color {
-        Color::White => 8,
-        Color::Black => square.rank(),
-    };
-    for rank in start..end {
-        for file_delta in -1_i8..=1 {
-            let file = square.file() as i8 + file_delta;
-            if (0..8).contains(&file)
-                && let Some(target) = Square::from_coords(file as u8, rank)
-            {
-                mask |= target.bit();
-            }
-        }
-    }
-    mask
+    files & forward_ranks
 }
 
 const fn relative_rank(square: Square, color: Color) -> u8 {
     match color {
         Color::White => square.rank(),
         Color::Black => 7 - square.rank(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bitboard_passed_pawn_masks_match_the_loop_oracle() {
+        for color in [Color::White, Color::Black] {
+            for index in 0..64 {
+                let square = Square::from_index(index).expect("board index is valid");
+                assert_eq!(passed_pawn_mask(square, color), loop_oracle(square, color));
+            }
+        }
+    }
+
+    fn loop_oracle(square: Square, color: Color) -> u64 {
+        let (start, end) = match color {
+            Color::White => (square.rank() + 1, 8),
+            Color::Black => (0, square.rank()),
+        };
+        let mut mask = 0;
+        for rank in start..end {
+            for file_delta in -1_i8..=1 {
+                let file = square.file() as i8 + file_delta;
+                if (0..8).contains(&file)
+                    && let Some(target) = Square::from_coords(file as u8, rank)
+                {
+                    mask |= target.bit();
+                }
+            }
+        }
+        mask
     }
 }

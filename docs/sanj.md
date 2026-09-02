@@ -31,10 +31,12 @@ target/release/neyrang bench-nnue /path/to/network.nnue 5
 ```
 
 The feature exposes the UCI string option `EvalFile`. A non-empty path must be a
-complete version-1 `NEYRANG\0` Chess768 artifact; decoding is fail-closed. The
-loaded network is immutable and shared across Lazy-SMP workers, while every
-worker owns a move-delta accumulator stack. The engine scalar output is checked
-bit-for-bit against the independent reference crate on frozen FEN suites.
+complete supported `NEYRANG\0` artifact: version 1 uses Chess768 and version 2
+uses the registered three-bank horizontally mirrored Chess768x3hm mapping.
+Decoding is fail-closed. The loaded network is immutable and shared across
+Lazy-SMP workers, while every worker owns a move-delta accumulator stack. The
+engine scalar output is checked bit-for-bit against the independent reference
+crate on frozen FEN suites.
 
 This is an experimental playing path, not a retained network or an Elo claim.
 The retained N1e-16M artifact passed bit-exact inference and deterministic
@@ -44,6 +46,12 @@ the default. A replacement still requires a new untouched final holdout,
 fixed-node and equal-time games, a normalized SPRT, longer-time-control
 confirmation, and an independent artifact audit. An empty `EvalFile` value
 selects classical SANJ.
+
+The later N2d version-2 candidate passed parity, fresh selection and an
+untouched holdout, but scored `343/356/301` (`49.35%`) in its clean 1,000-game
+fixed-node screen against classical SANJ. Its registered floor was 50%, so it is
+also rejected and received zero equal-time or SPRT games. These runner results
+are selection evidence, not a release Elo estimate.
 
 ## Exact SANJ trace
 

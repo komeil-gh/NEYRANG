@@ -492,7 +492,7 @@ python3 -m venv .venv-sanj
 .venv-sanj/bin/python -m unittest discover -s scripts/tests -p 'test_*.py'
 ```
 
-The repository Python suite currently has 88 tests covering match/corpus auditing, concurrency-safe round pairing, corpus construction, dense pair balancing, legacy-manifest compatibility, opening selection, fixed 38-to-42 feature mapping, complete-group learning subsets, scale fitting, deterministic group bootstrap, repository contracts, scored-shard orchestration, duplicate opening-stream quarantine, complete-game NNUE assembly, duplicate-opening/cross-partition whole-game quarantine and independent NNUE-record/terminal replay. Exact campaign, corpus, network, parity and diagnostic identities are recorded in the experiment ledger and the [N1c](evidence/nnue-n1c-1m.json), [N1d](evidence/nnue-n1d-4m.json), [N1e](evidence/nnue-n1e-16m.json), [N2a](evidence/nnue-n2a-engine-inference.json) and [N2b](evidence/nnue-n2b-diagnosis.json) evidence manifests.
+The repository Python suite currently has 89 tests covering match/corpus auditing, concurrency-safe round pairing, corpus construction, dense pair balancing, legacy-manifest compatibility, opening selection, fixed 38-to-42 feature mapping, complete-group learning subsets, scale fitting, deterministic group bootstrap, repository contracts, scored-shard orchestration, duplicate opening-stream quarantine, complete-game NNUE assembly, duplicate-opening/cross-partition whole-game quarantine and independent NNUE-record/terminal replay. Exact campaign, corpus, network, parity and diagnostic identities are recorded in the experiment ledger and the [N1c](evidence/nnue-n1c-1m.json), [N1d](evidence/nnue-n1d-4m.json), [N1e](evidence/nnue-n1e-16m.json), [N2a](evidence/nnue-n2a-engine-inference.json), [N2b](evidence/nnue-n2b-diagnosis.json) and [N2d](evidence/nnue-n2d-result.json) evidence manifests.
 
 ## N2a engine-inference and playing-screen evidence
 
@@ -550,3 +550,22 @@ search-score sign agreement was `0.904318802`, below the preregistered
 `0.904808319` floor. The binding failure stopped new holdout generation and all
 games. Exact identities and gate outcomes are in the
 [N2c result manifest](evidence/nnue-n2c-result.json).
+
+## N2d convergence, untouched-holdout and playing evidence
+
+N2d adds four-way paired sign transitions, deterministic equal-game bootstrap
+and context slices, then freezes one candidate whose only change from N2c is a
+second deterministic training pass. The candidate consumed 32,016,984
+positions, passed curated/balanced `8/2 cp` parity and had zero integer mismatch
+against engine inference. It passed both fresh selection and the independently
+replayed 19,749-game untouched holdout; both paired bootstrap intervals were
+wholly negative and both MAE/sign gates improved over N2b.
+
+The authorized strict 1,000-game screen used one frozen binary, 10,000
+nodes/move, Threads=1, Hash=64 MiB, 500 color-reversed unique openings and seed
+`2026090201`. N2d scored `343/356/301`, or `49.35%`. Independent audit recovered
+the exact W/D/L, pentanomial `[56,106,186,99,53]`, 94,738 telemetry-complete
+plies, balanced colors, 1,000 normal terminations and zero anomaly. Because the
+registered floor was 50%, the candidate is rejected and equal-time/SPRT remain
+unrun. The complete boundary is in the
+[N2d result manifest](evidence/nnue-n2d-result.json).

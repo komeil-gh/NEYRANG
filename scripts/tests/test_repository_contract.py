@@ -1,3 +1,4 @@
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -95,6 +96,25 @@ class RepositoryContractTests(unittest.TestCase):
         self.assertIn("one_batch_matches_independently_sharded_seed_offsets", integration)
         self.assertIn("neyrang-genfens-shard-v1", generator)
         self.assertIn("N1b", specification)
+
+    def test_retired_identity_is_absent_from_tracked_tree(self) -> None:
+        retired = ("a" + "kht").encode("ascii")
+        failures: list[str] = []
+        tracked = subprocess.run(
+            ["git", "ls-files", "-z"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+        ).stdout.split(b"\0")
+        for encoded in sorted(item for item in tracked if item):
+            relative = Path(encoded.decode("utf-8"))
+            path = ROOT / relative
+            if retired in str(relative).lower().encode("utf-8"):
+                failures.append(f"path:{relative}")
+                continue
+            if retired in path.read_bytes().lower():
+                failures.append(f"content:{relative}")
+        self.assertEqual([], failures, "retired identity remains: " + ", ".join(failures))
 
 
 if __name__ == "__main__":

@@ -29,7 +29,7 @@ fn network_loader_rejects_legacy_magic_and_payload_corruption() {
     let bytes = constant_network_artifact(0);
 
     let mut legacy = bytes.clone();
-    legacy[..8].copy_from_slice(b"NEYRANGNNUE");
+    legacy[..8].copy_from_slice(b"OLDNNUE\0");
     assert_eq!(Network::from_bytes(&legacy), Err(NetworkError::BadMagic));
 
     let mut corrupt = bytes;

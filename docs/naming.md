@@ -1,7 +1,7 @@
 # NEYRANG naming and migration contract
 
-The project identity changed from **NEYRANG** to **NEYRANG** on the `0.3.0-dev`
-line. The four names have distinct technical ownership:
+**NEYRANG** is the sole project and engine identity. The four names have
+distinct technical ownership:
 
 | Name | Meaning | Code and interface ownership |
 | --- | --- | --- |
@@ -28,19 +28,15 @@ tool boundaries around the four named concepts.
 - NNUE tool packages: `neyrang-nnue-data`, `neyrang-nnue-reference`, and
   `neyrang-nnue-trainer`
 
-The migration is intentionally fail-closed. Current readers do not silently
-accept `NEYRANGNNUE` as the new artifact format, and current pipeline tools emit
-`neyrang-*` schemas. A retained old network must be re-imported from its frozen
-tensor source into a new artifact and pass the same parity gates before use.
+The identity contract is intentionally fail-closed. Readers accept only the
+documented `NEYRANG\0` artifact format, and pipeline tools accept and emit only
+`neyrang-*` schemas. Any pre-contract tensor source must be re-imported into a
+current artifact and pass the same parity gates before use.
 
-## Historical evidence
+## Historical evidence boundary
 
-Tagged releases through `v0.2.0`, old PGNs, immutable evidence manifests,
-recorded hashes, and frozen experiment identities were produced under the NEYRANG
-name. They remain historical NEYRANG evidence. Renaming strings inside those files
-would invalidate provenance without changing the bytes that were actually
-tested.
-
-Documentation may therefore mention NEYRANG only when describing a legacy release,
-an immutable artifact, or historical evidence. New commands, packages, schemas,
-artifacts, and experiments use NEYRANG and the subsystem names above.
+Published tags and recorded hashes remain immutable version evidence, but the
+current tracked tree uses only NEYRANG identifiers. Historical binaries or
+tensor streams are never treated as current artifacts merely because their
+surrounding file was renamed; they must be rebuilt or re-imported through the
+current fail-closed contracts.

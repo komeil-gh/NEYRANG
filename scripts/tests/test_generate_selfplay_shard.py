@@ -153,13 +153,14 @@ class SelfPlayShardGeneratorTests(unittest.TestCase):
 
             self.assertFalse(output.exists())
 
-    def test_registered_legacy_opening_manifest_keeps_original_provenance(self) -> None:
+    def test_retired_opening_manifest_schema_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             opening = chess.STARTING_FEN
             openings, opening_manifest = write_opening_shard(root, [opening])
             payload = json.loads(opening_manifest.read_text())
-            payload["schema"] = "neyrang-genfens-shard-v1"
+            retired_prefix = "a" + "kht"
+            payload["schema"] = f"{retired_prefix}-genfens-shard-v1"
             payload["source"] = {
                 "kind": "NEYRANG deterministic self-generated openings",
                 "license": "UNLICENSED-NEYRANG-INTERNAL",
@@ -167,68 +168,76 @@ class SelfPlayShardGeneratorTests(unittest.TestCase):
             opening_manifest.write_text(json.dumps(payload), encoding="utf-8")
             binary = write_fake_generator(root / "generator", forced_mate_fixture(0))
             output = root / "holdout.vf"
-            legacy_split_schema = "neyrang-nnue-selfplay-split-v1"
             partition = self.generator.partition_for_opening(
                 opening,
                 "split-seed",
                 80,
                 10,
-                split_digest_schema=legacy_split_schema,
             )
 
-            manifest = self.generator.generate_shard(
-                make_config(
-                    self.generator,
-                    root,
-                    binary,
-                    openings,
-                    opening_manifest,
-                    output,
-                    partition=partition,
-                    source_license="UNLICENSED-NEYRANG-INTERNAL",
-                    split_digest_schema=legacy_split_schema,
+            with self.assertRaisesRegex(
+                self.generator.GenerationError, "openings manifest schema"
+            ):
+                self.generator.generate_shard(
+                    make_config(
+                        self.generator,
+                        root,
+                        binary,
+                        openings,
+                        opening_manifest,
+                        output,
+                        partition=partition,
+                        source_license="UNLICENSED-NEYRANG-INTERNAL",
+                    )
                 )
+
+            self.assertFalse(output.exists())
+
+    def test_retired_split_schema_is_rejected(self) -> None:
+        retired_prefix = "a" + "kht"
+        with self.assertRaisesRegex(
+            self.generator.GenerationError, "split digest schema"
+        ):
+            self.generator.partition_for_opening(
+                chess.STARTING_FEN,
+                "split-seed",
+                80,
+                10,
+                split_digest_schema=f"{retired_prefix}-nnue-selfplay-split-v1",
             )
 
-            self.assertEqual(manifest["schema"], "neyrang-nnue-selfplay-shard-v1")
-            self.assertEqual(
-                manifest["opening_source"]["license"],
-                "UNLICENSED-NEYRANG-INTERNAL",
-            )
-            self.assertEqual(
-                manifest["split"]["assignment_digest_schema"],
-                legacy_split_schema,
-            )
-
-    def test_registered_legacy_generator_summary_is_accepted(self) -> None:
+    def test_retired_generator_summary_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             opening = chess.STARTING_FEN
             openings, opening_manifest = write_opening_shard(root, [opening])
+            retired_prefix = "a" + "kht"
             binary = write_fake_generator(
                 root / "generator",
                 forced_mate_fixture(0),
-                summary_schema="neyrang-selfplay-summary-v1",
+                summary_schema=f"{retired_prefix}-selfplay-summary-v1",
             )
-            output = root / "legacy-summary.vf"
+            output = root / "retired-summary.vf"
             partition = self.generator.partition_for_opening(
                 opening, "split-seed", 80, 10
             )
 
-            manifest = self.generator.generate_shard(
-                make_config(
-                    self.generator,
-                    root,
-                    binary,
-                    openings,
-                    opening_manifest,
-                    output,
-                    partition=partition,
+            with self.assertRaisesRegex(
+                self.generator.GenerationError, "generator summary has an invalid schema"
+            ):
+                self.generator.generate_shard(
+                    make_config(
+                        self.generator,
+                        root,
+                        binary,
+                        openings,
+                        opening_manifest,
+                        output,
+                        partition=partition,
+                    )
                 )
-            )
 
-            self.assertEqual(manifest["artifact"]["games"], 1)
-            self.assertEqual(manifest["generator"]["summary_schema"], "neyrang-selfplay-summary-v1")
+            self.assertFalse(output.exists())
 
     def test_generator_completion_reason_counts_must_match_independent_replay(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

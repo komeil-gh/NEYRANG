@@ -1,6 +1,6 @@
 # NEYRANG legacy mark
 
-The current artwork is the inherited horse-and-star mark from the NEYRANG era. It
+The current artwork is NEYRANG's horse-and-star mark. It
 is retained as a provisional NEYRANG asset so existing GUI integration paths do
 not break during the code-identity migration. It must not be described as a
 literal visual explanation of the word NEYRANG.

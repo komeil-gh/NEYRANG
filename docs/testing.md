@@ -54,7 +54,7 @@ cargo run --release --features nnue -- \
 The NNUE benchmark records its own semantic tree and checksum. It must not be
 compared with the classical tree as if the evaluator were a speed-only change.
 
-Legacy NEYRANG 0.1.0 ARM64 release baseline on the development Apple Silicon host:
+Version `v0.1.0` ARM64 release baseline on the development Apple Silicon host:
 
 - positions: 5
 - depth: 5
@@ -64,7 +64,7 @@ Legacy NEYRANG 0.1.0 ARM64 release baseline on the development Apple Silicon hos
 
 All five runs produced the same node count and checksum. This is a deterministic regression baseline, not a cross-machine performance promise.
 
-Legacy NEYRANG 0.2.0 on the same workload and host:
+Version `v0.2.0` on the same workload and host:
 
 - positions: 5
 - depth: 5
@@ -140,24 +140,26 @@ Frozen P3 passed this gate at `2.010776x / 3.956388x`; Threads 2/4 p95 hard-dead
 
 ## Complete-game smoke evidence
 
-On 2026-08-29, the legacy NEYRANG ARM64 release was run through python-chess
+On 2026-08-29, the v0.1.0 ARM64 release was run through python-chess
 1.11.2 against the official native ARM64 Stockfish 18 binary (SHA-256
 `4d77c4aa3ad9bd1ea8111f2ac5a4620fe7ebf998d6893bf828d49ccd579c8cb0`).
-Five fixed openings were paired with colors reversed for ten games. NEYRANG used
-depth 3 and Stockfish depth 1.
+Five fixed openings were paired with colors reversed for ten games. The project
+engine used depth 3 and Stockfish depth 1.
 
 - 10/10 games completed
 - 0 crashes, hangs, illegal moves, or unfinished games
 - 5 checkmates and 5 threefold repetitions
-- NEYRANG-perspective W/D/L: 4/5/1
+- project-engine-perspective W/D/L: 4/5/1
 
 The deliberately unequal depth settings make this a protocol/legality stress test only. It is not an Elo estimate or evidence that NEYRANG is stronger than Stockfish.
 
 Two additional paired-color games used `go movetime 20` with a 2 ms move-overhead setting. Both completed after 36 plies without an illegal move, crash, or hang. An interactive infinite-search test returned `bestmove` 0.10 ms after `stop` in the final measured run. These are smoke measurements, not guaranteed latency bounds.
 
-The historical paired games are retained without rewritten headers at
-`examples/legacy/neyrang-vs-stockfish-smoke.pgn`. The current reproducible harness
-and En Croissant workflow are documented in [the integration guide](en-croissant.md).
+The paired games are retained at
+`examples/legacy/neyrang-vs-stockfish-smoke.pgn`. Moves, results, dates, and test
+parameters are unchanged; product-facing PGN labels are normalized to NEYRANG.
+The current reproducible harness and En Croissant workflow are documented in
+[the integration guide](en-croissant.md).
 
 ## External timing regression
 
@@ -281,7 +283,7 @@ coordinator. Use a reviewed OpenBench deployment for that role; do not treat a
 sequence of fixed shards as an SPRT by merely stopping when a point estimate looks
 favorable.
 
-## Legacy NEYRANG 0.2.0 release evidence
+## Version 0.2.0 release evidence
 
 Final versioned release gates:
 
@@ -291,7 +293,8 @@ Final versioned release gates:
 - tactical suite: 11/11 pass, including legal PV replay
 - Perft: 119,060,324 / 4,085,603 / 674,624 at the required fixture depths
 - fastchess UCI compliance: 40/40 steps pass
-- UCI identity/readiness smoke: `NEYRANG 0.2.0`, `uciok`, and `readyok`
+- UCI identity/readiness smoke: the versioned release identity, `uciok`, and
+  `readyok`
 
 The selected SEE/qsearch/LMR candidate was compared with the immutable `v0.1.0` ARM64 binary under a normalized fastchess SPRT:
 
@@ -307,13 +310,13 @@ The selected SEE/qsearch/LMR candidate was compared with the immutable `v0.1.0` 
 
 The accepted hypothesis says the candidate clears the configured +5 Elo threshold against this exact baseline. It does not say the engine is exactly +5 Elo, nor does the reported estimate transfer automatically to another time control or opponent pool. Raw PGN, log, recovery configuration, and metadata are retained locally under `testing/final/` and summarized in the experiment ledger.
 
-## Legacy NEYRANG 0.3 retrospective evidence
+## NEYRANG 0.3 retrospective evidence
 
 Before new 0.3 search work, four fixed 1,000-game matches re-tested every retained 0.2 step with the preserved binaries and the same opening sequence. SEE ordering measured `+29.25 +/-17.09 Elo`, qsearch SEE pruning measured `+66.46 +/-18.72 Elo`, isolated LMR was inconclusive at `+6.25 +/-12.52 Elo`, and cumulative v0.2.0 measured `+90.97 +/-18.38 Elo` against v0.1.0.
 
 All 4,000 games completed with no crash, illegal move, disconnect, or unfinished game. Five 2-11 ms clock forfeits occurred only in historical parent binaries; final LMR/v0.2 recorded none in their 1,000-game appearances. The complete configuration, termination audit, decisions, and artifact checksums are in the [0.3 retrospective campaign](development/0.3.0-game-campaign.md). The separate timing audit subsequently reproduced a current zero-margin edge, hardened it, and passed a fresh 1,000-game stress before the first 0.3 feature experiment.
 
-## Legacy NEYRANG 0.3 ordering evidence
+## NEYRANG 0.3 ordering evidence
 
 The staged MovePicker was kept after 7,046 valid comparison games, including a 4,046-game H1-accepting SPRT and a corrected 1,000-game longer-TC confirmation. The following lazy main-search threshold caller completed two independent 1,000-game screens and a fresh 10,000-game normalized SPRT. The SPRT finished `3557/3487/2956`, 50.35%, `+4.16 +/- 6.81 nElo`, and LLR `+0.69` inside `[-2.94, +2.94]`; it therefore hit the registered inconclusive cap and was reverted rather than promoted.
 
@@ -351,7 +354,7 @@ The independent trace matched production evaluation and its own component recons
 
 H1 added a deterministic pair-first corpus builder without changing the playing engine. Four Python tests cover opening-group co-location, deterministic reruns, quiet-position filtering, malformed/odd pair rejection, cross-partition transposition removal, manifest checksums, and no-overwrite behavior.
 
-The historical pilot independently replayed 4,000 already-audited games / 2,000 color-reversed pairs and produced 2,967 globally unique quiet positions: 2,382 train, 318 validation, and 267 untouched holdout. Reversing source argument order produced byte-identical TSVs; every record exported as one fixed 38-column legacy `neyrang-eval-trace-v1` row. A separate audit reconstructed every encoded ply and rechecked FEN, target, quietness, split assignment, and uniqueness without a mismatch. H1 is retained as evidence infrastructure only; the pilot is too small and correlated to authorize weight tuning.
+The historical pilot independently replayed 4,000 already-audited games / 2,000 color-reversed pairs and produced 2,967 globally unique quiet positions: 2,382 train, 318 validation, and 267 untouched holdout. Reversing source argument order produced byte-identical TSVs; every record exported as one fixed 38-column pre-contract trace row. A separate audit reconstructed every encoded ply and rechecked FEN, target, quietness, split assignment, and uniqueness without a mismatch. H1 is retained as evidence infrastructure only; the pilot is too small and correlated to authorize weight tuning.
 
 ## H2b fresh-corpus evidence
 
@@ -519,9 +522,9 @@ bias, MAE, RMSE, Pearson correlation, sign agreement, score/result/blended loss
 and Viriformat/Bullet filter exposure. Trainer tests freeze the exact default
 filter and require explicit `--position-filter`, `--wdl-proportion` and
 `--feature-set` values.
-Self-play and assembly tests cover historical opening/corpus schemas, explicit
-legacy split-domain reproduction and holdout partition assembly without
-weakening hash, replay or no-clobber checks.
+Self-play and assembly tests reject pre-contract opening, split, summary, corpus,
+and contract schemas while covering holdout partition assembly without weakening
+hash, replay, or no-clobber checks.
 
 The filter-only candidate stopped when its selection-validation paired interval
 crossed zero. The score-only candidate passed `8/2 cp` raw/quantized parity and

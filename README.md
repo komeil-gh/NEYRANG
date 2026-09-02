@@ -1,8 +1,7 @@
 # NEYRANG
 
 NEYRANG is an independent UCI chess engine written from scratch in stable Rust.
-It is the new identity of the project formerly called NEYRANG. The latest tagged
-release remains the legacy `NEYRANG 0.2.0`; the current development identity is
+The latest tagged version is `0.2.0`; the current development identity is
 `NEYRANG 0.3.0-dev`. The `dev/0.3-search` branch contains accepted but
 unreleased timing, staged-MovePicker, threshold-SEE, conservative-NMP, and
 non-mutating legal-generation work developed through isolated correctness
@@ -181,7 +180,7 @@ scripts/en-croissant.sh prepare
 ```
 
 Select the printed path from En Croissant's **Engines** page. The preserved
-legacy NEYRANG protocol-smoke PGN can then be opened with:
+protocol-smoke PGN can then be opened with:
 
 ```bash
 scripts/en-croissant.sh open
@@ -384,7 +383,7 @@ license grant.
 
 ## Roadmap
 
-The legacy NEYRANG 0.3 search order was evidence-driven. A completed 4,000-game
+The NEYRANG 0.3 search order was evidence-driven. A completed 4,000-game
 retrospective found direct positive evidence for SEE ordering and qsearch
 pruning, an inconclusive isolated LMR result, and `+90.97 +/-18.38 Elo` for
 cumulative v0.2.0 against v0.1.0. A separate timing audit retained isolated

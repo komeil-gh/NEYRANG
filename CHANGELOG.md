@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to NEYRANG, formerly NEYRANG, are documented here.
+All notable changes to NEYRANG are documented here.
 
 ## [Unreleased]
 
@@ -40,9 +40,13 @@ All notable changes to NEYRANG, formerly NEYRANG, are documented here.
 
 ### Changed
 
-- The development version is now `NEYRANG 0.3.0-dev`; the executable and Rust
-  crate are `neyrang`, and the legacy `NEYRANG 0.2.0` tag remains historical
-  provenance rather than being rewritten.
+- The tracked source, documentation, examples, package names, executable, UCI
+  identity, and current data contracts now use NEYRANG exclusively. A repository
+  contract test rejects any tracked path or byte sequence containing the retired
+  identity, and current readers reject pre-contract schemas rather than silently
+  relabeling historical artifacts.
+- The development version is `NEYRANG 0.3.0-dev`; the executable and Rust crate
+  are `neyrang`, while the immutable `v0.2.0` tag remains version provenance.
 - Development legal move generation now avoids make/check/unmake in the common path and validates exceptional moves against simulated final occupancy. The deterministic search tree and checksum are unchanged.
 - The retained F1 candidate reduced median depth-8 wall time by 33.99% and raised median NPS by 51.50% across 15 interleaved runs per frozen binary.
 - Exact SEE now carries color occupancy and target attackers through the exchange, reveals slider x-rays incrementally, prepares each accepted legal LVA state once, and preserves every prior score, threshold answer, exchange-step count, search tree, and checksum.
@@ -91,7 +95,8 @@ All notable changes to NEYRANG, formerly NEYRANG, are documented here.
 
 - The five-position depth-5 benchmark fell from 448,136 nodes (`a4b453e8ce750456`) to 196,627 nodes (`4a4c31e290740db3`).
 - The final candidate accepted the configured H1 in a 786-game normalized SPRT against the immutable `v0.1.0` binary, scoring 61.70% with no recorded protocol failure.
-- UCI identity is now `NEYRANG 0.2.0`.
+- The release binary reports its versioned UCI identity and passes `uciok` and
+  `readyok`; the product label shown in this migrated changelog is NEYRANG.
 
 ### Rejected
 

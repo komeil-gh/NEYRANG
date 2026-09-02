@@ -19,16 +19,11 @@ import chess
 
 
 SCHEMA = "neyrang-nnue-corpus-v1"
-LEGACY_SCHEMA = "neyrang-nnue-corpus-v1"
 SHUFFLE_SCHEMA = "neyrang-nnue-game-shuffle-v1"
 OPENING_DEDUP_SCHEMA = "neyrang-nnue-opening-dedup-v1"
 SHARD_SCHEMA = "neyrang-nnue-selfplay-shard-v1"
 CONTRACT = "neyrang-viriformat-strict-v1"
-LEGACY_CONTRACT = "neyrang-viriformat-strict-v1"
-REGISTERED_CORPUS_CONTRACTS = {
-    (SCHEMA, CONTRACT),
-    (LEGACY_SCHEMA, LEGACY_CONTRACT),
-}
+REGISTERED_CORPUS_CONTRACTS = {(SCHEMA, CONTRACT)}
 PARTITIONS = ("train", "validation", "holdout")
 HEADER_SIZE = 32
 RECORD_SIZE = 4

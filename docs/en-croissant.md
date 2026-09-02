@@ -21,8 +21,10 @@ The prepared artifact is separate from `target/`, so cleaning Cargo build output
 
 ## Viewing games
 
-The repository preserves the pre-rename paired smoke-match PGN at
-`examples/legacy/neyrang-vs-stockfish-smoke.pgn`. Its headers remain historical.
+The repository preserves an identity-normalized copy of the paired smoke-match
+PGN at `examples/legacy/neyrang-vs-stockfish-smoke.pgn`. Its moves, results,
+dates, and test parameters are unchanged; product-facing header labels use the
+current NEYRANG identity.
 Open it directly from En Croissant or run:
 
 ```bash

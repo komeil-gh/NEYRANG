@@ -10,6 +10,7 @@
 __pycache__/
 *.pgn
 *.epd
+!data/openings/sanj-h3-final-holdout.epd
 !examples/*.pgn
 !examples/legacy/
 !examples/legacy/*.pgn

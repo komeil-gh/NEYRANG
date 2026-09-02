@@ -31,6 +31,21 @@ auditor = load_module("audit_eval_corpus", AUDITOR_PATH)
 
 
 class CorpusAuditorTests(unittest.TestCase):
+    def test_independent_replay_accepts_fixed_holdout_partition(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root, output = build_fixture(
+                Path(temporary), fixed_partition="holdout"
+            )
+            try:
+                summary = auditor.audit_corpus(root, output)
+            except auditor.AuditError as error:
+                self.fail(f"fixed holdout replay was rejected: {error}")
+
+            self.assertTrue(summary["ok"])
+            self.assertEqual(summary["records"]["train"], 0)
+            self.assertEqual(summary["records"]["validation"], 0)
+            self.assertGreater(summary["records"]["holdout"], 0)
+
     def test_independent_replay_accepts_valid_corpus(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root, output = build_fixture(Path(temporary))
@@ -113,7 +128,11 @@ class CorpusAuditorTests(unittest.TestCase):
                 auditor.audit_corpus(root, output)
 
 
-def build_fixture(root: Path, dense: bool = False) -> tuple[Path, Path]:
+def build_fixture(
+    root: Path,
+    dense: bool = False,
+    fixed_partition: str | None = None,
+) -> tuple[Path, Path]:
     source = root / "games.pgn"
     write_game(
         source,
@@ -139,6 +158,7 @@ def build_fixture(root: Path, dense: bool = False) -> tuple[Path, Path]:
         tail_plies=0,
         samples_per_game=2 if dense else 1,
         min_sample_gap=2 if dense else 0,
+        fixed_partition=fixed_partition,
     )
     builder.build_corpus(config)
     shutil.copyfile(BUILDER_PATH, root / BUILDER_PATH.name)

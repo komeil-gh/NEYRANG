@@ -20,6 +20,50 @@ SPEC.loader.exec_module(corpus)
 
 
 class CorpusBuilderTests(unittest.TestCase):
+    def test_fixed_partition_places_every_record_in_sealed_holdout(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "games.pgn"
+            write_pair(source, "Engine-A", "Engine-B")
+            base = make_config(root, root / "output", source)
+
+            self.assertTrue(hasattr(base, "fixed_partition"))
+            config = corpus.BuildConfig(
+                **{**base.__dict__, "fixed_partition": "holdout"}
+            )
+            manifest = corpus.build_corpus(config)
+
+            counts = manifest["records"]["partitions"]
+            self.assertEqual(counts["train"]["records"], 0)
+            self.assertEqual(counts["validation"]["records"], 0)
+            self.assertGreater(counts["holdout"]["records"], 0)
+            self.assertEqual(
+                counts["holdout"]["records"],
+                manifest["records"]["deduplication"]["records_kept"],
+            )
+            self.assertEqual(
+                manifest["split"],
+                {
+                    "mode": "fixed-partition-v1",
+                    "group_key": "canonical first-four-field starting FEN",
+                    "partition": "holdout",
+                    "seed": "20260830",
+                },
+            )
+
+    def test_fixed_partition_rejects_unknown_partition(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "games.pgn"
+            write_pair(source, "Engine-A", "Engine-B")
+            base = make_config(root, root / "output", source)
+            config = corpus.BuildConfig(
+                **{**base.__dict__, "fixed_partition": "sealed"}
+            )
+
+            with self.assertRaisesRegex(corpus.CorpusError, "fixed partition"):
+                corpus.validate_config(config)
+
     def test_sampling_configuration_is_explicit(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -72,12 +72,20 @@ def audit_corpus(repo_root: Path, corpus_dir: Path) -> dict[str, Any]:
 
     split = require_mapping(manifest, "split")
     seed = require_string(split, "seed")
-    train_percent = require_int(split, "train_percent")
-    validation_percent = require_int(split, "validation_percent")
-    if train_percent <= 0 or validation_percent <= 0:
-        raise AuditError("split percentages must be positive")
-    if train_percent + validation_percent >= 100:
-        raise AuditError("train plus validation percentages must be below 100")
+    fixed_partition: str | None = None
+    if split.get("mode") == "fixed-partition-v1":
+        fixed_partition = require_string(split, "partition")
+        if fixed_partition not in PARTITIONS:
+            raise AuditError("fixed partition is invalid")
+        train_percent = 0
+        validation_percent = 0
+    else:
+        train_percent = require_int(split, "train_percent")
+        validation_percent = require_int(split, "validation_percent")
+        if train_percent <= 0 or validation_percent <= 0:
+            raise AuditError("split percentages must be positive")
+        if train_percent + validation_percent >= 100:
+            raise AuditError("train plus validation percentages must be below 100")
 
     sampling = require_mapping(manifest, "sampling")
     min_ply = require_int(sampling, "min_recorded_ply")
@@ -149,6 +157,7 @@ def audit_corpus(repo_root: Path, corpus_dir: Path) -> dict[str, Any]:
             selector_schema=selector_schema,
             train_percent=train_percent,
             validation_percent=validation_percent,
+            fixed_partition=fixed_partition,
         )
         expected.extend(records)
         compare_source_evidence(
@@ -224,6 +233,7 @@ def replay_source(
     selector_schema: str,
     train_percent: int,
     validation_percent: int,
+    fixed_partition: str | None,
 ) -> tuple[list[ExpectedRecord], dict[str, Any]]:
     records: list[ExpectedRecord] = []
     counts: Counter[str] = Counter()
@@ -255,6 +265,7 @@ def replay_source(
                 opening_key,
                 train_percent,
                 validation_percent,
+                fixed_partition,
             )
             samples: list[list[tuple[int, str]]] = []
             for game_in_pair, game in enumerate((left, right), start=1):
@@ -445,7 +456,10 @@ def partition_for(
     opening_key: str,
     train_percent: int,
     validation_percent: int,
+    fixed_partition: str | None,
 ) -> str:
+    if fixed_partition is not None:
+        return fixed_partition
     chosen = stable_digest(schema, seed, opening_key, "partition")
     bucket = int.from_bytes(chosen[:8], "big") % 100
     if bucket < train_percent:

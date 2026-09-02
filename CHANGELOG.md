@@ -6,6 +6,9 @@ All notable changes to NEYRANG are documented here.
 
 ### Added
 
+- A no-clobber fixed-partition SANJ corpus mode for separately sourced final
+  holdouts, with independent PGN replay that verifies every record remains in
+  the registered sealed partition while legacy 80/10/10 builds stay unchanged.
 - An external macOS search-observability harness that runs an unchanged frozen
   profiling binary, hash-binds raw `sample` output and deterministic bench
   results, publishes a stable no-clobber category schema, and cleans up its own

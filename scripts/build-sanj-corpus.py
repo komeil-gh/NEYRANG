@@ -51,6 +51,7 @@ class BuildConfig:
     min_sample_gap: int = 0
     train_percent: int = 80
     validation_percent: int = 10
+    fixed_partition: str | None = None
 
 
 @dataclass(frozen=True)
@@ -87,6 +88,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--tail-plies", type=int, default=8)
     parser.add_argument("--samples-per-game", type=int, default=1)
     parser.add_argument("--min-sample-gap", type=int, default=0)
+    parser.add_argument(
+        "--fixed-partition",
+        choices=PARTITIONS,
+        help="place every opening group in one partition for a separately sealed corpus",
+    )
     return parser.parse_args()
 
 
@@ -105,6 +111,7 @@ def main() -> int:
             tail_plies=args.tail_plies,
             samples_per_game=args.samples_per_game,
             min_sample_gap=args.min_sample_gap,
+            fixed_partition=args.fixed_partition,
         )
         manifest = build_corpus(config)
     except (CorpusError, OSError) as error:
@@ -169,6 +176,8 @@ def validate_config(config: BuildConfig) -> None:
         raise CorpusError("train and validation percentages must be positive")
     if config.train_percent + config.validation_percent >= 100:
         raise CorpusError("train plus validation percentages must be below 100")
+    if config.fixed_partition is not None and config.fixed_partition not in PARTITIONS:
+        raise CorpusError(f"fixed partition must be one of {PARTITIONS}")
     try:
         config.output_dir.resolve().relative_to(config.repo_root.resolve())
     except ValueError as error:
@@ -443,6 +452,8 @@ def has_legal_tactical_move(board: chess.Board) -> bool:
 
 
 def partition_for_opening(opening_key: str, config: BuildConfig) -> str:
+    if config.fixed_partition is not None:
+        return config.fixed_partition
     digest = stable_digest(CORPUS_SCHEMA, config.seed, opening_key, "partition")
     bucket = int.from_bytes(digest[:8], "big") % 100
     if bucket < config.train_percent:
@@ -533,6 +544,24 @@ def make_manifest(
     record_summary["sampled_before_deduplication"] = len(sampled_records)
     record_summary["deduplication"] = duplicate_summary
 
+    if config.fixed_partition is None:
+        split = {
+            "seed": config.seed,
+            "group_key": "canonical first-four-field starting FEN",
+            "train_percent": config.train_percent,
+            "validation_percent": config.validation_percent,
+            "holdout_percent": 100
+            - config.train_percent
+            - config.validation_percent,
+        }
+    else:
+        split = {
+            "mode": "fixed-partition-v1",
+            "group_key": "canonical first-four-field starting FEN",
+            "partition": config.fixed_partition,
+            "seed": config.seed,
+        }
+
     return {
         "schema": CORPUS_SCHEMA,
         "created_utc": datetime.now(timezone.utc).isoformat(),
@@ -546,15 +575,7 @@ def make_manifest(
             "platform": platform.platform(),
             "machine": platform.machine(),
         },
-        "split": {
-            "seed": config.seed,
-            "group_key": "canonical first-four-field starting FEN",
-            "train_percent": config.train_percent,
-            "validation_percent": config.validation_percent,
-            "holdout_percent": 100
-            - config.train_percent
-            - config.validation_percent,
-        },
+        "split": split,
         "sampling": {
             "mode": (
                 "single-hash-v1"

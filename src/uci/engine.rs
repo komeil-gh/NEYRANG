@@ -7,7 +7,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
     thread::{self, JoinHandle},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use crate::{
@@ -221,6 +221,7 @@ impl UciEngine {
     }
 
     fn start_search(&mut self, parameters: GoParameters) {
+        let started = Instant::now();
         let position = self.position.clone();
         let color = position.side_to_move();
         let limits = normalize_limits(&parameters, color, self.move_overhead_ms);
@@ -238,9 +239,15 @@ impl UciEngine {
                 let mut position = position;
                 let mut searcher =
                     Searcher::with_table_and_evaluator(&worker_stop, table, evaluator);
-                let result = searcher.search(&mut position, &limits, &game_hashes, |info| {
-                    let _ = send_line(&format_info(info));
-                });
+                let result = searcher.search_started(
+                    &mut position,
+                    &limits,
+                    &game_hashes,
+                    started,
+                    |info| {
+                        let _ = send_line(&format_info(info));
+                    },
+                );
                 (result, searcher.into_table())
             } else {
                 search_parallel_with_evaluator(
@@ -249,7 +256,7 @@ impl UciEngine {
                     &game_hashes,
                     &worker_stop,
                     table,
-                    ParallelOptions::new(threads, evaluator),
+                    ParallelOptions::new(threads, evaluator, started),
                     |info| {
                         let _ = send_line(&format_info(info));
                     },

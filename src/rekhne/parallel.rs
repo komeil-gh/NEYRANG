@@ -16,11 +16,16 @@ use super::{
 pub(crate) struct ParallelOptions {
     threads: usize,
     evaluator: sanj::Evaluator,
+    started: Instant,
 }
 
 impl ParallelOptions {
-    pub(crate) const fn new(threads: usize, evaluator: sanj::Evaluator) -> Self {
-        Self { threads, evaluator }
+    pub(crate) const fn new(threads: usize, evaluator: sanj::Evaluator, started: Instant) -> Self {
+        Self {
+            threads,
+            evaluator,
+            started,
+        }
     }
 }
 
@@ -43,7 +48,7 @@ where
         game_hashes,
         stop,
         table,
-        ParallelOptions::new(threads, sanj::Evaluator::classical()),
+        ParallelOptions::new(threads, sanj::Evaluator::classical(), Instant::now()),
         on_info,
     )
 }
@@ -60,12 +65,15 @@ pub(crate) fn search_parallel_with_evaluator<F>(
 where
     F: FnMut(&SearchInfo),
 {
-    let ParallelOptions { threads, evaluator } = options;
+    let ParallelOptions {
+        threads,
+        evaluator,
+        started,
+    } = options;
     assert!(threads > 1, "parallel search requires at least two workers");
     assert!(table.is_shared(), "parallel search requires a shared TT");
 
     table.new_search();
-    let started = Instant::now();
     let global_nodes = limits.nodes.map(|_| AtomicU64::new(0));
     let progress = (0..threads)
         .map(|_| SearchProgress::default())
@@ -263,15 +271,48 @@ struct VoteGroup {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::{
+        sync::atomic::{AtomicBool, Ordering},
+        thread,
+        time::{Duration, Instant},
+    };
 
     use crate::{
         chess::Position,
         rekhne::{SearchLimits, tt::TranspositionTable},
     };
 
-    use super::{search_parallel, select_result};
+    use super::{ParallelOptions, search_parallel, search_parallel_with_evaluator, select_result};
     use crate::rekhne::{SearchResult, SearchStatistics};
+
+    #[test]
+    fn parallel_workers_share_the_go_receipt_timestamp() {
+        let mut position = Position::startpos();
+        let hashes = [position.repetition_hash()];
+        let stop = AtomicBool::new(false);
+        let limits = SearchLimits {
+            depth: Some(12),
+            hard_time: Some(Duration::from_millis(5)),
+            ..SearchLimits::default()
+        };
+        let started = Instant::now();
+        thread::sleep(Duration::from_millis(15));
+
+        let (result, _) = search_parallel_with_evaluator(
+            &position,
+            &limits,
+            &hashes,
+            &stop,
+            TranspositionTable::new_shared(16),
+            ParallelOptions::new(2, crate::sanj::Evaluator::classical(), started),
+            |_| {},
+        );
+
+        assert!(result.stopped);
+        assert!(result.nodes <= 2);
+        assert!(result.best_move.is_some());
+        assert!(result.elapsed >= Duration::from_millis(15));
+    }
 
     #[test]
     fn depth_search_returns_a_legal_pv_and_exact_final_aggregate() {

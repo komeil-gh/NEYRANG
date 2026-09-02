@@ -90,6 +90,14 @@ impl SearchSetup {
             advance_generation: false,
         }
     }
+
+    const fn started(started: Instant) -> Self {
+        Self {
+            started: Some(started),
+            root_preferred: None,
+            advance_generation: true,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -375,6 +383,26 @@ impl<'a> Searcher<'a> {
             limits,
             game_hashes,
             SearchSetup::normal(),
+            on_info,
+        )
+    }
+
+    pub(crate) fn search_started<F>(
+        &mut self,
+        position: &mut Position,
+        limits: &SearchLimits,
+        game_hashes: &[u64],
+        started: Instant,
+        on_info: F,
+    ) -> SearchResult
+    where
+        F: FnMut(&SearchInfo),
+    {
+        self.search_internal(
+            position,
+            limits,
+            game_hashes,
+            SearchSetup::started(started),
             on_info,
         )
     }
@@ -1150,6 +1178,46 @@ fn has_meaningful_non_pawn_material(position: &Position) -> bool {
     let minor =
         position.pieces(color, PieceType::Knight) | position.pieces(color, PieceType::Bishop);
     major != 0 || minor.count_ones() >= 2
+}
+
+#[cfg(test)]
+mod timing_tests {
+    use std::{
+        sync::atomic::AtomicBool,
+        thread,
+        time::{Duration, Instant},
+    };
+
+    use super::Searcher;
+    use crate::{
+        chess::{Move, Position},
+        rekhne::{SearchLimits, tt::Bound},
+    };
+
+    #[test]
+    fn go_receipt_time_survives_worker_dispatch_and_advances_tt_generation() {
+        let mut position = Position::startpos();
+        let stop = AtomicBool::new(false);
+        let mut searcher = Searcher::new(&stop);
+        searcher.tt.store(0, 1, 0, Bound::Exact, Move::NONE, 0);
+        assert!(searcher.tt.hashfull() > 0);
+        let hashes = [position.repetition_hash()];
+        let limits = SearchLimits {
+            depth: Some(12),
+            hard_time: Some(Duration::from_millis(5)),
+            ..SearchLimits::default()
+        };
+        let started = Instant::now();
+        thread::sleep(Duration::from_millis(15));
+
+        let result = searcher.search_started(&mut position, &limits, &hashes, started, |_| {});
+
+        assert!(result.stopped);
+        assert!(result.nodes <= 1);
+        assert!(result.best_move.is_some());
+        assert!(result.elapsed >= Duration::from_millis(15));
+        assert_eq!(result.hashfull, 0);
+    }
 }
 
 #[cfg(all(test, feature = "stats"))]

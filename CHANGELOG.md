@@ -6,6 +6,10 @@ All notable changes to NEYRANG are documented here.
 
 ### Added
 
+- An external macOS search-observability harness that runs an unchanged frozen
+  profiling binary, hash-binds raw `sample` output and deterministic bench
+  results, publishes a stable no-clobber category schema, and cleans up its own
+  benchmark process on sampler failure.
 - The NEYRANG identity and explicit REKHNE search, SANJ evaluation, and SHEGERD
   strength-technique module boundaries, with a fail-closed migration contract
   for binaries, packages, schemas, and NNUE artifacts.

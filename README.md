@@ -358,6 +358,7 @@ The bundled opening file is intentionally small; replace `OPENINGS_FILE` with a 
 - [REKHNE search strategy](docs/rekhne.md)
 - [SANJ position judgment](docs/sanj.md)
 - [Testing and benchmarks](docs/testing.md)
+- [External search observability](docs/development/search-observability.md)
 - [OpenBench integration](docs/openbench.md)
 - [En Croissant integration](docs/en-croissant.md)
 - [0.2.0 frozen baseline](docs/development/0.2.0-baseline.md)

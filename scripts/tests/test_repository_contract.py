@@ -87,6 +87,22 @@ class RepositoryContractTests(unittest.TestCase):
         self.assertIn("No playing-strength claim", specification)
         self.assertIn("/tools/nnue-data/target/", gitignore)
 
+    def test_external_search_profiling_is_documented_and_linked(self) -> None:
+        readme = self.read("README.md")
+        guide = self.read("docs/development/search-observability.md")
+        profiler = self.read("scripts/profile-search.py")
+        self.assertIn("docs/development/search-observability.md", readme)
+        for required in [
+            "neyrang-search-profile-v1",
+            "Frozen binary",
+            "No playing-strength claim",
+            "/usr/bin/sample",
+            "suppressed",
+        ]:
+            self.assertIn(required, guide)
+        self.assertIn("refusing to overwrite", profiler)
+        self.assertIn("unchanged_during_capture", profiler)
+
     def test_genfens_has_engine_and_independent_provenance_gates(self) -> None:
         engine = self.read("src/tools/genfens.rs")
         integration = self.read("tests/genfens.rs")

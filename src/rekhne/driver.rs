@@ -24,6 +24,8 @@ pub const VALUE_MATE: i32 = 30_000;
 pub const VALUE_INFINITE: i32 = 32_000;
 const NULL_MOVE_MIN_DEPTH: i32 = 4;
 const NULL_MOVE_REDUCTION: i32 = 2;
+const SHALLOW_FUTILITY_MARGIN: i32 = 120;
+const SHALLOW_FUTILITY_MIN_SEARCHED: usize = 4;
 
 #[derive(Clone, Copy)]
 struct SearchContext {
@@ -694,6 +696,14 @@ impl<'a> Searcher<'a> {
                 return beta;
             }
         }
+        let futility_eval = (ply != 0
+            && depth == 1
+            && !is_pv_node
+            && !context.in_null_subtree
+            && !in_check
+            && alpha > -mate_bound
+            && beta < mate_bound)
+            .then(|| self.evaluate_position(position, ply));
         let moving_color = position.side_to_move();
         let tt_move = tt_data.map(|data| data.best_move);
         let ordering_preferred = tt_move.or(context.preferred);
@@ -705,6 +715,40 @@ impl<'a> Searcher<'a> {
         let mut searched_moves = MoveList::new();
         while let Some(mv) = picker.next_move(position, &self.history) {
             let move_index = searched_moves.len();
+            let can_prune = futility_eval.is_some()
+                && move_index >= SHALLOW_FUTILITY_MIN_SEARCHED
+                && !mv.is_capture()
+                && !mv.is_promotion()
+                && !mv.is_castle()
+                && tt_move != Some(mv)
+                && !self.killers[ply].contains(&mv)
+                && self.history.score(moving_color, mv) < HistoryTable::MAX_SCORE / 4;
+            let can_reduce = ply != 0
+                && depth >= 3
+                && move_index >= 4
+                && !is_pv_node
+                && !in_check
+                && !mv.is_capture()
+                && !mv.is_promotion()
+                && tt_move != Some(mv)
+                && !self.killers[ply].contains(&mv)
+                && self.history.score(moving_color, mv) < HistoryTable::MAX_SCORE / 4;
+            self.push_move_accumulator(position, mv, ply);
+            let undo = position.make_move(mv);
+            let gives_check =
+                (can_prune || can_reduce) && position.is_in_check(position.side_to_move());
+            if can_prune
+                && !gives_check
+                && futility_eval.is_some_and(|eval| eval + SHALLOW_FUTILITY_MARGIN <= alpha)
+            {
+                position.unmake_move(mv, undo);
+                self.pop_accumulator(ply);
+                #[cfg(feature = "stats")]
+                {
+                    self.statistics.futility_prunes += 1;
+                }
+                continue;
+            }
             #[cfg(feature = "stats")]
             {
                 self.statistics.moves_searched += 1;
@@ -722,19 +766,6 @@ impl<'a> Searcher<'a> {
             if tt_move == Some(mv) {
                 self.statistics.tt_move_searches += 1;
             }
-            let can_reduce = ply != 0
-                && depth >= 3
-                && move_index >= 4
-                && !is_pv_node
-                && !in_check
-                && !mv.is_capture()
-                && !mv.is_promotion()
-                && tt_move != Some(mv)
-                && !self.killers[ply].contains(&mv)
-                && self.history.score(moving_color, mv) < HistoryTable::MAX_SCORE / 4;
-            self.push_move_accumulator(position, mv, ply);
-            let undo = position.make_move(mv);
-            let gives_check = can_reduce && position.is_in_check(position.side_to_move());
             if !context.in_null_subtree {
                 self.hashes.push(position.repetition_hash());
             }
@@ -1191,6 +1222,111 @@ mod tests {
 
         assert!(searcher.statistics.bad_captures > 0);
         assert_eq!(searcher.statistics.see_prunes, 0);
+    }
+
+    #[test]
+    fn shallow_futility_prunes_late_quiets_and_restores_position() {
+        let mut position = Position::startpos();
+        let original = position.clone();
+        let legal_moves = position.legal_moves().len() as u64;
+        let stop = AtomicBool::new(false);
+        let mut searcher = Searcher::new(&stop);
+        let hashes = [position.repetition_hash()];
+        searcher.reset(
+            &mut position,
+            &SearchLimits::depth(1),
+            &hashes,
+            SearchSetup::normal(),
+        );
+
+        let score = searcher.negamax(
+            &mut position,
+            1,
+            1,
+            1_000,
+            1_001,
+            SearchContext::without_null(None),
+        );
+
+        assert!(searcher.statistics.futility_prunes > 0);
+        assert!(searcher.statistics.moves_searched >= 4);
+        assert!(searcher.statistics.moves_searched < legal_moves);
+        assert!(score <= 1_000);
+        assert_eq!(position, original);
+    }
+
+    #[test]
+    fn shallow_futility_node_guards_block_pruning() {
+        let mate_bound = VALUE_MATE - super::MAX_PLY as i32;
+        let cases = [
+            (
+                Position::startpos(),
+                1,
+                0,
+                1_000,
+                1_001,
+                SearchContext::without_null(None),
+            ),
+            (
+                Position::startpos(),
+                1,
+                1,
+                -1_000,
+                1_000,
+                SearchContext::without_null(None),
+            ),
+            (
+                Position::from_fen("k5r1/8/8/8/8/7q/4Q1r1/6K1 w - - 0 1")
+                    .expect("in-check fixture must be valid"),
+                1,
+                1,
+                1_000,
+                1_001,
+                SearchContext::without_null(None),
+            ),
+            (
+                Position::startpos(),
+                1,
+                1,
+                1_000,
+                1_001,
+                SearchContext::normal(None).after_null(),
+            ),
+            (
+                Position::startpos(),
+                1,
+                1,
+                mate_bound - 1,
+                mate_bound,
+                SearchContext::without_null(None),
+            ),
+            (
+                Position::startpos(),
+                2,
+                1,
+                1_000,
+                1_001,
+                SearchContext::without_null(None),
+            ),
+        ];
+
+        for (mut position, depth, ply, alpha, beta, context) in cases {
+            let original = position.clone();
+            let stop = AtomicBool::new(false);
+            let mut searcher = Searcher::new(&stop);
+            let hashes = [position.repetition_hash()];
+            searcher.reset(
+                &mut position,
+                &SearchLimits::depth(depth as u8),
+                &hashes,
+                SearchSetup::normal(),
+            );
+
+            let _ = searcher.negamax(&mut position, depth, ply, alpha, beta, context);
+
+            assert_eq!(searcher.statistics.futility_prunes, 0);
+            assert_eq!(position, original);
+        }
     }
 
     #[test]

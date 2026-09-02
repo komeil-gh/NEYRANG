@@ -1,3 +1,4 @@
+import json
 import subprocess
 import unittest
 from pathlib import Path
@@ -91,6 +92,12 @@ class RepositoryContractTests(unittest.TestCase):
         readme = self.read("README.md")
         guide = self.read("docs/development/search-observability.md")
         profiler = self.read("scripts/profile-search.py")
+        registration = json.loads(
+            self.read("docs/evidence/search-observability-o1-registration.json")
+        )
+        result = json.loads(
+            self.read("docs/evidence/search-observability-o1-result.json")
+        )
         self.assertIn("docs/development/search-observability.md", readme)
         for required in [
             "neyrang-search-profile-v1",
@@ -102,6 +109,23 @@ class RepositoryContractTests(unittest.TestCase):
             self.assertIn(required, guide)
         self.assertIn("refusing to overwrite", profiler)
         self.assertIn("unchanged_during_capture", profiler)
+        self.assertEqual(
+            "neyrang-search-observability-o1-registration-v1",
+            registration["schema"],
+        )
+        self.assertFalse(registration["playing_engine_change_authorized"])
+        self.assertFalse(registration["strength_claim_authorized"])
+        self.assertEqual("neyrang-search-observability-o1-result-v1", result["schema"])
+        self.assertTrue(result["acceptance"]["all_registered_gates_passed"])
+        samples = result["samples"]
+        self.assertEqual(
+            samples["total"],
+            samples["classified"]
+            + samples["unclassified_visible"]
+            + samples["suppressed"],
+        )
+        self.assertFalse(result["interpretation"]["playing_strength_claim"])
+        self.assertFalse(result["interpretation"]["elo_claim"])
 
     def test_genfens_has_engine_and_independent_provenance_gates(self) -> None:
         engine = self.read("src/tools/genfens.rs")

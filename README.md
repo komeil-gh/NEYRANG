@@ -424,4 +424,15 @@ or playing source changed. The next gate is an H3b fitter preregistration
 followed by train/validation-only selection of exactly one candidate before the
 first final-holdout access.
 
+H3b later retained a classical SANJ candidate, and T1/T2 retained deadline and
+stopped-node accounting infrastructure. The project-specific R1 confidence
+frontier then scored `+73.70 +/-16.49 Elo` in its clean 1,000-game fixed-node
+screen, but two independently seeded equal-time attempts were interrupted by a
+timeout from the frozen T2 baseline. R1 was therefore reverted and its node
+result remains diagnostic only. SANJ K1 subsequently preserved every score,
+node and checksum while replacing per-pawn nested span construction with exact
+bitboard masks; its registered 15-pair depth-eight comparison reduced median
+wall time by 14.883%. K1 is retained as a speed optimization, not an Elo or
+Blunder claim.
+
 N0a/N1a/N1b/N1c/N1d/N1e cover the data and learning-curve path from scalar `Chess768` inference and strict Viriformat games through deterministic corpus assembly, pinned Bullet ingestion, quantized export, fixed FEN parity and paired fixed-validation diagnostics. The 16M point retained 18,140,767 train positions and consumed an exact 16,008,492-position epoch against the unchanged 463,228-position validation corpus. The selected quantization stays within the preregistered `8 cp` maximum and `2 cp` mean error bounds, and all three N1e validation gates passed. N2a now adds an opt-in scalar engine bridge and worker-owned accumulator stack with bit-exact reference parity. Fifteen interleaved benchmarks were deterministic, then an independently audited 1,000-game equal-node screen rejected the 16M network at `177/633/190` and 27.20% (`-171.02 +/- 20.09` reported logistic Elo). That is evidence against this network, not evidence against the inference path. The final holdout does not yet exist, the default engine remains classical, and SIMD or any 64M extension requires a newly registered model/data diagnosis rather than automatic scale growth. Exact N2a evidence is in [the engine-inference manifest](docs/evidence/nnue-n2a-engine-inference.json).

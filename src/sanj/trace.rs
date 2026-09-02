@@ -20,11 +20,11 @@ pub const TRACE_COLUMNS: &str = concat!(
     "middlegame_cp\tendgame_cp\twhite_cp\ttempo_cp\tstm_cp"
 );
 
-const MG_VALUE: [i32; 6] = [82, 337, 365, 477, 1_025, 0];
-const EG_VALUE: [i32; 6] = [94, 281, 297, 512, 936, 0];
+const MG_VALUE: [i32; 6] = [69, 300, 312, 405, 1_094, 0];
+const EG_VALUE: [i32; 6] = [79, 280, 330, 589, 1_077, 0];
 const PHASE_WEIGHT: [i32; 6] = [0, 1, 1, 2, 4, 0];
 const MAX_PHASE: i32 = 24;
-const TEMPO: i32 = 12;
+const TEMPO: i32 = 6;
 
 /// Exact white-minus-black coefficients for the current classical evaluator.
 ///
@@ -153,40 +153,39 @@ impl EvalTrace {
         let material_mg = dot(self.piece_count, MG_VALUE);
         let material_eg = dot(self.piece_count, EG_VALUE);
 
-        let psqt_mg = self.pawn_rank * 7 + self.pawn_file_edge * 2 + self.knight_center * 9
+        let psqt_mg = self.pawn_rank * 3 + self.knight_center * 14
             - self.piece_count[PieceType::Knight.index()] * 24
-            + self.bishop_center * 5
+            + self.bishop_center * 6
             - self.piece_count[PieceType::Bishop.index()] * 12
-            + self.rook_rank * 2
-            + self.rook_file_edge
-            + self.queen_center * 2
+            + self.rook_rank * 4
+            + self.rook_file_edge * 3
+            + self.queen_center * 4
             - self.piece_count[PieceType::Queen.index()] * 5
-            - self.king_rank * 9
-            - self.king_file_edge * 3;
-        let psqt_eg = self.pawn_rank * 12 + self.pawn_file_edge + self.knight_center * 7
+            - self.king_rank * 6
+            - self.king_file_edge * 5;
+        let psqt_eg = self.pawn_rank * 6 + self.knight_center * 9
             - self.piece_count[PieceType::Knight.index()] * 18
             + self.bishop_center * 4
             - self.piece_count[PieceType::Bishop.index()] * 10
-            + self.rook_rank * 3
+            + self.rook_rank * 4
             + self.queen_center
-            + self.king_center * 8
+            + self.king_center * 4
             - self.piece_count[PieceType::King.index()] * 20;
 
         let middlegame = material_mg + psqt_mg + self.bishop_pair * 28
-            - self.doubled_extra * 11
+            - self.doubled_extra * 9
             - self.isolated_pawn * 10
-            + self.passed_rank_sq * 2
-            + self.mobility[0] * 4
-            + self.mobility[1] * 5
-            + self.mobility[2] * 2
-            + self.mobility[3]
-            + self.rook_open * 18
-            + self.rook_semi_open * 10
-            + self.king_shield * 9;
-        let endgame = material_eg + psqt_eg + self.bishop_pair * 38
-            - self.doubled_extra * 16
-            - self.isolated_pawn * 8
-            + self.passed_rank_sq * 4;
+            + self.mobility[0] * 5
+            + self.mobility[1] * 8
+            + self.mobility[2] * 4
+            + self.mobility[3] * 3
+            + self.rook_open * 27
+            + self.rook_semi_open * 15
+            + self.king_shield * 14;
+        let endgame = material_eg + psqt_eg + self.bishop_pair * 41
+            - self.doubled_extra * 14
+            - self.isolated_pawn * 9
+            + self.passed_rank_sq * 6;
         let white_score =
             (middlegame * self.phase + endgame * (MAX_PHASE - self.phase)) / MAX_PHASE;
         let final_score = match self.side_to_move {

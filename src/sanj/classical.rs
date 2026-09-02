@@ -2,10 +2,10 @@ use crate::chess::{Color, PieceType, Position, Square, attacks};
 
 use super::{pawns, psqt};
 
-pub const TEMPO: i32 = 12;
+pub const TEMPO: i32 = 6;
 
-const MG_VALUE: [i32; 6] = [82, 337, 365, 477, 1_025, 0];
-const EG_VALUE: [i32; 6] = [94, 281, 297, 512, 936, 0];
+const MG_VALUE: [i32; 6] = [69, 300, 312, 405, 1_094, 0];
+const EG_VALUE: [i32; 6] = [79, 280, 330, 589, 1_077, 0];
 const PHASE_WEIGHT: [i32; 6] = [0, 1, 1, 2, 4, 0];
 const MAX_PHASE: i32 = 24;
 
@@ -32,7 +32,7 @@ pub fn evaluate(position: &Position) -> i32 {
 
         if position.pieces(color, PieceType::Bishop).count_ones() >= 2 {
             middlegame += sign * 28;
-            endgame += sign * 38;
+            endgame += sign * 41;
         }
         let (pawn_mg, pawn_eg) = pawns::evaluate(position, color);
         middlegame += sign * pawn_mg;
@@ -55,10 +55,10 @@ fn mobility(position: &Position, color: Color) -> i32 {
     let all = position.all_occupancy();
     let mut score = 0;
     for (kind, weight) in [
-        (PieceType::Knight, 4),
-        (PieceType::Bishop, 5),
-        (PieceType::Rook, 2),
-        (PieceType::Queen, 1),
+        (PieceType::Knight, 5),
+        (PieceType::Bishop, 8),
+        (PieceType::Rook, 4),
+        (PieceType::Queen, 3),
     ] {
         let mut pieces = position.pieces(color, kind);
         while pieces != 0 {
@@ -89,9 +89,9 @@ fn rook_files(position: &Position, color: Color) -> i32 {
         let square = Square::from_index(index).expect("rook bit is a valid square");
         let file = pawns::file_mask(square.file());
         if all_pawns & file == 0 {
-            score += 18;
+            score += 27;
         } else if own_pawns & file == 0 {
-            score += 10;
+            score += 15;
         }
     }
     score
@@ -119,5 +119,5 @@ fn king_safety(position: &Position, color: Color) -> i32 {
             }
         }
     }
-    shield * 9
+    shield * 14
 }

@@ -8,12 +8,12 @@ pub(crate) const fn middlegame(kind: PieceType, square: Square, color: Color) ->
     let file_edge = edge_distance(file);
     let rank_edge = edge_distance(rank);
     match kind {
-        PieceType::Pawn => rank * 7 + file_edge * 2,
-        PieceType::Knight => (file_edge + rank_edge) * 9 - 24,
-        PieceType::Bishop => (file_edge + rank_edge) * 5 - 12,
-        PieceType::Rook => rank * 2 + file_edge,
-        PieceType::Queen => (file_edge + rank_edge) * 2 - 5,
-        PieceType::King => -rank * 9 - file_edge * 3,
+        PieceType::Pawn => rank * 3,
+        PieceType::Knight => (file_edge + rank_edge) * 14 - 24,
+        PieceType::Bishop => (file_edge + rank_edge) * 6 - 12,
+        PieceType::Rook => rank * 4 + file_edge * 3,
+        PieceType::Queen => (file_edge + rank_edge) * 4 - 5,
+        PieceType::King => -rank * 6 - file_edge * 5,
     }
 }
 
@@ -23,12 +23,12 @@ pub(crate) const fn endgame(kind: PieceType, square: Square, color: Color) -> i3
     let file_edge = edge_distance(file);
     let rank_edge = edge_distance(rank);
     match kind {
-        PieceType::Pawn => rank * 12 + file_edge,
-        PieceType::Knight => (file_edge + rank_edge) * 7 - 18,
+        PieceType::Pawn => rank * 6,
+        PieceType::Knight => (file_edge + rank_edge) * 9 - 18,
         PieceType::Bishop => (file_edge + rank_edge) * 4 - 10,
-        PieceType::Rook => rank * 3,
+        PieceType::Rook => rank * 4,
         PieceType::Queen => file_edge + rank_edge,
-        PieceType::King => (file_edge + rank_edge) * 8 - 20,
+        PieceType::King => (file_edge + rank_edge) * 4 - 20,
     }
 }
 

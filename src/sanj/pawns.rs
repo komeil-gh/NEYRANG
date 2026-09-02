@@ -9,8 +9,8 @@ pub(crate) fn evaluate(position: &Position, color: Color) -> (i32, i32) {
     for file in 0..8 {
         let count = (pawns & file_mask(file)).count_ones() as i32;
         if count > 1 {
-            middlegame -= (count - 1) * 11;
-            endgame -= (count - 1) * 16;
+            middlegame -= (count - 1) * 9;
+            endgame -= (count - 1) * 14;
         }
     }
 
@@ -23,12 +23,11 @@ pub(crate) fn evaluate(position: &Position, color: Color) -> (i32, i32) {
         let adjacent = adjacent_file_mask(file);
         if pawns & adjacent == 0 {
             middlegame -= 10;
-            endgame -= 8;
+            endgame -= 9;
         }
         if enemy_pawns & passed_pawn_mask(square, color) == 0 {
             let advancement = relative_rank(square, color) as i32;
-            middlegame += advancement * advancement * 2;
-            endgame += advancement * advancement * 4;
+            endgame += advancement * advancement * 6;
         }
     }
     (middlegame, endgame)

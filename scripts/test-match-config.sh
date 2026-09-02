@@ -8,6 +8,7 @@ trap 'rm -rf "$scratch"' EXIT
 
 pgn_out="$scratch/smoke.pgn"
 meta_out="$scratch/smoke.meta.txt"
+engine_log_out="$scratch/engine.log"
 
 output="$(
     DRY_RUN=1 \
@@ -32,6 +33,7 @@ output="$(
     NODES=5000 \
     PGN_OUT="$pgn_out" \
     META_OUT="$meta_out" \
+    ENGINE_LOG_OUT="$engine_log_out" \
     "$script_dir/match.sh"
 )"
 
@@ -57,6 +59,7 @@ require_output "-show-latency"
 require_output "-strict"
 require_output "-autosaveinterval 2"
 require_output "outname=$scratch/smoke.config.json"
+require_output "-log file=$engine_log_out level=trace engine=true append=false realtime=true"
 
 if [[ ! -f "$meta_out" ]]; then
     echo "metadata file was not created" >&2
@@ -80,6 +83,7 @@ for expected in \
     "pair_offset=14" \
     "autosave_interval=2" \
     "games=10" \
+    "engine_log_out=$engine_log_out" \
     "config_out=$scratch/smoke.config.json"; do
     if ! grep -Fqx "$expected" "$meta_out"; then
         echo "metadata is missing: $expected" >&2

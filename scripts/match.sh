@@ -34,6 +34,7 @@ opening_seed="${OPENING_SEED:-20260829}"
 pgn_out="${PGN_OUT:-$repo_root/results/match.pgn}"
 meta_out="${META_OUT:-${pgn_out%.pgn}.meta.txt}"
 log_out="${LOG_OUT:-${pgn_out%.pgn}.log}"
+engine_log_out="${ENGINE_LOG_OUT:-}"
 config_out="${CONFIG_OUT:-${pgn_out%.pgn}.config.json}"
 engine_a_git_sha="${ENGINE_A_GIT_SHA:-}"
 engine_b_git_sha="${ENGINE_B_GIT_SHA:-unknown}"
@@ -142,6 +143,10 @@ for identity in "$campaign_id" "$shard_id" "$campaign_manifest_sha256" "$shard_m
         exit 2
     fi
 done
+if [[ "$engine_log_out" == *$'\n'* || "$engine_log_out" == *$'\r'* ]]; then
+    echo "ENGINE_LOG_OUT must be a single-line path" >&2
+    exit 2
+fi
 if [[ ! -x "$engine_a" || ! -x "$engine_b" ]]; then
     echo "Both ENGINE_A and ENGINE_B must be executable" >&2
     exit 2
@@ -175,6 +180,9 @@ mkdir -p \
     "$(dirname -- "$meta_out")" \
     "$(dirname -- "$log_out")" \
     "$(dirname -- "$config_out")"
+if [[ -n "$engine_log_out" ]]; then
+    mkdir -p "$(dirname -- "$engine_log_out")"
+fi
 
 sha256_file() {
     shasum -a 256 "$1" | awk '{print $1}'
@@ -262,6 +270,9 @@ fi
 if [[ "$strict" == "1" ]]; then
     command+=(-strict)
 fi
+if [[ -n "$engine_log_out" ]]; then
+    command+=(-log "file=$engine_log_out" level=trace engine=true append=false realtime=true)
+fi
 
 {
     echo "format=neyrang-match-v1"
@@ -314,6 +325,7 @@ fi
     echo "adjudication=fastchess-default"
     echo "pgn_out=$pgn_out"
     echo "log_out=$log_out"
+    echo "engine_log_out=$engine_log_out"
     echo "config_out=$config_out"
 } >"$meta_out"
 

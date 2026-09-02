@@ -184,6 +184,11 @@ Run `scripts/test-match-config.sh` before comparative testing. Use `scripts/regr
 
 `match.sh` normally applies `THREADS` to both engines. A registered resource-scaling comparison may instead omit `THREADS` and set both `ENGINE_A_THREADS` and `ENGINE_B_THREADS`; partial or mixed shared/per-engine configuration is rejected. The runner records `thread_mode` and both effective values, so a same-binary Threads-2-versus-Threads-1 match remains independently auditable.
 
+Set `ENGINE_LOG_OUT` when a strict timed gate must retain full engine
+communications. The optional trace is written separately from the ordinary
+match log and its path is recorded in metadata; leave it unset for routine
+high-volume games because protocol traces are large.
+
 For HCE-versus-NNUE matches built from the same feature-enabled binary, set
 `ENGINE_A_EVAL_FILE` only for the NNUE side. `match.sh` and `sprt.sh` pass that
 option only to the named engine and record the path plus full SHA-256 in match

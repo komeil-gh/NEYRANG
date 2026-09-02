@@ -1134,6 +1134,9 @@ impl<'a> Searcher<'a> {
     }
 
     fn visit_node(&mut self, quiescence: bool) {
+        if self.stopped {
+            return;
+        }
         if let Some(nodes) = self.global_nodes {
             let limit = self
                 .limits
@@ -1188,7 +1191,7 @@ mod timing_tests {
         time::{Duration, Instant},
     };
 
-    use super::Searcher;
+    use super::{SearchContext, Searcher, VALUE_DRAW};
     use crate::{
         chess::{Move, Position},
         rekhne::{SearchLimits, tt::Bound},
@@ -1217,6 +1220,27 @@ mod timing_tests {
         assert!(result.best_move.is_some());
         assert!(result.elapsed >= Duration::from_millis(15));
         assert_eq!(result.hashfull, 0);
+    }
+
+    #[test]
+    fn stopped_recursive_entry_does_not_count_another_node() {
+        let mut position = Position::startpos();
+        let stop = AtomicBool::new(false);
+        let mut searcher = Searcher::new(&stop);
+        searcher.nodes = 7;
+        searcher.qnodes = 3;
+        searcher.stopped = true;
+
+        assert_eq!(
+            searcher.negamax(&mut position, 1, 0, -1, 1, SearchContext::normal(None)),
+            VALUE_DRAW
+        );
+        assert_eq!(
+            searcher.qsearch(&mut position, 0, -1, 1, SearchContext::normal(None)),
+            VALUE_DRAW
+        );
+        assert_eq!(searcher.nodes, 7);
+        assert_eq!(searcher.qnodes, 3);
     }
 }
 

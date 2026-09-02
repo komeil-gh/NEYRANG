@@ -24,55 +24,6 @@ pub const VALUE_MATE: i32 = 30_000;
 pub const VALUE_INFINITE: i32 = 32_000;
 const NULL_MOVE_MIN_DEPTH: i32 = 4;
 const NULL_MOVE_REDUCTION: i32 = 2;
-const CONFIDENCE_FRONTIER_MIN_SEARCHED: usize = 4;
-const CONFIDENCE_FRONTIER_HISTORY_LIMIT: i32 = 4_096;
-const CONFIDENCE_FRONTIER_HISTORY_DIVISOR: i32 = 64;
-const CONFIDENCE_FRONTIER_LATENESS_CAP: usize = 8;
-const CONFIDENCE_FRONTIER_LATENESS_DISCOUNT: i32 = 5;
-const CONFIDENCE_FRONTIER_BASE_MARGIN: i32 = 120;
-const CONFIDENCE_FRONTIER_MARGIN_MIN: i32 = 56;
-const CONFIDENCE_FRONTIER_MARGIN_MAX: i32 = 184;
-
-fn confidence_frontier_move_is_eligible(
-    move_index: usize,
-    mv: Move,
-    tt_move: Option<Move>,
-    killers: [Move; 2],
-    history_score: i32,
-) -> bool {
-    move_index >= CONFIDENCE_FRONTIER_MIN_SEARCHED
-        && !mv.is_capture()
-        && !mv.is_promotion()
-        && !mv.is_castle()
-        && tt_move != Some(mv)
-        && !killers.contains(&mv)
-        && history_score < HistoryTable::MAX_SCORE / 4
-}
-
-fn confidence_frontier_margin(move_index: usize, history_score: i32) -> i32 {
-    let history = history_score.clamp(
-        -CONFIDENCE_FRONTIER_HISTORY_LIMIT,
-        CONFIDENCE_FRONTIER_HISTORY_LIMIT,
-    );
-    let lateness = move_index
-        .saturating_sub(CONFIDENCE_FRONTIER_MIN_SEARCHED)
-        .min(CONFIDENCE_FRONTIER_LATENESS_CAP) as i32;
-    (CONFIDENCE_FRONTIER_BASE_MARGIN + history / CONFIDENCE_FRONTIER_HISTORY_DIVISOR
-        - CONFIDENCE_FRONTIER_LATENESS_DISCOUNT * lateness)
-        .clamp(
-            CONFIDENCE_FRONTIER_MARGIN_MIN,
-            CONFIDENCE_FRONTIER_MARGIN_MAX,
-        )
-}
-
-fn confidence_frontier_bound_allows(
-    eval: Option<i32>,
-    gives_check: bool,
-    alpha: i32,
-    margin: i32,
-) -> bool {
-    !gives_check && eval.is_some_and(|value| value + margin <= alpha)
-}
 
 #[derive(Clone, Copy)]
 struct SearchContext {
@@ -771,14 +722,6 @@ impl<'a> Searcher<'a> {
                 return beta;
             }
         }
-        let frontier_eligible = ply != 0
-            && depth == 1
-            && !is_pv_node
-            && !context.in_null_subtree
-            && !in_check
-            && alpha > -mate_bound
-            && beta < mate_bound;
-        let mut frontier_eval = None;
         let moving_color = position.side_to_move();
         let tt_move = tt_data.map(|data| data.best_move);
         let ordering_preferred = tt_move.or(context.preferred);
@@ -790,48 +733,6 @@ impl<'a> Searcher<'a> {
         let mut searched_moves = MoveList::new();
         while let Some(mv) = picker.next_move(position, &self.history) {
             let move_index = searched_moves.len();
-            let history_score = self.history.score(moving_color, mv);
-            let can_prune = frontier_eligible
-                && confidence_frontier_move_is_eligible(
-                    move_index,
-                    mv,
-                    tt_move,
-                    self.killers[ply],
-                    history_score,
-                );
-            if can_prune && frontier_eval.is_none() {
-                frontier_eval = Some(self.evaluate_position(position, ply));
-            }
-            let can_reduce = ply != 0
-                && depth >= 3
-                && move_index >= 4
-                && !is_pv_node
-                && !in_check
-                && !mv.is_capture()
-                && !mv.is_promotion()
-                && tt_move != Some(mv)
-                && !self.killers[ply].contains(&mv)
-                && history_score < HistoryTable::MAX_SCORE / 4;
-            self.push_move_accumulator(position, mv, ply);
-            let undo = position.make_move(mv);
-            let gives_check =
-                (can_prune || can_reduce) && position.is_in_check(position.side_to_move());
-            if can_prune
-                && confidence_frontier_bound_allows(
-                    frontier_eval,
-                    gives_check,
-                    alpha,
-                    confidence_frontier_margin(move_index, history_score),
-                )
-            {
-                position.unmake_move(mv, undo);
-                self.pop_accumulator(ply);
-                #[cfg(feature = "stats")]
-                {
-                    self.statistics.futility_prunes += 1;
-                }
-                continue;
-            }
             #[cfg(feature = "stats")]
             {
                 self.statistics.moves_searched += 1;
@@ -849,6 +750,19 @@ impl<'a> Searcher<'a> {
             if tt_move == Some(mv) {
                 self.statistics.tt_move_searches += 1;
             }
+            let can_reduce = ply != 0
+                && depth >= 3
+                && move_index >= 4
+                && !is_pv_node
+                && !in_check
+                && !mv.is_capture()
+                && !mv.is_promotion()
+                && tt_move != Some(mv)
+                && !self.killers[ply].contains(&mv)
+                && self.history.score(moving_color, mv) < HistoryTable::MAX_SCORE / 4;
+            self.push_move_accumulator(position, mv, ply);
+            let undo = position.make_move(mv);
+            let gives_check = can_reduce && position.is_in_check(position.side_to_move());
             if !context.in_null_subtree {
                 self.hashes.push(position.repetition_hash());
             }
@@ -1369,191 +1283,6 @@ mod tests {
 
         assert!(searcher.statistics.bad_captures > 0);
         assert_eq!(searcher.statistics.see_prunes, 0);
-    }
-
-    #[test]
-    fn confidence_frontier_prunes_late_quiets_and_restores_position() {
-        let mut position = Position::startpos();
-        let original = position.clone();
-        let legal_moves = position.legal_moves().len() as u64;
-        let stop = AtomicBool::new(false);
-        let mut searcher = Searcher::new(&stop);
-        let hashes = [position.repetition_hash()];
-        searcher.reset(
-            &mut position,
-            &SearchLimits::depth(1),
-            &hashes,
-            SearchSetup::normal(),
-        );
-
-        let score = searcher.negamax(
-            &mut position,
-            1,
-            1,
-            1_000,
-            1_001,
-            SearchContext::without_null(None),
-        );
-
-        assert!(searcher.statistics.futility_prunes > 0);
-        assert!(searcher.statistics.moves_searched >= 4);
-        assert!(searcher.statistics.moves_searched < legal_moves);
-        assert!(score <= 1_000);
-        assert_eq!(position, original);
-    }
-
-    #[test]
-    fn confidence_frontier_node_guards_block_pruning() {
-        let mate_bound = VALUE_MATE - super::MAX_PLY as i32;
-        let cases = [
-            (
-                Position::startpos(),
-                1,
-                0,
-                1_000,
-                1_001,
-                SearchContext::without_null(None),
-            ),
-            (
-                Position::startpos(),
-                1,
-                1,
-                -1_000,
-                1_000,
-                SearchContext::without_null(None),
-            ),
-            (
-                Position::from_fen("k5r1/8/8/8/8/7q/4Q1r1/6K1 w - - 0 1")
-                    .expect("in-check fixture must be valid"),
-                1,
-                1,
-                1_000,
-                1_001,
-                SearchContext::without_null(None),
-            ),
-            (
-                Position::startpos(),
-                1,
-                1,
-                1_000,
-                1_001,
-                SearchContext::normal(None).after_null(),
-            ),
-            (
-                Position::startpos(),
-                1,
-                1,
-                mate_bound - 1,
-                mate_bound,
-                SearchContext::without_null(None),
-            ),
-            (
-                Position::startpos(),
-                2,
-                1,
-                1_000,
-                1_001,
-                SearchContext::without_null(None),
-            ),
-        ];
-
-        for (mut position, depth, ply, alpha, beta, context) in cases {
-            let original = position.clone();
-            let stop = AtomicBool::new(false);
-            let mut searcher = Searcher::new(&stop);
-            let hashes = [position.repetition_hash()];
-            searcher.reset(
-                &mut position,
-                &SearchLimits::depth(depth as u8),
-                &hashes,
-                SearchSetup::normal(),
-            );
-
-            let _ = searcher.negamax(&mut position, depth, ply, alpha, beta, context);
-
-            assert_eq!(searcher.statistics.futility_prunes, 0);
-            assert_eq!(position, original);
-        }
-    }
-
-    #[test]
-    fn confidence_frontier_move_guards_protect_special_moves() {
-        let quiet = Position::startpos()
-            .find_legal_move("e2e4")
-            .expect("quiet fixture must be legal");
-        let capture = Position::from_fen("7k/8/8/3p4/4P3/8/8/K7 w - - 0 1")
-            .expect("capture fixture must be valid")
-            .find_legal_move("e4d5")
-            .expect("capture fixture must be legal");
-        let promotion = Position::from_fen("7k/P7/8/8/8/8/8/K7 w - - 0 1")
-            .expect("promotion fixture must be valid")
-            .find_legal_move("a7a8q")
-            .expect("promotion fixture must be legal");
-        let castle = Position::from_fen("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1")
-            .expect("castling fixture must be valid")
-            .find_legal_move("e1g1")
-            .expect("castling fixture must be legal");
-        let no_killers = [Move::NONE; 2];
-
-        assert!(super::confidence_frontier_move_is_eligible(
-            4, quiet, None, no_killers, 0,
-        ));
-        assert!(!super::confidence_frontier_move_is_eligible(
-            3, quiet, None, no_killers, 0,
-        ));
-        assert!(!super::confidence_frontier_move_is_eligible(
-            4,
-            quiet,
-            Some(quiet),
-            no_killers,
-            0,
-        ));
-        assert!(!super::confidence_frontier_move_is_eligible(
-            4,
-            quiet,
-            None,
-            [quiet, Move::NONE],
-            0,
-        ));
-        assert!(!super::confidence_frontier_move_is_eligible(
-            4,
-            quiet,
-            None,
-            no_killers,
-            crate::shegerd::history::HistoryTable::MAX_SCORE / 4,
-        ));
-        for special in [capture, promotion, castle] {
-            assert!(!super::confidence_frontier_move_is_eligible(
-                4, special, None, no_killers, 0,
-            ));
-        }
-        assert!(super::confidence_frontier_bound_allows(
-            Some(-1_000),
-            false,
-            1_000,
-            120,
-        ));
-        assert!(!super::confidence_frontier_bound_allows(
-            Some(-1_000),
-            true,
-            1_000,
-            120,
-        ));
-        assert!(!super::confidence_frontier_bound_allows(
-            None, false, 1_000, 120,
-        ));
-    }
-
-    #[test]
-    fn confidence_frontier_margin_fuses_history_and_lateness() {
-        let neutral = super::confidence_frontier_margin(4, 0);
-
-        assert_eq!(neutral, 120);
-        assert!(super::confidence_frontier_margin(4, 1_024) > neutral);
-        assert!(super::confidence_frontier_margin(4, -1_024) < neutral);
-        assert!(super::confidence_frontier_margin(12, 0) < neutral);
-        assert_eq!(super::confidence_frontier_margin(4, i32::MAX), 184);
-        assert_eq!(super::confidence_frontier_margin(usize::MAX, i32::MIN), 56);
     }
 
     #[test]

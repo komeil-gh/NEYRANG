@@ -138,6 +138,17 @@ class SanjWeightFitterTests(unittest.TestCase):
 
         self.assertFalse(fitter.material_order_is_safe(unsafe))
 
+    def test_decision_metadata_uses_python_booleans(self) -> None:
+        fitter = load_fitter()
+
+        rejected = fitter.build_decision(False)
+        accepted = fitter.build_decision(True)
+
+        self.assertIs(rejected["candidate_frozen"], False)
+        self.assertIs(rejected["holdout_access_authorized"], False)
+        self.assertIs(rejected["weight_source_changed"], False)
+        self.assertIs(accepted["candidate_frozen"], True)
+
 
 if __name__ == "__main__":
     unittest.main()

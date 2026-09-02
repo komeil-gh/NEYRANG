@@ -175,6 +175,23 @@ def material_order_is_safe(weights: np.ndarray) -> bool:
     return True
 
 
+def build_decision(accepted: bool) -> dict[str, Any]:
+    return {
+        "status": "accept-one-vector" if accepted else "reject-vector",
+        "candidate_frozen": accepted,
+        "holdout_access_authorized": False,
+        "weight_source_changed": False,
+        "strength_claim": False,
+        "next_gate": (
+            "apply exactly this vector to registered SANJ literals, commit "
+            "source, freeze binary, then separately authorize H3c"
+            if accepted
+            else "retain fitter infrastructure; do not change SANJ weights "
+            "or open H3a-R1"
+        ),
+    }
+
+
 def _fit_one(
     partition: Any,
     mask: np.ndarray,
@@ -574,20 +591,7 @@ def fit_registered(
             "core_sha256": hashlib.sha256(first_bytes).hexdigest(),
         },
         "fit": first,
-        "decision": {
-            "status": "accept-one-vector" if accepted else "reject-vector",
-            "candidate_frozen": accepted,
-            "holdout_access_authorized": false,
-            "weight_source_changed": false,
-            "strength_claim": false,
-            "next_gate": (
-                "apply exactly this vector to registered SANJ literals, commit "
-                "source, freeze binary, then separately authorize H3c"
-                if accepted
-                else "retain fitter infrastructure; do not change SANJ weights "
-                "or open H3a-R1"
-            ),
-        },
+        "decision": build_decision(accepted),
     }
 
 

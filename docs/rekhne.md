@@ -76,4 +76,12 @@ The second conservative NMP experiment was then run against that restored orderi
 
 P3 then retained one root-diversified Lazy-SMP design without changing the Threads-1 tree. Threads 2/4 reached `2.010776x / 3.956388x` the Threads-1 aggregate NPS in the frozen external scaling gate, with p95 hard-deadline overshoot below 0.7 ms. Its binding same-binary 2,000-game screen completed `711/701/588` for Threads 2, 53.075%, reported `+21.39 +/-10.90 Elo`, with all 1,000 pairs and 196,758 plies independently replayed and no timing, legality, crash, warning, or protocol anomaly. A normalized SMP SPRT remains a separately registered future decision.
 
+T1 subsequently moved the monotonic start timestamp for every timed search to
+the instant the UCI `go` command enters the engine, so operating-system worker
+dispatch is covered by the hard deadline. It preserved both deterministic
+trees, passed 1,500 direct deadline samples across Threads 1/2/4, and completed
+1,000 fresh same-binary games with zero timing or protocol anomaly. T1 is
+retained as infrastructure only; it provides no strength or Elo claim and does
+not retroactively prove the cause of the interrupted S4 games.
+
 NEYRANG does not learn merely by playing games; improvements still require an explicit, tested patch. Pawn hashing remains deferred. Any future baseline-protocol repair, null-move refinement, reverse futility, LMP, ProbCut, or singular-extension work must be pre-registered and isolated rather than bundled into the accepted candidate. The complete outcome is in the [0.3 final report](development/0.3.0-final-report.md).

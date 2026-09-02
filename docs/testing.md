@@ -398,6 +398,19 @@ offline vector passed both validation point and 20,000-replicate opening-group
 interval gates, but it is not playing evidence and does not open the final
 holdout until its source commit and binary are frozen.
 
+The accepted H3b vector is now source-frozen at
+`2abb0c33664093b997bb890f1477b07372d35f0d`; its clean release binary is
+`builds/neyrang-sanj-h3b-2abb0c3`, SHA-256
+`703d647c5c9f0fa7207d2922e3ca898a78be9bd905939d65603d46e8bc107482`.
+Formatting, warnings-denied Clippy, normal/all-feature/stats/tactical Rust tests
+(`88 / 117 / 101 / 11`), all 112 Python evidence tests, release build, required
+Perft, match/SPRT configuration tests, 100,000-position trace reconstruction
+and fastchess UCI compliance 40/40 pass. Candidate search identities are
+165,402 nodes/checksum `485491effa74cdce` at depth 5 and 3,984,027/checksum
+`159cae8a496777f0` at depth 8. H3a-R1 remains unopened; see the
+[source-freeze record](evidence/sanj-h3b-source-freeze.json). These are
+correctness and identity gates, not Elo evidence.
+
 ## N0a/N1a/N1b/N1c/N1d/N1e NNUE foundation and pipeline evidence
 
 `tools/nnue-reference` remains the scalar `Chess768` and network-artifact oracle. The following `tools/nnue-data` crate adds the canonical lossless game boundary without linking either crate into the playing engine. Its tests decode and re-encode the upstream Viriformat example byte for byte, replay every encoded move, cover castling/en-passant/underpromotion and concatenated games, and fail closed on corruption, truncation, illegal play or state that the strict subset cannot preserve.

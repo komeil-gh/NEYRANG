@@ -31,6 +31,10 @@ OPENING_MANIFEST_SCHEMAS = (
     "neyrang-genfens-shard-v1",
     "neyrang-genfens-shard-v1",
 )
+GENERATOR_SUMMARY_SCHEMAS = (
+    "neyrang-selfplay-summary-v1",
+    "neyrang-selfplay-summary-v1",
+)
 MAX_CAPTURED_STREAM_BYTES = 1 << 20
 PROGRESS = re.compile(
     r"^info string selfplay attempted ([0-9]+) accepted ([0-9]+) "
@@ -520,7 +524,7 @@ def read_and_validate_summary(
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError, UnicodeDecodeError) as error:
         raise GenerationError(f"invalid generator summary: {error}") from error
-    if not isinstance(payload, dict) or payload.get("schema") != "neyrang-selfplay-summary-v1":
+    if not isinstance(payload, dict) or payload.get("schema") not in GENERATOR_SUMMARY_SCHEMAS:
         raise GenerationError("generator summary has an invalid schema")
     for field in SUMMARY_COUNT_FIELDS:
         value = payload.get(field)
@@ -624,6 +628,7 @@ def build_manifest(
             "wall_time_limit": None,
             "network": None,
             "engine_role": "NEYRANG self-play generator and score teacher",
+            "summary_schema": summary["schema"],
         },
         "opening_source": {
             "artifact": opening_manifest["artifact"],

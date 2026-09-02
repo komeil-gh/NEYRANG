@@ -200,6 +200,36 @@ class SelfPlayShardGeneratorTests(unittest.TestCase):
                 legacy_split_schema,
             )
 
+    def test_registered_legacy_generator_summary_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            opening = chess.STARTING_FEN
+            openings, opening_manifest = write_opening_shard(root, [opening])
+            binary = write_fake_generator(
+                root / "generator",
+                forced_mate_fixture(0),
+                summary_schema="neyrang-selfplay-summary-v1",
+            )
+            output = root / "legacy-summary.vf"
+            partition = self.generator.partition_for_opening(
+                opening, "split-seed", 80, 10
+            )
+
+            manifest = self.generator.generate_shard(
+                make_config(
+                    self.generator,
+                    root,
+                    binary,
+                    openings,
+                    opening_manifest,
+                    output,
+                    partition=partition,
+                )
+            )
+
+            self.assertEqual(manifest["artifact"]["games"], 1)
+            self.assertEqual(manifest["generator"]["summary_schema"], "neyrang-selfplay-summary-v1")
+
     def test_generator_completion_reason_counts_must_match_independent_replay(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -294,7 +324,12 @@ def write_opening_shard(root: Path, fens: list[str]) -> tuple[Path, Path]:
     return openings, manifest_path
 
 
-def write_fake_generator(path: Path, corpus: bytes, accepted_positions: int = 4) -> Path:
+def write_fake_generator(
+    path: Path,
+    corpus: bytes,
+    accepted_positions: int = 4,
+    summary_schema: str = "neyrang-selfplay-summary-v1",
+) -> Path:
     script = textwrap.dedent(
         f"""\
         #!/usr/bin/env python3
@@ -306,7 +341,7 @@ def write_fake_generator(path: Path, corpus: bytes, accepted_positions: int = 4)
         openings = pathlib.Path(options["--openings"]).read_text().splitlines()
         pathlib.Path(options["--output"]).write_bytes(bytes({list(corpus)!r}))
         summary = {{
-            "schema": "neyrang-selfplay-summary-v1",
+            "schema": {summary_schema!r},
             "attempted_games": len(openings),
             "accepted_games": 1,
             "rejected_games": len(openings) - 1,

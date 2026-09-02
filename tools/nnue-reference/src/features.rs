@@ -65,14 +65,25 @@ pub fn feature_index_for(
                 .pieces(perspective, PieceType::King)
                 .trailing_zeros() as usize;
             let oriented_king = orient_square(king_square, perspective);
-            let rank = oriented_king / 8;
             let file = oriented_king % 8;
-            let mirrored_file = file.min(7 - file);
-            let bucket = usize::from(KING_BUCKET_LAYOUT_MIRRORED_3[rank * 4 + mirrored_file]);
+            let bucket = usize::from(king_bucket_mirrored_3(position, perspective));
             let horizontal_flip = if file > 3 { 7 } else { 0 };
             bucket * INPUT_FEATURES + (base ^ horizontal_flip)
         }
     }
+}
+
+/// Map one perspective's oriented king square to the registered three-bank layout.
+#[must_use]
+pub fn king_bucket_mirrored_3(position: &Position, perspective: Color) -> u8 {
+    let king_square = position
+        .pieces(perspective, PieceType::King)
+        .trailing_zeros() as usize;
+    let oriented_king = orient_square(king_square, perspective);
+    let rank = oriented_king / 8;
+    let file = oriented_king % 8;
+    let mirrored_file = file.min(7 - file);
+    KING_BUCKET_LAYOUT_MIRRORED_3[rank * 4 + mirrored_file]
 }
 
 /// Return all active Chess768 features for a board and one perspective.

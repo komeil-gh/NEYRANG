@@ -11,14 +11,15 @@ mod parity;
 
 pub use accumulator::AccumulatorPair;
 pub use diagnostics::{
-    CorpusCompositionReport, NetworkDiagnosticError, NetworkDiagnosticReport,
-    PairedComparisonError, PairedComparisonReport, ScoreFitReport, blended_target,
-    compare_networks, diagnose_network, logistic_cp,
+    CorpusCompositionReport, NamedSignSliceReport, NetworkDiagnosticError, NetworkDiagnosticReport,
+    PairedComparisonError, PairedComparisonReport, PairedSignDiagnosticReport, ScoreFitReport,
+    SignTransitionReport, blended_target, compare_networks, diagnose_network,
+    diagnose_sign_disagreements, logistic_cp,
 };
 pub use features::{
     FeatureSet, INPUT_FEATURES, INPUT_FEATURES_KING_BUCKETS_MIRRORED_3,
     KING_BUCKET_LAYOUT_MIRRORED_3, active_features, active_features_for, feature_index,
-    feature_index_for,
+    feature_index_for, king_bucket_mirrored_3,
 };
 pub use fen_suite::{FenSuiteError, FrozenPosition, parse_fen_suite};
 pub use float_network::{FloatNetwork, FloatNetworkError, FloatQuantizationError};

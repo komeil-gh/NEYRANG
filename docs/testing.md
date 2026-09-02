@@ -390,6 +390,14 @@ estimates improve slightly, but the registered 10,000-replicate group-bootstrap
 intervals include zero. H2e is retained as evidence infrastructure; no
 evaluation weight or playing source changes.
 
+H3b adds 7 focused fitter tests for half-away-from-zero rounding, exact source
+mapping, deterministic complete-group splitting, the analytic gradient, path
+fail-closure, material ordering and native decision booleans. The full Python
+evidence-tool suite passes 112 tests before the eligible fit. The accepted
+offline vector passed both validation point and 20,000-replicate opening-group
+interval gates, but it is not playing evidence and does not open the final
+holdout until its source commit and binary are frozen.
+
 ## N0a/N1a/N1b/N1c/N1d/N1e NNUE foundation and pipeline evidence
 
 `tools/nnue-reference` remains the scalar `Chess768` and network-artifact oracle. The following `tools/nnue-data` crate adds the canonical lossless game boundary without linking either crate into the playing engine. Its tests decode and re-encode the upstream Viriformat example byte for byte, replay every encoded move, cover castling/en-passant/underpromotion and concatenated games, and fail closed on corruption, truncation, illegal play or state that the strict subset cannot preserve.

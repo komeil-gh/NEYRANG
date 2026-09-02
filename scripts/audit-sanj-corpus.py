@@ -243,87 +243,78 @@ def replay_source(
     pair_record_counts: Counter[str] = Counter()
     target_record_counts: Counter[str] = Counter()
 
-    with source_path.open(encoding="utf-8") as handle:
-        pair_index = 0
-        while True:
-            left = chess.pgn.read_game(handle)
-            if left is None:
-                break
-            right = chess.pgn.read_game(handle)
-            pair_index += 1
-            if right is None:
-                raise AuditError(f"{source_id} pair {pair_index}: odd trailing game")
-            validate_pair(source_id, pair_index, left, right)
-            counts["games_parsed"] += 2
-            counts["pairs_parsed"] += 1
+    for pair_index, left, right in read_source_pairs(source_id, source_path):
+        validate_pair(source_id, pair_index, left, right)
+        counts["games_parsed"] += 2
+        counts["pairs_parsed"] += 1
 
-            opening_fen = left.headers.get("FEN", chess.STARTING_FEN)
-            opening_key = position_key(opening_fen)
-            partition = partition_for(
+        opening_fen = left.headers.get("FEN", chess.STARTING_FEN)
+        opening_key = position_key(opening_fen)
+        partition = partition_for(
+            schema,
+            seed,
+            opening_key,
+            train_percent,
+            validation_percent,
+            fixed_partition,
+        )
+        samples: list[list[tuple[int, str]]] = []
+        for game_in_pair, game in enumerate((left, right), start=1):
+            sample, sample_counts = sample_game(
+                game,
                 schema,
                 seed,
-                opening_key,
-                train_percent,
-                validation_percent,
-                fixed_partition,
+                source_id,
+                pair_index,
+                game_in_pair,
+                min_ply,
+                tail_plies,
+                samples_per_game,
+                min_sample_gap,
+                selector_schema,
             )
-            samples: list[list[tuple[int, str]]] = []
-            for game_in_pair, game in enumerate((left, right), start=1):
-                sample, sample_counts = sample_game(
-                    game,
-                    schema,
-                    seed,
-                    source_id,
-                    pair_index,
-                    game_in_pair,
-                    min_ply,
-                    tail_plies,
-                    samples_per_game,
-                    min_sample_gap,
-                    selector_schema,
-                )
-                counts.update(sample_counts)
-                samples.append(sample)
-                engines.update(
-                    value
-                    for value in (game.headers.get("White"), game.headers.get("Black"))
-                    if value
-                )
-                time_controls[game.headers.get("TimeControl", "missing")] += 1
-                results[game.headers["Result"]] += 1
+            counts.update(sample_counts)
+            samples.append(sample)
+            engines.update(
+                value
+                for value in (game.headers.get("White"), game.headers.get("Black"))
+                if value
+            )
+            time_controls[game.headers.get("TimeControl", "missing")] += 1
+            results[game.headers["Result"]] += 1
 
-            paired_count = min(len(samples[0]), len(samples[1]))
-            dropped = len(samples[0]) + len(samples[1]) - 2 * paired_count
-            if dropped:
-                counts["pair_balancing_records_dropped"] += dropped
-            if paired_count == 0:
-                counts["pairs_without_two_samples"] += 1
-                continue
-            counts["pairs_sampled"] += 1
-            pair_record_counts[str(2 * paired_count)] += 1
-            for game_in_pair, (game, game_samples) in enumerate(
-                zip((left, right), samples, strict=True), start=1
-            ):
-                for ply, fen in sorted(game_samples[:paired_count]):
-                    record_id = (
-                        f"{source_id}:pair-{pair_index:06d}:"
-                        f"game-{game_in_pair}:ply-{ply:03d}"
+        paired_count = min(len(samples[0]), len(samples[1]))
+        dropped = len(samples[0]) + len(samples[1]) - 2 * paired_count
+        if dropped:
+            counts["pair_balancing_records_dropped"] += dropped
+        if paired_count == 0:
+            counts["pairs_without_two_samples"] += 1
+            continue
+        counts["pairs_sampled"] += 1
+        pair_record_counts[str(2 * paired_count)] += 1
+        for game_in_pair, (game, game_samples) in enumerate(
+            zip((left, right), samples, strict=True), start=1
+        ):
+            for ply, fen in sorted(game_samples[:paired_count]):
+                record_id = (
+                    f"{source_id}:pair-{pair_index:06d}:"
+                    f"game-{game_in_pair}:ply-{ply:03d}"
+                )
+                if RECORD_ID.fullmatch(record_id) is None:
+                    raise AuditError(f"record id is outside schema: {record_id!r}")
+                records.append(
+                    ExpectedRecord(
+                        partition=partition,
+                        record_id=record_id,
+                        target=RESULT_TARGET[game.headers["Result"]],
+                        fen=fen,
+                        position_key=position_key(fen),
+                        source_id=source_id,
+                        pair_index=pair_index,
                     )
-                    if RECORD_ID.fullmatch(record_id) is None:
-                        raise AuditError(f"record id is outside schema: {record_id!r}")
-                    records.append(
-                        ExpectedRecord(
-                            partition=partition,
-                            record_id=record_id,
-                            target=RESULT_TARGET[game.headers["Result"]],
-                            fen=fen,
-                            position_key=position_key(fen),
-                            source_id=source_id,
-                            pair_index=pair_index,
-                        )
-                    )
-                    counts["records_sampled"] += 1
-                    target_record_counts[RESULT_TARGET[game.headers["Result"]]] += 1
+                )
+                counts["records_sampled"] += 1
+                target_record_counts[RESULT_TARGET[game.headers["Result"]]] += 1
 
     return records, {
         "counts": sorted_counter(counts),
@@ -333,6 +324,46 @@ def replay_source(
         "pair_record_counts": sorted_counter(pair_record_counts),
         "target_record_counts": sorted_counter(target_record_counts),
     }
+
+
+def read_source_pairs(
+    source_id: str, source_path: Path
+) -> list[tuple[int, chess.pgn.Game, chess.pgn.Game]]:
+    games_by_round: dict[str, list[chess.pgn.Game]] = defaultdict(list)
+    game_count = 0
+    with source_path.open(encoding="utf-8") as handle:
+        while True:
+            game = chess.pgn.read_game(handle)
+            if game is None:
+                break
+            game_count += 1
+            round_header = game.headers.get("Round")
+            if not round_header:
+                raise AuditError(f"{source_id} game {game_count}: missing round header")
+            games_by_round[round_header].append(game)
+
+    if game_count % 2:
+        raise AuditError(f"{source_id}: odd trailing game")
+
+    pairs: list[tuple[int, chess.pgn.Game, chess.pgn.Game]] = []
+    for pair_index, round_header in enumerate(
+        sorted(games_by_round, key=round_sort_key), start=1
+    ):
+        games = games_by_round[round_header]
+        if len(games) != 2:
+            raise AuditError(
+                f"{source_id} round {round_header!r}: "
+                f"contains {len(games)} games, expected 2"
+            )
+        pairs.append((pair_index, games[0], games[1]))
+    return pairs
+
+
+def round_sort_key(round_header: str) -> tuple[int, tuple[int, ...] | str]:
+    parts = round_header.split(".")
+    if parts and all(part.isdigit() for part in parts):
+        return 0, tuple(int(part) for part in parts)
+    return 1, round_header
 
 
 def validate_pair(

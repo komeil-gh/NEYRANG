@@ -31,6 +31,44 @@ auditor = load_module("audit_eval_corpus", AUDITOR_PATH)
 
 
 class CorpusAuditorTests(unittest.TestCase):
+    def test_independent_replay_groups_concurrent_completion_by_round(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "concurrent.pgn"
+            for index, (round_number, white, black) in enumerate(
+                (
+                    ("2", "Engine-A", "Engine-B"),
+                    ("1", "Engine-A", "Engine-B"),
+                    ("2", "Engine-B", "Engine-A"),
+                    ("1", "Engine-B", "Engine-A"),
+                )
+            ):
+                write_game(
+                    source,
+                    white,
+                    black,
+                    ("g1f3", "g8f6", "b1c3", "b8c6"),
+                    append=index > 0,
+                    round_number=round_number,
+                )
+            output = root / "corpus"
+            builder.build_corpus(
+                builder.BuildConfig(
+                    repo_root=root,
+                    output_dir=output,
+                    sources=(builder.SourceSpec("fixture", source),),
+                    seed="auditor-concurrent-test",
+                    min_ply=1,
+                    tail_plies=0,
+                )
+            )
+            shutil.copyfile(BUILDER_PATH, root / BUILDER_PATH.name)
+
+            summary = auditor.audit_corpus(root, output)
+
+            self.assertTrue(summary["ok"])
+            self.assertEqual(summary["sources"]["fixture"]["pairs_parsed"], 2)
+
     def test_independent_replay_accepts_fixed_holdout_partition(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root, output = build_fixture(
@@ -171,12 +209,13 @@ def write_game(
     black: str,
     moves: tuple[str, ...],
     append: bool,
+    round_number: str = "1",
 ) -> None:
     game = chess.pgn.Game()
     game.headers.update(
         {
             "Event": "Auditor fixture",
-            "Round": "1",
+            "Round": round_number,
             "White": white,
             "Black": black,
             "Result": "1/2-1/2",

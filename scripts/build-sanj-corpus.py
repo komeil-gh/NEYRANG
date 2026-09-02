@@ -242,75 +242,66 @@ def extract_source(
     target_record_counts: Counter[str] = Counter()
     records: list[Record] = []
 
-    with source.path.open(encoding="utf-8") as handle:
-        pair_index = 0
-        while True:
-            left = chess.pgn.read_game(handle)
-            if left is None:
-                break
-            right = chess.pgn.read_game(handle)
-            pair_index += 1
-            if right is None:
-                raise CorpusError(
-                    f"{source.source_id} pair {pair_index}: source has an odd trailing game"
-                )
-            stats["games_parsed"] += 2
-            stats["pairs_parsed"] += 1
-            validate_pair(source.source_id, pair_index, left, right)
+    for pair_index, left, right in read_source_pairs(source):
+        stats["games_parsed"] += 2
+        stats["pairs_parsed"] += 1
+        validate_pair(source.source_id, pair_index, left, right)
 
-            opening_fen = left.headers.get("FEN", chess.STARTING_FEN)
-            opening_key = canonical_position_key(opening_fen)
-            partition = partition_for_opening(opening_key, config)
-            left_samples, left_stats = sample_game(
-                left, source.source_id, pair_index, 1, config
+        opening_fen = left.headers.get("FEN", chess.STARTING_FEN)
+        opening_key = canonical_position_key(opening_fen)
+        partition = partition_for_opening(opening_key, config)
+        left_samples, left_stats = sample_game(
+            left, source.source_id, pair_index, 1, config
+        )
+        right_samples, right_stats = sample_game(
+            right, source.source_id, pair_index, 2, config
+        )
+        stats.update(left_stats)
+        stats.update(right_stats)
+
+        for game in (left, right):
+            engine_names.update(
+                filter(None, (game.headers.get("White"), game.headers.get("Black")))
             )
-            right_samples, right_stats = sample_game(
-                right, source.source_id, pair_index, 2, config
-            )
-            stats.update(left_stats)
-            stats.update(right_stats)
+            time_controls[game.headers.get("TimeControl", "missing")] += 1
+            results[game.headers["Result"]] += 1
 
-            for game in (left, right):
-                engine_names.update(
-                    filter(None, (game.headers.get("White"), game.headers.get("Black")))
+        paired_count = min(len(left_samples), len(right_samples))
+        dropped = len(left_samples) + len(right_samples) - 2 * paired_count
+        if dropped:
+            stats["pair_balancing_records_dropped"] += dropped
+        if paired_count == 0:
+            stats["pairs_without_two_samples"] += 1
+            continue
+
+        stats["pairs_sampled"] += 1
+        pair_record_counts[str(2 * paired_count)] += 1
+        for game_in_pair, game, samples in (
+            (1, left, left_samples),
+            (2, right, right_samples),
+        ):
+            for sample in sorted(samples[:paired_count], key=lambda item: item.ply):
+                record_id = (
+                    f"{source.source_id}:pair-{pair_index:06d}:"
+                    f"game-{game_in_pair}:ply-{sample.ply:03d}"
                 )
-                time_controls[game.headers.get("TimeControl", "missing")] += 1
-                results[game.headers["Result"]] += 1
-
-            paired_count = min(len(left_samples), len(right_samples))
-            dropped = len(left_samples) + len(right_samples) - 2 * paired_count
-            if dropped:
-                stats["pair_balancing_records_dropped"] += dropped
-            if paired_count == 0:
-                stats["pairs_without_two_samples"] += 1
-                continue
-
-            stats["pairs_sampled"] += 1
-            pair_record_counts[str(2 * paired_count)] += 1
-            for game_in_pair, game, samples in (
-                (1, left, left_samples),
-                (2, right, right_samples),
-            ):
-                for sample in sorted(samples[:paired_count], key=lambda item: item.ply):
-                    record_id = (
-                        f"{source.source_id}:pair-{pair_index:06d}:"
-                        f"game-{game_in_pair}:ply-{sample.ply:03d}"
+                records.append(
+                    Record(
+                        partition=partition,
+                        record_id=record_id,
+                        target=RESULT_TARGET[game.headers["Result"]],
+                        fen=sample.fen,
+                        position_key=canonical_position_key(sample.fen),
+                        source_id=source.source_id,
+                        pair_index=pair_index,
+                        game_in_pair=game_in_pair,
+                        ply=sample.ply,
                     )
-                    records.append(
-                        Record(
-                            partition=partition,
-                            record_id=record_id,
-                            target=RESULT_TARGET[game.headers["Result"]],
-                            fen=sample.fen,
-                            position_key=canonical_position_key(sample.fen),
-                            source_id=source.source_id,
-                            pair_index=pair_index,
-                            game_in_pair=game_in_pair,
-                            ply=sample.ply,
-                        )
-                    )
-                    stats["records_sampled"] += 1
-                    target_record_counts[format_target(RESULT_TARGET[game.headers["Result"]])] += 1
+                )
+                stats["records_sampled"] += 1
+                target_record_counts[
+                    format_target(RESULT_TARGET[game.headers["Result"]])
+                ] += 1
 
     return (
         {
@@ -327,6 +318,48 @@ def extract_source(
         },
         records,
     )
+
+
+def read_source_pairs(
+    source: SourceSpec,
+) -> list[tuple[int, chess.pgn.Game, chess.pgn.Game]]:
+    games_by_round: dict[str, list[chess.pgn.Game]] = defaultdict(list)
+    game_count = 0
+    with source.path.open(encoding="utf-8") as handle:
+        while True:
+            game = chess.pgn.read_game(handle)
+            if game is None:
+                break
+            game_count += 1
+            round_header = game.headers.get("Round")
+            if not round_header:
+                raise CorpusError(
+                    f"{source.source_id} game {game_count}: missing round header"
+                )
+            games_by_round[round_header].append(game)
+
+    if game_count % 2:
+        raise CorpusError(f"{source.source_id}: source has an odd trailing game")
+
+    pairs: list[tuple[int, chess.pgn.Game, chess.pgn.Game]] = []
+    for pair_index, round_header in enumerate(
+        sorted(games_by_round, key=round_sort_key), start=1
+    ):
+        games = games_by_round[round_header]
+        if len(games) != 2:
+            raise CorpusError(
+                f"{source.source_id} round {round_header!r}: "
+                f"contains {len(games)} games, expected 2"
+            )
+        pairs.append((pair_index, games[0], games[1]))
+    return pairs
+
+
+def round_sort_key(round_header: str) -> tuple[int, tuple[int, ...] | str]:
+    parts = round_header.split(".")
+    if parts and all(part.isdigit() for part in parts):
+        return 0, tuple(int(part) for part in parts)
+    return 1, round_header
 
 
 def validate_pair(

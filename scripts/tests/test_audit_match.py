@@ -144,6 +144,23 @@ class ExpectedMetadataTests(unittest.TestCase):
 
 
 class ExpectedOpeningTests(unittest.TestCase):
+    def test_uncapturable_en_passant_square_is_canonicalized_away(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "shard.epd"
+            path.write_text(
+                "rn1qkb1r/1b3ppp/p3pn2/2pp4/NpP5/3P1NP1/PP2PPBP/R1BQ1RK1 w kq c6\n",
+                encoding="utf-8",
+            )
+
+            _, errors = AUDIT_MATCH.audit_expected_openings(
+                [
+                    "rn1qkb1r/1b3ppp/p3pn2/2pp4/NpP5/3P1NP1/PP2PPBP/R1BQ1RK1 w kq -"
+                ],
+                path,
+            )
+
+            self.assertEqual(errors, [])
+
     def test_exact_canonical_pair_sequence_passes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "shard.epd"

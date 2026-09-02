@@ -240,7 +240,7 @@ def canonical_opening(value: str) -> str:
     else:
         board = chess.Board()
         board.set_epd(value)
-    return " ".join(board.fen(en_passant="fen").split()[:4])
+    return " ".join(board.fen(en_passant="legal").split()[:4])
 
 
 def warning_is_allowed(

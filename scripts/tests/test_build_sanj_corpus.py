@@ -20,6 +20,34 @@ SPEC.loader.exec_module(corpus)
 
 
 class CorpusBuilderTests(unittest.TestCase):
+    def test_concurrent_pgn_completion_order_is_grouped_by_round(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "concurrent.pgn"
+            for index, (round_number, white, black) in enumerate(
+                (
+                    ("2", "Engine-A", "Engine-B"),
+                    ("1", "Engine-A", "Engine-B"),
+                    ("2", "Engine-B", "Engine-A"),
+                    ("1", "Engine-B", "Engine-A"),
+                )
+            ):
+                write_custom_game(
+                    source,
+                    white,
+                    black,
+                    ("g1f3", "g8f6", "b1c3", "b8c6"),
+                    append=index > 0,
+                    round_number=round_number,
+                )
+
+            manifest = corpus.build_corpus(
+                make_config(root, root / "output", source)
+            )
+
+            self.assertEqual(manifest["sources"][0]["counts"]["games_parsed"], 4)
+            self.assertEqual(manifest["sources"][0]["counts"]["pairs_parsed"], 2)
+
     def test_fixed_partition_places_every_record_in_sealed_holdout(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -290,12 +318,13 @@ def write_custom_game(
     black: str,
     moves: tuple[str, ...],
     append: bool,
+    round_number: str = "1",
 ) -> None:
     game = chess.pgn.Game()
     game.headers.update(
         {
             "Event": "Corpus fixture",
-            "Round": "1",
+            "Round": round_number,
             "White": white,
             "Black": black,
             "Result": "1/2-1/2",

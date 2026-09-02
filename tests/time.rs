@@ -13,25 +13,13 @@ fn clock_budget_keeps_a_hard_deadline_inside_remaining_time() {
 
     assert!(budget.soft > Duration::ZERO);
     assert!(budget.soft < budget.hard);
-    assert!(budget.hard <= Duration::from_millis(9_970));
+    assert!(budget.hard <= Duration::from_millis(9_985));
 }
 
 #[test]
-fn clock_budget_reserves_two_response_windows() {
+fn clock_budget_enters_emergency_at_three_overheads() {
     let budget = TimeManager::allocate(
-        Duration::from_millis(205),
-        Duration::from_millis(5),
-        None,
-        Duration::from_millis(100),
-    );
-
-    assert!(budget.hard <= Duration::from_millis(5));
-}
-
-#[test]
-fn clock_budget_stops_when_two_overhead_windows_consume_the_clock() {
-    let budget = TimeManager::allocate(
-        Duration::from_millis(199),
+        Duration::from_millis(300),
         Duration::from_millis(5),
         None,
         Duration::from_millis(100),
@@ -39,4 +27,18 @@ fn clock_budget_stops_when_two_overhead_windows_consume_the_clock() {
 
     assert_eq!(budget.soft, Duration::ZERO);
     assert_eq!(budget.hard, Duration::ZERO);
+}
+
+#[test]
+fn clock_budget_preserves_ordinary_allocation_above_emergency() {
+    let budget = TimeManager::allocate(
+        Duration::from_millis(301),
+        Duration::from_millis(5),
+        None,
+        Duration::from_millis(100),
+    );
+
+    assert!(budget.soft > Duration::ZERO);
+    assert!(budget.hard > budget.soft);
+    assert!(budget.hard <= Duration::from_millis(201));
 }

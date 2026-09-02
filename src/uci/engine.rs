@@ -222,9 +222,18 @@ impl UciEngine {
 
     fn start_search(&mut self, parameters: GoParameters) {
         let started = Instant::now();
-        let position = self.position.clone();
+        let mut position = self.position.clone();
         let color = position.side_to_move();
         let limits = normalize_limits(&parameters, color, self.move_overhead_ms);
+        if limits.hard_time == Some(Duration::ZERO) {
+            let bestmove = position
+                .legal_moves()
+                .as_slice()
+                .first()
+                .map_or_else(|| "0000".to_owned(), ToString::to_string);
+            let _ = send_line(&format!("bestmove {bestmove}"));
+            return;
+        }
         let game_hashes = self.game_hashes.clone();
         let stop = Arc::new(AtomicBool::new(false));
         let worker_stop = Arc::clone(&stop);

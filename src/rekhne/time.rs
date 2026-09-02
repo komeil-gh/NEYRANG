@@ -9,21 +9,21 @@ pub struct TimeBudget {
 pub struct TimeManager;
 
 impl TimeManager {
-    /// Allocate conservatively from the active clock. The hard limit keeps
-    /// two communication-overhead windows in reserve.
+    /// Allocate conservatively from the active clock. Once at most three
+    /// communication-overhead windows remain, return an emergency zero budget.
     pub fn allocate(
         remaining: Duration,
         increment: Duration,
         moves_to_go: Option<u32>,
         overhead: Duration,
     ) -> TimeBudget {
-        let usable = remaining.saturating_sub(overhead.saturating_mul(2));
-        if usable.is_zero() {
+        if remaining <= overhead.saturating_mul(3) {
             return TimeBudget {
                 soft: Duration::ZERO,
                 hard: Duration::ZERO,
             };
         }
+        let usable = remaining.saturating_sub(overhead);
         let horizon = moves_to_go.unwrap_or(30).clamp(1, 50);
         let base = usable / horizon;
         let increment_share = increment * 3 / 4;

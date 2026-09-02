@@ -6,6 +6,7 @@
 /builds/
 /testing/
 /.venv/
+/.venv-sanj/
 /results/
 __pycache__/
 *.pgn

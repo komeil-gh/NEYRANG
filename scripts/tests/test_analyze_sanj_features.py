@@ -95,6 +95,31 @@ class EvalFeatureAnalysisTests(unittest.TestCase):
         )
         self.assertLess(fitted_loss, baseline_loss)
 
+    def test_exact_integer_cp_matches_rust_taper_and_truncation(self) -> None:
+        analysis = load_analysis()
+        self.assertTrue(hasattr(analysis, "exact_integer_cp"))
+        weights = np.asarray(analysis.CURRENT_EFFECTIVE_WEIGHTS, dtype=np.int64)
+        mg = np.zeros((2, 25), dtype=np.int64)
+        eg = np.zeros((2, 16), dtype=np.int64)
+        mg[:, 0] = [1, -1]
+        partition = analysis.Partition(
+            path=Path("train.features.tsv"),
+            record_ids=("row-1", "row-2"),
+            groups=np.array(["pair-a", "pair-b"], dtype=object),
+            design=np.zeros((2, 42)),
+            target=np.array([1.0, 0.0]),
+            cp=np.array([18.0, -6.0]),
+            names=tuple(f"feature-{index}" for index in range(42)),
+            phase=np.array([2, 2], dtype=np.int64),
+            mg_coefficients=mg,
+            eg_coefficients=eg,
+            tempo_sign=np.array([1, 1], dtype=np.int64),
+        )
+
+        actual = analysis.exact_integer_cp(partition, weights)
+
+        self.assertEqual(actual.tolist(), [18, 6])
+
     def test_partition_loader_builds_the_registered_42_columns(self) -> None:
         analysis = load_analysis()
         self.assertTrue(hasattr(analysis, "load_partition"))
@@ -179,6 +204,36 @@ class EvalFeatureAnalysisTests(unittest.TestCase):
         )
         self.assertTrue(np.allclose(partition.cp, [112.0, 88.0]))
 
+    def test_partition_loader_accepts_hash_bound_pre_contract_schema(self) -> None:
+        analysis = load_analysis()
+        header = list(analysis.TRACE_COLUMNS)
+        values = {name: "0" for name in header}
+        values.update(
+            {
+                "schema": "historical-eval-trace-v1",
+                "record_id": "source:pair-000001:game-1:ply-016",
+                "target": "0.5",
+                "fen": "8/8/8/8/8/8/8/K6k w - - 0 1",
+                "stm": "w",
+                "phase": "0",
+                "white_cp": "0",
+                "tempo_cp": "12",
+                "stm_cp": "12",
+            }
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "train.features.tsv"
+            path.write_text(
+                "\t".join(header)
+                + "\n"
+                + "\t".join(values[name] for name in header)
+                + "\n"
+            )
+
+            partition = analysis.load_partition(path)
+
+        self.assertEqual(partition.cp.tolist(), [12.0])
+
     def test_partition_analysis_reports_train_validation_only(self) -> None:
         analysis = load_analysis()
         self.assertTrue(hasattr(analysis, "analyze_partitions"))
@@ -199,6 +254,10 @@ class EvalFeatureAnalysisTests(unittest.TestCase):
                 target=analysis.probability(cp, 1.75),
                 cp=cp,
                 names=names,
+                phase=np.full(4, 24, dtype=np.int64),
+                mg_coefficients=np.zeros((4, 25), dtype=np.int64),
+                eg_coefficients=np.zeros((4, 16), dtype=np.int64),
+                tempo_sign=np.ones(4, dtype=np.int64),
             )
 
         report = analysis.analyze_partitions(

@@ -104,6 +104,54 @@ RECORD_ID = re.compile(
     r"^(?P<group>[A-Za-z0-9][A-Za-z0-9._-]*:pair-[0-9]{6,}):"
     r"game-[12]:ply-[0-9]{3,}$"
 )
+CURRENT_TRACE_SCHEMA = "neyrang-sanj-trace-v1"
+PRE_CONTRACT_TRACE_SCHEMA = re.compile(
+    r"^[a-z0-9][a-z0-9-]*-eval-trace-v1$"
+)
+CURRENT_EFFECTIVE_WEIGHTS = (
+    82,
+    313,
+    353,
+    477,
+    1_020,
+    7,
+    2,
+    9,
+    5,
+    2,
+    1,
+    2,
+    -9,
+    -3,
+    28,
+    -11,
+    -10,
+    2,
+    4,
+    5,
+    2,
+    1,
+    18,
+    10,
+    9,
+    94,
+    263,
+    287,
+    512,
+    936,
+    12,
+    1,
+    7,
+    4,
+    3,
+    1,
+    8,
+    38,
+    -16,
+    -8,
+    4,
+    12,
+)
 
 
 @dataclass(frozen=True)
@@ -115,6 +163,35 @@ class Partition:
     target: np.ndarray
     cp: np.ndarray
     names: tuple[str, ...]
+    phase: np.ndarray
+    mg_coefficients: np.ndarray
+    eg_coefficients: np.ndarray
+    tempo_sign: np.ndarray
+
+
+def _integer_columns(rows: list[dict[str, str]], names: tuple[str, ...]) -> np.ndarray:
+    values = np.asarray(
+        [[float(row[name]) for name in names] for row in rows], dtype=np.float64
+    )
+    if not np.array_equal(values, np.trunc(values)):
+        raise ValueError("trace coefficients must be integers")
+    return values.astype(np.int64)
+
+
+def exact_integer_cp(partition: Partition, weights: np.ndarray) -> np.ndarray:
+    """Reproduce Rust's tapered integer score in the White-relative frame."""
+    candidate = np.asarray(weights)
+    if candidate.shape != (42,) or not np.array_equal(candidate, np.trunc(candidate)):
+        raise ValueError("effective weights must be 42 integers")
+    candidate = candidate.astype(np.int64)
+    middlegame = partition.mg_coefficients @ candidate[:25]
+    endgame = partition.eg_coefficients @ candidate[25:41]
+    numerator = (
+        middlegame * partition.phase
+        + endgame * (24 - partition.phase)
+    )
+    tapered = np.where(numerator >= 0, numerator // 24, -((-numerator) // 24))
+    return tapered + partition.tempo_sign * candidate[41]
 
 
 def load_partition(path: Path) -> Partition:
@@ -129,7 +206,11 @@ def load_partition(path: Path) -> Partition:
     record_ids: list[str] = []
     groups: list[str] = []
     for row in rows:
-        if row.get("schema") != "neyrang-sanj-trace-v1":
+        schema = row.get("schema", "")
+        if (
+            schema != CURRENT_TRACE_SCHEMA
+            and PRE_CONTRACT_TRACE_SCHEMA.fullmatch(schema) is None
+        ):
             raise ValueError(f"{path}: unexpected trace schema")
         record_id = row["record_id"]
         match = RECORD_ID.fullmatch(record_id)
@@ -144,28 +225,28 @@ def load_partition(path: Path) -> Partition:
     if not np.isin(stm, np.asarray(["w", "b"], dtype=object)).all():
         raise ValueError(f"{path}: side to move must be w or b")
 
-    phase = np.asarray([float(row["phase"]) for row in rows])
+    phase_values = np.asarray([float(row["phase"]) for row in rows])
+    if not np.array_equal(phase_values, np.trunc(phase_values)):
+        raise ValueError(f"{path}: phase must be an integer")
+    phase = phase_values.astype(np.int64)
     if np.any((phase < 0.0) | (phase > 24.0)):
         raise ValueError(f"{path}: phase is outside [0,24]")
     target = np.asarray([float(row["target"]) for row in rows])
     if not np.isin(target, np.asarray([0.0, 0.5, 1.0])).all():
         raise ValueError(f"{path}: target is outside WDL values")
 
+    mg_coefficients = _integer_columns(rows, MG_FEATURES)
+    eg_coefficients = _integer_columns(rows, EG_FEATURES)
     columns: list[np.ndarray] = []
     names: list[str] = []
-    for feature in MG_FEATURES:
-        columns.append(
-            np.asarray([float(row[feature]) for row in rows]) * phase / 24.0
-        )
+    for index, feature in enumerate(MG_FEATURES):
+        columns.append(mg_coefficients[:, index] * phase / 24.0)
         names.append(f"mg:{feature}")
-    for feature in EG_FEATURES:
-        columns.append(
-            np.asarray([float(row[feature]) for row in rows])
-            * (24.0 - phase)
-            / 24.0
-        )
+    for index, feature in enumerate(EG_FEATURES):
+        columns.append(eg_coefficients[:, index] * (24.0 - phase) / 24.0)
         names.append(f"eg:{feature}")
-    columns.append(np.where(stm == "w", 1.0, -1.0))
+    tempo_sign = np.where(stm == "w", 1, -1).astype(np.int64)
+    columns.append(tempo_sign.astype(np.float64))
     names.append("tempo")
     design = np.column_stack(columns)
     cp = np.asarray(
@@ -196,6 +277,10 @@ def load_partition(path: Path) -> Partition:
         target=target,
         cp=cp,
         names=tuple(names),
+        phase=phase,
+        mg_coefficients=mg_coefficients,
+        eg_coefficients=eg_coefficients,
+        tempo_sign=tempo_sign,
     )
 
 

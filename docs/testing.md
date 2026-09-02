@@ -380,7 +380,15 @@ The registered H2d replacement uses G1 at 30,000 and F1 at 29,200 nodes per move
 
 H2e deterministically selects at most eight quiet positions per game with an eight-ply gap, then truncates both games in each color-reversed pair to equal record counts. H2b+H2d produced 38,234 pair-balanced records before deduplication and 35,032 unique records afterward: 28,040 train, 3,564 validation, and 3,428 current-holdout records. Reversing source order produced byte-identical TSVs, and the independent auditor replayed all 13,000 accepted source games and every selection/deduplication decision. The default one-position selector still reproduces the exact registered legacy TSV bytes.
 
-The train/validation-only analyzer reconstructs all 42 effective evaluation columns and weights every opening pair equally. Both designs have full rank and no dead column. Scale-only fits are stable around `0.80-0.83`, and all validation point estimates improve slightly, but the registered 10,000-replicate group-bootstrap intervals include zero. H2e is retained as evidence infrastructure; no evaluation weight or playing source changes.
+The train/validation-only analyzer reconstructs all 42 effective evaluation
+columns and weights every opening pair equally. It accepts the hash-bound
+pre-contract schema class and now retains raw integer coefficients so the
+current 42-weight vector reproduces all 28,040 train scores exactly under
+Rust's tapered truncation. Both designs have full rank and no dead column.
+Scale-only fits are stable around `0.80-0.83`, and all validation point
+estimates improve slightly, but the registered 10,000-replicate group-bootstrap
+intervals include zero. H2e is retained as evidence infrastructure; no
+evaluation weight or playing source changes.
 
 ## N0a/N1a/N1b/N1c/N1d/N1e NNUE foundation and pipeline evidence
 

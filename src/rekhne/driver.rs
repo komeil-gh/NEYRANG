@@ -24,7 +24,6 @@ pub const VALUE_MATE: i32 = 30_000;
 pub const VALUE_INFINITE: i32 = 32_000;
 const NULL_MOVE_MIN_DEPTH: i32 = 4;
 const NULL_MOVE_REDUCTION: i32 = 2;
-const FUTILITY_MAX_DEPTH: i32 = 2;
 
 #[derive(Clone, Copy)]
 struct SearchContext {
@@ -656,13 +655,6 @@ impl<'a> Searcher<'a> {
             };
         }
         let mate_bound = VALUE_MATE - MAX_PLY as i32;
-        let can_prune_futility = ply != 0
-            && !is_pv_node
-            && !in_check
-            && depth <= FUTILITY_MAX_DEPTH
-            && alpha > -mate_bound
-            && alpha < mate_bound;
-        let mut static_eval = None;
         if ply != 0
             && !is_pv_node
             && context.null_allowed
@@ -672,7 +664,7 @@ impl<'a> Searcher<'a> {
             && beta > -mate_bound
             && beta < mate_bound
             && has_meaningful_non_pawn_material(position)
-            && *static_eval.get_or_insert_with(|| self.evaluate_position(position, ply)) >= beta
+            && self.evaluate_position(position, ply) >= beta
         {
             #[cfg(feature = "stats")]
             {
@@ -713,24 +705,6 @@ impl<'a> Searcher<'a> {
         let mut searched_moves = MoveList::new();
         while let Some(mv) = picker.next_move(position, &self.history) {
             let move_index = searched_moves.len();
-            let is_quiet = !mv.is_capture() && !mv.is_promotion();
-            if can_prune_futility
-                && move_index >= 4
-                && is_quiet
-                && tt_move != Some(mv)
-                && !self.killers[ply].contains(&mv)
-                && *static_eval.get_or_insert_with(|| self.evaluate_position(position, ply))
-                    + futility_margin(depth)
-                    <= alpha
-            {
-                let undo = position.make_move(mv);
-                let gives_check = position.is_in_check(position.side_to_move());
-                position.unmake_move(mv, undo);
-                if !gives_check {
-                    self.statistics.futility_prunes += 1;
-                    continue;
-                }
-            }
             #[cfg(feature = "stats")]
             {
                 self.statistics.moves_searched += 1;
@@ -753,7 +727,8 @@ impl<'a> Searcher<'a> {
                 && move_index >= 4
                 && !is_pv_node
                 && !in_check
-                && is_quiet
+                && !mv.is_capture()
+                && !mv.is_promotion()
                 && tt_move != Some(mv)
                 && !self.killers[ply].contains(&mv)
                 && self.history.score(moving_color, mv) < HistoryTable::MAX_SCORE / 4;
@@ -1177,10 +1152,6 @@ fn has_meaningful_non_pawn_material(position: &Position) -> bool {
     major != 0 || minor.count_ones() >= 2
 }
 
-const fn futility_margin(depth: i32) -> i32 {
-    200 + 140 * depth
-}
-
 #[cfg(all(test, feature = "stats"))]
 mod tests {
     use std::sync::atomic::AtomicBool;
@@ -1324,66 +1295,6 @@ mod tests {
         assert_eq!(score, 0);
         assert_eq!(searcher.statistics.null_move_attempts, 0);
         assert_eq!(position, original);
-    }
-
-    #[test]
-    fn shallow_futility_prunes_late_quiets_at_fail_low_nodes() {
-        let mut position = Position::startpos();
-        let original = position.clone();
-        let stop = AtomicBool::new(false);
-        let mut searcher = Searcher::new(&stop);
-        let hashes = [position.repetition_hash()];
-        searcher.reset(
-            &mut position,
-            &SearchLimits::depth(1),
-            &hashes,
-            SearchSetup::normal(),
-        );
-
-        let _ = searcher.negamax(&mut position, 1, 1, 400, 401, SearchContext::normal(None));
-
-        assert!(searcher.statistics.futility_prunes > 0);
-        assert_eq!(position, original);
-    }
-
-    #[test]
-    fn shallow_futility_guards_block_root_and_in_check_nodes() {
-        let cases = [
-            (Position::startpos(), 1, 0, 200, 201),
-            (
-                Position::from_fen("k5r1/8/8/8/8/7q/4Q1r1/6K1 w - - 0 1")
-                    .expect("in-check fixture must be valid"),
-                1,
-                1,
-                200,
-                201,
-            ),
-        ];
-
-        for (mut position, depth, ply, alpha, beta) in cases {
-            let original = position.clone();
-            let stop = AtomicBool::new(false);
-            let mut searcher = Searcher::new(&stop);
-            let hashes = [position.repetition_hash()];
-            searcher.reset(
-                &mut position,
-                &SearchLimits::depth(depth as u8),
-                &hashes,
-                SearchSetup::normal(),
-            );
-
-            let _ = searcher.negamax(
-                &mut position,
-                depth,
-                ply,
-                alpha,
-                beta,
-                SearchContext::normal(None),
-            );
-
-            assert_eq!(searcher.statistics.futility_prunes, 0);
-            assert_eq!(position, original);
-        }
     }
 
     #[test]

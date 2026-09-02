@@ -9,6 +9,9 @@ All notable changes to NEYRANG are documented here.
 - A no-clobber fixed-partition SANJ corpus mode for separately sourced final
   holdouts, with independent PGN replay that verifies every record remains in
   the registered sealed partition while legacy 80/10/10 builds stay unchanged.
+- Concurrency-safe SANJ corpus pairing in both builder and independent auditor,
+  reconstructing color-reversed games by numeric `Round` identity instead of
+  assuming completion-order adjacency in retained PGNs.
 - An external macOS search-observability harness that runs an unchanged frozen
   profiling binary, hash-binds raw `sample` output and deterministic bench
   results, publishes a stable no-clobber category schema, and cleans up its own
@@ -66,6 +69,9 @@ All notable changes to NEYRANG are documented here.
 - H2d replaces H2c's wall-clock allocation with pre-registered 30,000/29,200-node G1/F1 limits derived from 732,065 plies of rejected-run telemetry; no playing code or evaluation weight changes.
 - The fixed match runner records the selected warning policy and refuses to combine the immutable-baseline compatibility policy with fastchess strict mode.
 - The match auditor can require the exact registered opening sequence, while distributed metadata carries campaign/shard identities and pair offsets. Sub-millisecond time controls are rejected before games because they cannot round-trip through the PGN header.
+- Expected-opening audit canonicalization now removes uncapturable en-passant
+  fields consistently with fastchess, while still rejecting a legally
+  capturable en-passant mismatch.
 - `Threads=1` retains the established local full-key TT and deterministic search entry point; `Threads>1` exercises the retained P3 shared-TT path after passing its binding scaling, deadline, and paired-game decisions.
 
 ### Evidence
@@ -74,6 +80,13 @@ All notable changes to NEYRANG are documented here.
   profiling binary while preserving the registered depth-11 121,149,567-node
   tree and checksum. Classical SANJ ranked first at 39.30%; this prioritizes a
   separate experiment and is not NPS, Elo, playing-strength, or release proof.
+- The first 2,000-game H3a data attempt was rejected because required
+  concurrency fixes changed registered tool identities. H3a-R1 then completed
+  2,000 replacement games from 1,000 different openings with zero H2b/H2d or
+  rejected-attempt overlap. Independent match and corpus audits accepted a
+  sealed 5,440-record final holdout from 825 sampled pairs; its match aggregate,
+  rows, targets, feature values, predictions and loss remain uninspected. No
+  evaluator weight or playing source changed.
 - F1 completed a strict 2,000-game / 1,000-pair timed screen at 62.20%, with 2,000 normal terminations and no timing, legality, crash, or protocol anomaly. This is development evidence; version `0.2.0` remains the latest release.
 - G1 completed a separate strict 2,000-game / 1,000-pair timed screen at 50.98%, with 2,000 normal terminations and no timing, legality, crash, or protocol anomaly. This is a tree-identical performance regression guard; version `0.2.0` remains the latest release.
 - H2b completed 4,000 fresh paired games without a timing, crash, legality, warning, or protocol failure and produced 2,910 independently replayed unique evaluation records. The source is retained for later tuning, its holdout remains sealed, and no evaluation weight changed.

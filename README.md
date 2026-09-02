@@ -413,4 +413,15 @@ P3 subsequently retained one root-diversified Lazy-SMP design. Frozen Threads 2/
 
 H0/H1 then added byte-isolated evaluation evidence tooling and proved it on a 4,000-game historical pilot. H2b subsequently completed 4,000 fresh paired games without a timing, crash, legality, warning, or protocol failure. The first 9,000-game H2c expansion was rejected in full after one timeout; its deterministic H2d replacement completed and independently audited all 9,000 games at fixed per-engine node budgets. H2b+H2d first produced a conservative 9,959-record corpus, then H2e recovered 35,032 unique records through pre-registered gap-constrained, pair-balanced dense extraction without generating or accepting another game. Train and validation contain 28,040/3,564 rows from 4,146/538 opening groups, both 42-column designs have full rank, and a scale-only diagnostic is stable but statistically unresolved on validation. No evaluation weight changed. Because aggregate current-holdout summaries were accidentally exposed, any future fitter requires its own preregistration and a new disjoint untouched final holdout before a playing candidate can exist.
 
+H3a-R1 now supplies that new final holdout. The first 2,000-game attempt was
+rejected when concurrency fixes changed registered builder/auditor identities.
+After committing those fixes, a new 1,000-opening set with zero H2b/H2d or
+rejected-attempt overlap produced 2,000 replacement games and 5,440 sealed
+records from 825 sampled pairs. The fixed-partition corpus and its 5,440-row,
+38-column SANJ trace passed independent replay. Match aggregates, sampled rows,
+targets, feature values, predictions and loss remain uninspected; no evaluator
+or playing source changed. The next gate is an H3b fitter preregistration
+followed by train/validation-only selection of exactly one candidate before the
+first final-holdout access.
+
 N0a/N1a/N1b/N1c/N1d/N1e cover the data and learning-curve path from scalar `Chess768` inference and strict Viriformat games through deterministic corpus assembly, pinned Bullet ingestion, quantized export, fixed FEN parity and paired fixed-validation diagnostics. The 16M point retained 18,140,767 train positions and consumed an exact 16,008,492-position epoch against the unchanged 463,228-position validation corpus. The selected quantization stays within the preregistered `8 cp` maximum and `2 cp` mean error bounds, and all three N1e validation gates passed. N2a now adds an opt-in scalar engine bridge and worker-owned accumulator stack with bit-exact reference parity. Fifteen interleaved benchmarks were deterministic, then an independently audited 1,000-game equal-node screen rejected the 16M network at `177/633/190` and 27.20% (`-171.02 +/- 20.09` reported logistic Elo). That is evidence against this network, not evidence against the inference path. The final holdout does not yet exist, the default engine remains classical, and SIMD or any 64M extension requires a newly registered model/data diagnosis rather than automatic scale growth. Exact N2a evidence is in [the engine-inference manifest](docs/evidence/nnue-n2a-engine-inference.json).

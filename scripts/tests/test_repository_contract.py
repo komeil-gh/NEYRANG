@@ -127,6 +127,49 @@ class RepositoryContractTests(unittest.TestCase):
         self.assertFalse(result["interpretation"]["playing_strength_claim"])
         self.assertFalse(result["interpretation"]["elo_claim"])
 
+    def test_h3a_replacement_is_sealed_and_bound_to_registered_tools(self) -> None:
+        registration = json.loads(
+            self.read("docs/evidence/sanj-h3a-r1-final-holdout-registration.json")
+        )
+        rejection = json.loads(
+            self.read("docs/evidence/sanj-h3a-attempt1-rejection.json")
+        )
+        result = json.loads(
+            self.read("docs/evidence/sanj-h3a-final-holdout-result.json")
+        )
+
+        self.assertFalse(registration["weight_fit_authorized"])
+        self.assertFalse(registration["holdout_loss_access_authorized"])
+        self.assertFalse(rejection["decision"]["eligible_for_h3_holdout"])
+        self.assertEqual(result["phase"], "H3a-R1")
+        self.assertEqual(result["match"]["games"], 2000)
+        self.assertEqual(result["match"]["pairs"], 1000)
+        self.assertGreaterEqual(
+            result["sealed_corpus"]["records"],
+            registration["sealed_corpus"]["minimum_records"],
+        )
+        self.assertGreaterEqual(
+            result["sealed_corpus"]["opening_pairs"],
+            registration["sealed_corpus"]["minimum_opening_pair_groups"],
+        )
+        self.assertTrue(result["match"]["artifacts"]["independent_audit"]["passed"])
+        self.assertTrue(
+            result["sealed_corpus"]["artifacts"]["independent_audit"]["passed"]
+        )
+        self.assertEqual(
+            result["sealed_corpus"]["tools"]["builder_sha256"],
+            registration["infrastructure"]["corpus_builder"]["sha256"],
+        )
+        self.assertEqual(
+            result["sealed_corpus"]["tools"]["corpus_auditor_sha256"],
+            registration["infrastructure"]["independent_corpus_auditor"]["sha256"],
+        )
+        self.assertTrue(
+            all(value is False for value in result["access_boundary"].values())
+        )
+        self.assertFalse(result["decision"]["strength_claim"])
+        self.assertFalse(result["decision"]["elo_claim"])
+
     def test_genfens_has_engine_and_independent_provenance_gates(self) -> None:
         engine = self.read("src/tools/genfens.rs")
         integration = self.read("tests/genfens.rs")

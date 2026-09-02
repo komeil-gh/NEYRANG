@@ -9,15 +9,15 @@ pub struct TimeBudget {
 pub struct TimeManager;
 
 impl TimeManager {
-    /// Allocate conservatively from the active clock. The hard limit never
-    /// crosses remaining time after communication overhead.
+    /// Allocate conservatively from the active clock. The hard limit keeps
+    /// two communication-overhead windows in reserve.
     pub fn allocate(
         remaining: Duration,
         increment: Duration,
         moves_to_go: Option<u32>,
         overhead: Duration,
     ) -> TimeBudget {
-        let usable = remaining.saturating_sub(overhead);
+        let usable = remaining.saturating_sub(overhead.saturating_mul(2));
         if usable.is_zero() {
             return TimeBudget {
                 soft: Duration::ZERO,

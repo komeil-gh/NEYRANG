@@ -412,6 +412,13 @@ P1 then resolved the immutable-v0.2.0 runner ambiguity with a narrow, independen
 
 P3 subsequently retained one root-diversified Lazy-SMP design. Frozen Threads 2/4 throughput reached `2.010776x / 3.956388x` the Threads-1 aggregate NPS with sub-millisecond p95 hard-deadline overshoot. The binding same-binary Threads-2-versus-Threads-1 screen completed all 2,000 games at `0.5+0.005`: `711/701/588`, 53.075%, reported `+21.39 +/-10.90 Elo`, and pentanomial `[57,184,437,223,99]`. Independent replay verified all 1,000 pairs and 196,758 plies with zero warning, timeout, crash, illegal move, protocol error, forfeit, or negative time-left sample. Including the independently audited N2a rejection screen, the project has now recorded 44,992 valid comparison games. Accepted work stays on `dev/0.3-search`; the released version and immutable `v0.2.0` tag remain unchanged. A normalized Lazy-SMP SPRT requires its own preregistration. Pawn hashing remains lower priority.
 
+R2 now tests NEYRANG's confidence-bounded frontier on the retained Fischer/T6
+parent. It passed the 1,000-game fixed-node screen at 60.85%, the fresh
+1,000-game equal-time screen at 51.95%, and accepted H1 in a normalized `[0,5]`
+SPRT after 3,712 games at 52.074% (`+14.42 +/-7.42` logistic Elo). Its final
+registered 1,000-game confirmation at `8+0.08` is running; R2 has no retention,
+external-opponent or release claim until that gate completes and audits cleanly.
+
 H0/H1 then added byte-isolated evaluation evidence tooling and proved it on a 4,000-game historical pilot. H2b subsequently completed 4,000 fresh paired games without a timing, crash, legality, warning, or protocol failure. The first 9,000-game H2c expansion was rejected in full after one timeout; its deterministic H2d replacement completed and independently audited all 9,000 games at fixed per-engine node budgets. H2b+H2d first produced a conservative 9,959-record corpus, then H2e recovered 35,032 unique records through pre-registered gap-constrained, pair-balanced dense extraction without generating or accepting another game. Train and validation contain 28,040/3,564 rows from 4,146/538 opening groups, both 42-column designs have full rank, and a scale-only diagnostic is stable but statistically unresolved on validation. No evaluation weight changed. Because aggregate current-holdout summaries were accidentally exposed, any future fitter requires its own preregistration and a new disjoint untouched final holdout before a playing candidate can exist.
 
 H3a-R1 now supplies that new final holdout. The first 2,000-game attempt was

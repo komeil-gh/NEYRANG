@@ -373,6 +373,7 @@ The bundled opening file is intentionally small; replace `OPENINGS_FILE` with a 
 - [NNUE scalar reference and artifact contract](docs/development/nnue-reference.md)
 - [NNUE lossless game-record and provenance contract](docs/development/nnue-data.md)
 - [SANJ corpus and tuning protocol](docs/development/sanj-tuning.md)
+- [Fischer style lane](docs/development/fischer-style.md)
 
 ## Contributing and security
 

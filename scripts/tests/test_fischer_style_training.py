@@ -12,6 +12,7 @@ import chess
 ROOT = Path(__file__).resolve().parents[2]
 LABELER = ROOT / "scripts" / "label-fischer-decisions.py"
 FITTER = ROOT / "scripts" / "fit-fischer-prior.py"
+EVALUATOR = ROOT / "scripts" / "evaluate-fischer-prior.py"
 
 
 class FischerStyleTrainingTests(unittest.TestCase):
@@ -140,6 +141,27 @@ class FischerStyleTrainingTests(unittest.TestCase):
                 self.assertEqual(1.0, report_data["validation"]["top1"])
                 hashes.append(report_data["artifact"]["sha256"])
             self.assertEqual(hashes[0], hashes[1])
+
+            evaluation = root / "evaluation.json"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(EVALUATOR),
+                    "--labels",
+                    str(validation),
+                    "--artifact",
+                    str(root / "prior-a.bin"),
+                    "--artifact-sha256",
+                    hashes[0],
+                    "--output",
+                    str(evaluation),
+                ],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(0, result.returncode, result.stderr)
+            self.assertEqual(1.0, json.loads(evaluation.read_text())["metrics"]["top1"])
 
 
 if __name__ == "__main__":

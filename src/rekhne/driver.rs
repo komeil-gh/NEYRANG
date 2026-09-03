@@ -10,7 +10,7 @@ use crate::sanj::nnue::AccumulatorPair;
 use crate::{
     chess::{Move, MoveList, PieceType, Position},
     sanj,
-    shegerd::{history::HistoryTable, ordering},
+    shegerd::{fischer, history::HistoryTable, ordering},
 };
 
 use super::{
@@ -445,7 +445,8 @@ impl<'a> Searcher<'a> {
             return self.root_terminal(position);
         }
 
-        let fallback = root_moves.as_slice()[0];
+        let fallback =
+            fischer::preferred(position, &root_moves).unwrap_or(root_moves.as_slice()[0]);
         let initial_preferred = setup
             .root_preferred
             .filter(|preferred| root_moves.iter().any(|&mv| mv == *preferred))

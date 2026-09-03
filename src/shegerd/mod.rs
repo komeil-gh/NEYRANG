@@ -4,6 +4,7 @@
 //! evaluation. Keeping them outside the search driver gives every technique a
 //! clear contract and a measurable right to remain in NEYRANG.
 
+pub(crate) mod fischer;
 pub mod history;
 pub(crate) mod ordering;
 mod see;

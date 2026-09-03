@@ -85,7 +85,7 @@ fn uci_process_reports_identity_readiness_and_a_legal_bestmove() {
 #[test]
 fn emergency_clock_returns_a_legal_fallback_without_searching() {
     let lines = run_uci_search(
-        "setoption name Move Overhead value 100\nposition startpos\ngo wtime 300 btime 300 winc 5 binc 5\n",
+        "setoption name Move Overhead value 100\nposition startpos\ngo wtime 100 btime 100 winc 5 binc 5\n",
         None,
     );
 
@@ -108,12 +108,29 @@ fn emergency_clock_returns_a_legal_fallback_without_searching() {
 #[test]
 fn emergency_terminal_position_returns_the_null_move() {
     let lines = run_uci_search(
-        "setoption name Move Overhead value 100\nposition fen 7k/6Q1/6K1/8/8/8/8/8 b - - 0 1\ngo wtime 300 btime 300 winc 5 binc 5\n",
+        "setoption name Move Overhead value 100\nposition fen 7k/6Q1/6K1/8/8/8/8/8 b - - 0 1\ngo wtime 100 btime 100 winc 5 binc 5\n",
         None,
     );
 
     assert!(lines.iter().any(|line| line == "bestmove 0000"));
     assert!(!lines.iter().any(|line| line.starts_with("info depth ")));
+}
+
+#[test]
+fn non_emergency_terminal_search_returns_one_null_move() {
+    let lines = run_uci_search(
+        "position fen 7k/6Q1/6K1/8/8/8/8/8 b - - 0 1\ngo movetime 100\n",
+        None,
+    );
+
+    assert_eq!(
+        lines
+            .iter()
+            .filter(|line| line.starts_with("bestmove "))
+            .count(),
+        1
+    );
+    assert!(lines.iter().any(|line| line == "bestmove 0000"));
 }
 
 #[test]

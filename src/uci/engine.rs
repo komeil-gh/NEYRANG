@@ -5,16 +5,17 @@ use std::{
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
+        mpsc::{self, Receiver, RecvTimeoutError},
     },
     thread::{self, JoinHandle},
     time::{Duration, Instant},
 };
 
 use crate::{
-    chess::{Color, Position, perft},
+    chess::{Color, Move, Position, perft},
     engine::info::{ENGINE_AUTHOR, ENGINE_NAME, ENGINE_VERSION},
     rekhne::{
-        MAX_PLY, ParallelOptions, SearchInfo, SearchLimits, Searcher, VALUE_MATE,
+        MAX_PLY, ParallelOptions, SearchInfo, SearchLimits, SearchResult, Searcher, VALUE_MATE,
         search_parallel_with_evaluator, time::TimeManager, tt::TranspositionTable,
     },
     sanj,
@@ -225,57 +226,64 @@ impl UciEngine {
         let mut position = self.position.clone();
         let color = position.side_to_move();
         let limits = normalize_limits(&parameters, color, self.move_overhead_ms);
+        let fallback = position.legal_moves().as_slice().first().copied();
         if limits.hard_time == Some(Duration::ZERO) {
-            let bestmove = position
-                .legal_moves()
-                .as_slice()
-                .first()
-                .map_or_else(|| "0000".to_owned(), ToString::to_string);
+            let bestmove = fallback.map_or_else(|| "0000".to_owned(), |mv| mv.to_string());
             let _ = send_line(&format!("bestmove {bestmove}"));
             return;
         }
         let game_hashes = self.game_hashes.clone();
         let stop = Arc::new(AtomicBool::new(false));
-        let worker_stop = Arc::clone(&stop);
+        let supervisor_stop = Arc::clone(&stop);
         let threads = self.threads;
         let evaluator = self.evaluator.clone();
+        let deadline = limits.hard_time.map(|hard| started + hard);
         let table = self
             .table
             .take()
             .unwrap_or_else(|| table_for(self.hash_megabytes, threads));
         let handle = thread::spawn(move || {
-            let (result, table) = if threads == 1 {
-                let mut position = position;
-                let mut searcher =
-                    Searcher::with_table_and_evaluator(&worker_stop, table, evaluator);
-                let result = searcher.search_started(
-                    &mut position,
-                    &limits,
-                    &game_hashes,
-                    started,
-                    |info| {
-                        let _ = send_line(&format_info(info));
-                    },
-                );
-                (result, searcher.into_table())
-            } else {
-                search_parallel_with_evaluator(
-                    &position,
-                    &limits,
-                    &game_hashes,
-                    &worker_stop,
-                    table,
-                    ParallelOptions::new(threads, evaluator, started),
-                    |info| {
-                        let _ = send_line(&format_info(info));
-                    },
-                )
-            };
-            let bestmove = result
-                .best_move
-                .map_or_else(|| "0000".to_owned(), |mv| mv.to_string());
-            let _ = send_line(&format!("bestmove {bestmove}"));
-            table
+            let (sender, receiver) = mpsc::sync_channel(1);
+            let worker_stop = Arc::clone(&supervisor_stop);
+            let child = thread::spawn(move || {
+                let (result, table) = if threads == 1 {
+                    let mut searcher =
+                        Searcher::with_table_and_evaluator(&worker_stop, table, evaluator);
+                    let result = searcher.search_started(
+                        &mut position,
+                        &limits,
+                        &game_hashes,
+                        started,
+                        |info| {
+                            let _ = sender.send(SearchMessage::Info(info.clone()));
+                        },
+                    );
+                    (result, searcher.into_table())
+                } else {
+                    search_parallel_with_evaluator(
+                        &position,
+                        &limits,
+                        &game_hashes,
+                        &worker_stop,
+                        table,
+                        ParallelOptions::new(threads, evaluator, started),
+                        |info| {
+                            let _ = sender.send(SearchMessage::Info(info.clone()));
+                        },
+                    )
+                };
+                let _ = sender.send(SearchMessage::Finished(Box::new((result, table))));
+            });
+            supervise_search(
+                receiver,
+                child,
+                supervisor_stop,
+                deadline,
+                fallback,
+                |line| {
+                    let _ = send_line(line);
+                },
+            )
         });
         self.active = Some(ActiveSearch { stop, handle });
     }
@@ -320,6 +328,75 @@ fn table_for(megabytes: usize, threads: usize) -> TranspositionTable {
 struct ActiveSearch {
     stop: Arc<AtomicBool>,
     handle: JoinHandle<TranspositionTable>,
+}
+
+enum SearchMessage {
+    Info(SearchInfo),
+    Finished(Box<(SearchResult, TranspositionTable)>),
+}
+
+fn supervise_search<F>(
+    receiver: Receiver<SearchMessage>,
+    child: JoinHandle<()>,
+    stop: Arc<AtomicBool>,
+    deadline: Option<Instant>,
+    fallback: Option<Move>,
+    mut output: F,
+) -> TranspositionTable
+where
+    F: FnMut(&str),
+{
+    let mut best_move = fallback;
+    let mut closed = false;
+    let mut table = None;
+
+    loop {
+        let deadline_reached = deadline.is_some_and(|limit| Instant::now() >= limit);
+        if !closed && deadline_reached {
+            stop.store(true, Ordering::Relaxed);
+            closed = true;
+            emit_bestmove(best_move, &mut output);
+        }
+
+        let message = if let Some(limit) = deadline.filter(|_| !closed) {
+            receiver.recv_timeout(limit.saturating_duration_since(Instant::now()))
+        } else {
+            receiver.recv().map_err(|_| RecvTimeoutError::Disconnected)
+        };
+        match message {
+            Ok(SearchMessage::Info(info)) if !closed => {
+                if let Some(&mv) = info.pv.first() {
+                    best_move = Some(mv);
+                }
+                output(&format_info(&info));
+            }
+            Ok(SearchMessage::Info(_)) => {}
+            Ok(SearchMessage::Finished(completion)) => {
+                let (result, returned_table) = *completion;
+                if !closed {
+                    best_move = result.best_move.or(best_move);
+                    emit_bestmove(best_move, &mut output);
+                }
+                table = Some(returned_table);
+                break;
+            }
+            Err(RecvTimeoutError::Timeout) => {}
+            Err(RecvTimeoutError::Disconnected) => break,
+        }
+    }
+
+    if let Err(payload) = child.join() {
+        std::panic::resume_unwind(payload);
+    }
+    table.expect("search child exited without returning its transposition table")
+}
+
+fn emit_bestmove<F>(best_move: Option<Move>, output: &mut F)
+where
+    F: FnMut(&str),
+{
+    let bestmove = best_move.map_or_else(|| "0000".to_owned(), |mv| mv.to_string());
+    output(&format!("bestmove {bestmove}"));
 }
 
 fn normalize_limits(parameters: &GoParameters, color: Color, overhead_ms: u64) -> SearchLimits {
@@ -395,9 +472,25 @@ fn send_line(line: &str) -> io::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use crate::chess::Color;
+    use std::{
+        sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+            mpsc,
+        },
+        thread,
+        time::{Duration, Instant},
+    };
 
-    use super::{DEFAULT_MOVE_OVERHEAD_MS, GoParameters, UciEngine, normalize_limits};
+    use crate::{
+        chess::{Color, Move, Position},
+        rekhne::{SearchInfo, SearchResult, SearchStatistics},
+    };
+
+    use super::{
+        DEFAULT_MOVE_OVERHEAD_MS, GoParameters, SearchMessage, UciEngine, normalize_limits,
+        supervise_search, table_for,
+    };
 
     #[test]
     fn default_overhead_covers_observed_external_latency_tail() {
@@ -441,5 +534,83 @@ mod tests {
             .set_option("Threads", Some("1"))
             .expect("Threads 1 should be accepted");
         assert!(!engine.table.as_ref().expect("local TT").is_shared());
+    }
+
+    #[test]
+    fn deadline_closes_output_before_late_search_messages() {
+        let fallback = legal_move("a2a3");
+        let completed_move = legal_move("d2d4");
+        let late_move = legal_move("e2e4");
+        let (sender, receiver) = mpsc::sync_channel(1);
+        let child = thread::spawn(move || {
+            sender
+                .send(SearchMessage::Info(search_info(completed_move)))
+                .expect("supervisor receives completed info");
+            thread::sleep(Duration::from_millis(20));
+            sender
+                .send(SearchMessage::Info(search_info(late_move)))
+                .expect("supervisor drains late info");
+            sender
+                .send(SearchMessage::Finished(Box::new((
+                    search_result(Some(late_move)),
+                    table_for(1, 1),
+                ))))
+                .expect("supervisor receives result");
+        });
+        let stop = Arc::new(AtomicBool::new(false));
+        let mut lines = Vec::new();
+
+        supervise_search(
+            receiver,
+            child,
+            Arc::clone(&stop),
+            Some(Instant::now() + Duration::from_millis(2)),
+            Some(fallback),
+            |line| lines.push(line.to_owned()),
+        );
+
+        assert!(lines[0].starts_with("info depth 1 "), "{lines:?}");
+        assert_eq!(lines.last().map(String::as_str), Some("bestmove d2d4"));
+        assert_eq!(
+            lines.len(),
+            2,
+            "late output escaped the closed gate: {lines:?}"
+        );
+        assert!(stop.load(Ordering::Relaxed));
+    }
+
+    fn legal_move(notation: &str) -> Move {
+        Position::startpos()
+            .find_legal_move(notation)
+            .expect("legal start-position move")
+    }
+
+    fn search_info(mv: Move) -> SearchInfo {
+        SearchInfo {
+            depth: 1,
+            seldepth: 1,
+            score: 0,
+            nodes: 1,
+            qnodes: 0,
+            elapsed: Duration::from_millis(1),
+            pv: vec![mv],
+            hashfull: 0,
+        }
+    }
+
+    fn search_result(best_move: Option<Move>) -> SearchResult {
+        SearchResult {
+            best_move,
+            score: 0,
+            depth: 1,
+            seldepth: 1,
+            nodes: 1,
+            qnodes: 0,
+            elapsed: Duration::from_millis(1),
+            pv: best_move.into_iter().collect(),
+            stopped: false,
+            hashfull: 0,
+            statistics: SearchStatistics::default(),
+        }
     }
 }

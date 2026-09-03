@@ -9,15 +9,15 @@ pub struct TimeBudget {
 pub struct TimeManager;
 
 impl TimeManager {
-    /// Allocate conservatively from the active clock. Once at most three
-    /// communication-overhead windows remain, return an emergency zero budget.
+    /// Allocate conservatively from the active clock. If communication
+    /// overhead consumes the remaining time, return an emergency zero budget.
     pub fn allocate(
         remaining: Duration,
         increment: Duration,
         moves_to_go: Option<u32>,
         overhead: Duration,
     ) -> TimeBudget {
-        if remaining <= overhead.saturating_mul(3) {
+        if remaining <= overhead {
             return TimeBudget {
                 soft: Duration::ZERO,
                 hard: Duration::ZERO,

@@ -17,9 +17,9 @@ fn clock_budget_keeps_a_hard_deadline_inside_remaining_time() {
 }
 
 #[test]
-fn clock_budget_enters_emergency_at_three_overheads() {
+fn clock_budget_enters_emergency_when_overhead_consumes_the_clock() {
     let budget = TimeManager::allocate(
-        Duration::from_millis(300),
+        Duration::from_millis(100),
         Duration::from_millis(5),
         None,
         Duration::from_millis(100),
@@ -30,9 +30,9 @@ fn clock_budget_enters_emergency_at_three_overheads() {
 }
 
 #[test]
-fn clock_budget_preserves_ordinary_allocation_above_emergency() {
+fn clock_budget_preserves_ordinary_allocation_above_one_overhead() {
     let budget = TimeManager::allocate(
-        Duration::from_millis(301),
+        Duration::from_millis(101),
         Duration::from_millis(5),
         None,
         Duration::from_millis(100),
@@ -40,5 +40,5 @@ fn clock_budget_preserves_ordinary_allocation_above_emergency() {
 
     assert!(budget.soft > Duration::ZERO);
     assert!(budget.hard > budget.soft);
-    assert!(budget.hard <= Duration::from_millis(201));
+    assert!(budget.hard <= Duration::from_millis(1));
 }

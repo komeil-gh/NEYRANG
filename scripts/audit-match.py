@@ -60,10 +60,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--opponent", required=True)
     parser.add_argument("--expected-games", required=True, type=int)
     parser.add_argument("--expected-time-control")
-    parser.add_argument(
+    opening_expectation = parser.add_mutually_exclusive_group()
+    opening_expectation.add_argument(
         "--expected-openings",
         type=Path,
         help="require each color-reversed pair to match this EPD/FEN sequence",
+    )
+    opening_expectation.add_argument(
+        "--expected-opening-suite",
+        type=Path,
+        help="require shuffled pair openings to cover and periodically repeat this suite",
     )
     parser.add_argument(
         "--expect-meta",
@@ -163,9 +169,7 @@ def audit_expected_metadata(
     return expected, errors
 
 
-def audit_expected_openings(
-    pair_fens: list[str], path: Path
-) -> tuple[list[str], list[str]]:
+def read_canonical_openings(path: Path) -> tuple[list[str], list[str]]:
     expected: list[str] = []
     errors: list[str] = []
     for line_number, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
@@ -176,6 +180,13 @@ def audit_expected_openings(
             expected.append(canonical_opening(line))
         except ValueError as error:
             errors.append(f"invalid expected opening at {path}:{line_number}: {error}")
+    return expected, errors
+
+
+def audit_expected_openings(
+    pair_fens: list[str], path: Path
+) -> tuple[list[str], list[str]]:
+    expected, errors = read_canonical_openings(path)
 
     if len(pair_fens) != len(expected):
         errors.append(
@@ -192,6 +203,43 @@ def audit_expected_openings(
                 f"pair {index} opening is {canonical_actual!r}, expected {wanted!r}"
             )
     return expected, errors
+
+
+def audit_expected_opening_suite(
+    pair_fens: list[str], path: Path
+) -> tuple[list[str], list[str]]:
+    suite, errors = read_canonical_openings(path)
+    if not suite:
+        errors.append("expected opening suite is empty")
+        return suite, errors
+    if len(set(suite)) != len(suite):
+        errors.append("expected opening suite contains canonical duplicates")
+
+    actual: list[str] = []
+    for index, opening in enumerate(pair_fens, 1):
+        try:
+            actual.append(canonical_opening(opening))
+        except ValueError as error:
+            errors.append(f"pair {index} has invalid opening FEN: {error}")
+
+    suite_set = set(suite)
+    for index, opening in enumerate(actual, 1):
+        if opening not in suite_set:
+            errors.append(f"pair {index} opening is outside the expected suite")
+
+    prefix_length = min(len(actual), len(suite))
+    if len(set(actual[:prefix_length])) != prefix_length:
+        errors.append("first opening-suite cycle contains repeated pair openings")
+    if len(actual) >= len(suite) and set(actual[: len(suite)]) != suite_set:
+        errors.append("first opening-suite cycle does not exactly cover the suite")
+    for index in range(len(suite), len(actual)):
+        if actual[index] != actual[index % len(suite)]:
+            errors.append(
+                f"pair {index + 1} does not repeat pair "
+                f"{index % len(suite) + 1} from the first opening-suite cycle"
+            )
+
+    return suite, errors
 
 
 def _round_sort_key(round_header: str) -> tuple[int, tuple[int, ...] | str]:
@@ -452,6 +500,12 @@ def main() -> int:
             pair_opening_fens, args.expected_openings
         )
         errors.extend(opening_errors)
+    expected_opening_suite: list[str] | None = None
+    if args.expected_opening_suite:
+        expected_opening_suite, opening_errors = audit_expected_opening_suite(
+            pair_opening_fens, args.expected_opening_suite
+        )
+        errors.extend(opening_errors)
 
     if any(telemetry_missing.values()):
         errors.append(f"missing telemetry fields: {dict(telemetry_missing)}")
@@ -560,6 +614,20 @@ def main() -> int:
                 "pairs": len(expected_openings or []),
             }
             if args.expected_openings
+            else None
+        ),
+        "expected_opening_suite": (
+            {
+                "path": str(args.expected_opening_suite),
+                "entries": len(expected_opening_suite or []),
+                "played_pairs": len(pair_opening_fens),
+                "complete_cycles": (
+                    len(pair_opening_fens) // len(expected_opening_suite)
+                    if expected_opening_suite
+                    else 0
+                ),
+            }
+            if args.expected_opening_suite
             else None
         ),
         "terminations": dict(termination_counts),

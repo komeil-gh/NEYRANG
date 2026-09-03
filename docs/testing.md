@@ -219,6 +219,13 @@ python3 -m venv .venv
 
 The auditor parses every game with python-chess, compares header and movetext results, reconstructs W/D/L and pentanomial counts, groups color-reversed opening pairs by the fastchess `Round` identity even when concurrent games finish out of order, requires normal terminations and complete per-ply telemetry, reports latency/time-left distributions, checks completed metadata, scans the runner log for known failure classes, and compares its independent counts with fastchess's final summary. It exits nonzero on any mismatch.
 
+For a fixed sequential shard, add `--expected-openings path/to/shard.epd`. For a
+randomized run longer than its frozen suite, use
+`--expected-opening-suite path/to/suite.epd`: the auditor requires a unique
+shuffled first cycle covering the complete canonical suite, exact periodic
+repetition afterward, suite membership for every pair, identical pair FENs,
+and reversed colors. The two opening expectations are mutually exclusive.
+
 The default warning policy is `reject-all` and is unchanged. A comparison against the immutable 0.2.0 binary may explicitly set `WARNING_POLICY=allow-opponent-threefold-pv` with `STRICT=0`, then pass the same policy to `audit-match.py`. This compatibility mode permits only an exact threefold-repetition PV-continuation warning from the registered opponent name. It retains and reports every permitted line; the same warning from the candidate, any other warning, or any ordinary anomaly still rejects the complete match. The runner refuses to combine this policy with fastchess strict mode because strict mode stops on the known baseline warning before the post-run audit can classify it.
 
 P1 exercised this path with frozen G1 against immutable v0.2.0 over 2,000 games / 1,000 pairs at `0.5+0.005`. G1 scored `1006/623/371` (65.875%, reported `+114.26 +/-12.79 Elo`). Independent parsing verified 1,000 unique paired FENs, 196,771 telemetry-complete plies, 2,000 normal terminations, no negative time-left sample, and exact W/D/L/pentanomial reproduction. The log contained zero allowed warning and zero rejected warning or other anomaly: the compatibility path removed the runner ambiguity without excusing an event in the accepted match.

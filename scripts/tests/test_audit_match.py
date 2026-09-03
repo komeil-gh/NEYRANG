@@ -144,6 +144,17 @@ class ExpectedMetadataTests(unittest.TestCase):
 
 
 class ExpectedOpeningTests(unittest.TestCase):
+    @staticmethod
+    def suite_path(directory: str) -> Path:
+        path = Path(directory) / "suite.epd"
+        path.write_text(
+            "8/8/8/8/8/8/K6k/8 w - - 0 1\n"
+            "8/8/8/8/8/8/1K5k/8 b - - 0 1\n"
+            "8/8/8/8/8/8/2K4k/8 w - - 0 1\n",
+            encoding="utf-8",
+        )
+        return path
+
     def test_uncapturable_en_passant_square_is_canonicalized_away(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "shard.epd"
@@ -203,6 +214,66 @@ class ExpectedOpeningTests(unittest.TestCase):
 
             self.assertIn("pair 1 opening", order_errors[0])
             self.assertIn("expected 2 opening pairs", count_errors[0])
+
+    def test_shuffled_suite_accepts_unique_subset_and_complete_cycle(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = self.suite_path(directory)
+            suite, subset_errors = AUDIT_MATCH.audit_expected_opening_suite(
+                [
+                    "8/8/8/8/8/8/2K4k/8 w - - 7 9",
+                    "8/8/8/8/8/8/K6k/8 w - - 0 1",
+                ],
+                path,
+            )
+            _, cycle_errors = AUDIT_MATCH.audit_expected_opening_suite(
+                [suite[2], suite[0], suite[1]], path
+            )
+
+            self.assertEqual(subset_errors, [])
+            self.assertEqual(cycle_errors, [])
+
+    def test_shuffled_suite_accepts_exact_periodic_suffix(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = self.suite_path(directory)
+            suite, _ = AUDIT_MATCH.read_canonical_openings(path)
+
+            _, errors = AUDIT_MATCH.audit_expected_opening_suite(
+                [suite[1], suite[2], suite[0], suite[1], suite[2]], path
+            )
+
+            self.assertEqual(errors, [])
+
+    def test_shuffled_suite_rejects_duplicate_outside_and_nonperiodic_openings(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = self.suite_path(directory)
+            suite, _ = AUDIT_MATCH.read_canonical_openings(path)
+
+            _, duplicate_errors = AUDIT_MATCH.audit_expected_opening_suite(
+                [suite[0], suite[0]], path
+            )
+            _, outside_errors = AUDIT_MATCH.audit_expected_opening_suite(
+                ["8/8/8/8/8/8/3K3k/8 w - - 0 1"], path
+            )
+            _, periodic_errors = AUDIT_MATCH.audit_expected_opening_suite(
+                [suite[2], suite[0], suite[1], suite[0]], path
+            )
+
+            self.assertTrue(any("repeated" in error for error in duplicate_errors))
+            self.assertTrue(any("outside" in error for error in outside_errors))
+            self.assertTrue(any("does not repeat" in error for error in periodic_errors))
+
+    def test_shuffled_suite_rejects_canonical_duplicate_source(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "duplicates.epd"
+            path.write_text(
+                "8/8/8/8/8/8/K6k/8 w - - 0 1\n"
+                "8/8/8/8/8/8/K6k/8 w - - 99 77\n",
+                encoding="utf-8",
+            )
+
+            _, errors = AUDIT_MATCH.audit_expected_opening_suite([], path)
+
+            self.assertIn("expected opening suite contains canonical duplicates", errors)
 
 
 class PairingTests(unittest.TestCase):

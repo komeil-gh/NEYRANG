@@ -201,6 +201,37 @@ fi
 
 echo "per-engine Threads configuration test passed"
 
+default_threads_meta_out="$scratch/default-threads.meta.txt"
+default_threads_output="$(
+    DRY_RUN=1 \
+    FASTCHESS_BIN=true \
+    ENGINE_A=/usr/bin/true \
+    ENGINE_B=/usr/bin/true \
+    THREADS=default \
+    OPENINGS_FILE="$repo_root/scripts/openings.epd" \
+    GAMES=10 \
+    META_OUT="$default_threads_meta_out" \
+    PGN_OUT="$scratch/default-threads.pgn" \
+    "$script_dir/match.sh"
+)"
+
+if [[ "$default_threads_output" == *"option.Threads="* ]]; then
+    echo "engine-default dry run unexpectedly set a Threads option" >&2
+    exit 1
+fi
+for expected in \
+    "thread_mode=engine-default" \
+    "threads=default" \
+    "engine_a_threads=default" \
+    "engine_b_threads=default"; do
+    if ! grep -Fqx "$expected" "$default_threads_meta_out"; then
+        echo "engine-default Threads metadata is missing: $expected" >&2
+        exit 1
+    fi
+done
+
+echo "engine-default Threads configuration test passed"
+
 network_fixture="$repo_root/scripts/openings.epd"
 network_sha256="$(shasum -a 256 "$network_fixture" | awk '{print $1}')"
 nnue_meta_out="$scratch/nnue.meta.txt"

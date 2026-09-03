@@ -94,12 +94,17 @@ if [[ -n "$engine_a_threads" ]]; then
     thread_mode="per-engine"
     threads=""
 else
-    if ! [[ "$threads" =~ ^[1-9][0-9]*$ ]] || (( threads > 256 )); then
-        echo "THREADS must be an integer between 1 and 256" >&2
+    if [[ "$threads" == "default" ]]; then
+        thread_mode="engine-default"
+        engine_a_threads="default"
+        engine_b_threads="default"
+    elif ! [[ "$threads" =~ ^[1-9][0-9]*$ ]] || (( threads > 256 )); then
+        echo "THREADS must be default or an integer between 1 and 256" >&2
         exit 2
+    else
+        engine_a_threads="$threads"
+        engine_b_threads="$threads"
     fi
-    engine_a_threads="$threads"
-    engine_b_threads="$threads"
 fi
 if [[ -n "$time_margin_ms" ]] && ! [[ "$time_margin_ms" =~ ^[0-9]+$ ]]; then
     echo "TIME_MARGIN_MS must be a non-negative integer when set" >&2

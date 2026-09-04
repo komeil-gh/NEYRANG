@@ -92,7 +92,7 @@ scripts/test-openbench-contract.sh
 ```
 
 The test creates a unique temporary executable, requires three sequential and
-three concurrent 180,591-node benches with positive NPS, verifies UCI `Hash`,
+three concurrent 165,444-node benches with positive NPS, verifies UCI `Hash`,
 `Threads`, `uciok`, and `readyok`, repeats an eight-opening `genfens` workload,
 checks its exact line shape and upper-seed-bit sensitivity, and removes every
 temporary artifact on each exit path. This is a build and protocol gate, not

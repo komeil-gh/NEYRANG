@@ -137,6 +137,16 @@ empty value restores classical SANJ. The loader rejects legacy magic,
 incompatible shape/version/quantization, truncation, trailing bytes, and CRC
 mismatch. Match runners record the full network SHA-256 independently.
 
+The offline SHEGERD policy exporter is isolated from the playing crate:
+
+```bash
+cargo run --release --locked --manifest-path tools/policy-trace/Cargo.toml -- labels.tsv
+```
+
+Its five-column input and deterministic sibling-row output are specified in
+the [testing documentation](docs/testing.md). It does not train or load a
+policy and cannot change the default engine binary.
+
 OpenBench-compatible build (the executable is written at the repository root
 under the exact `EXE` name):
 

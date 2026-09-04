@@ -1,0 +1,13 @@
+[package]
+name = "neyrang-policy-trace"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+publish = false
+description = "Deterministic offline move-policy trace exporter for NEYRANG"
+
+[dependencies]
+neyrang = { path = "../.." }
+
+[lints.rust]
+unsafe_code = "forbid"

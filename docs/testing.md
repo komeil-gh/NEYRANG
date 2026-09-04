@@ -54,6 +54,25 @@ cargo run --release --features nnue -- \
 The NNUE benchmark records its own semantic tree and checksum. It must not be
 compared with the classical tree as if the evaluator were a speed-only change.
 
+## SHEGERD policy trace
+
+P0 is a separate developer tool, not an engine feature:
+
+```bash
+cargo test --manifest-path tools/policy-trace/Cargo.toml
+cargo clippy --manifest-path tools/policy-trace/Cargo.toml --all-targets -- -D warnings
+cargo run --release --locked --manifest-path tools/policy-trace/Cargo.toml -- labels.tsv
+```
+
+Input is UTF-8 TSV without a header: `record_id`, `group_id`, `previous_to`,
+`teacher_move`, `fen`. Use `-` for an absent previous destination or as the
+command's input path to read stdin. The teacher move must be legal. Output has
+one deterministic row for every legal sibling and records the selected move,
+quiet/tactical stage, side-normalized squares, mover/victim/promotion kinds,
+material phase, prior destination and exact-SEE bucket. Malformed rows and
+duplicate record IDs fail closed. The tool only exports features; data
+selection and fitting require a separately registered P1 experiment.
+
 Version `v0.1.0` ARM64 release baseline on the development Apple Silicon host:
 
 - positions: 5

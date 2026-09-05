@@ -133,6 +133,8 @@ deduplication decision, checks each legal teacher label, and verifies complete
 15-column legal-sibling traces without importing the builder or exporter. Its
 sealed-holdout report contains only row/record counts, width, byte count, hash
 and pass/fail; it emits no holdout row, move, feature or score aggregate.
+Its pre-data source and test identities are fixed in
+`docs/evidence/shegerd-p1-corpus-auditor-freeze.json`.
 
 Version `v0.1.0` ARM64 release baseline on the development Apple Silicon host:
 

@@ -73,6 +73,24 @@ material phase, prior destination and exact-SEE bucket. Malformed rows and
 duplicate record IDs fail closed. The tool only exports features; data
 selection and fitting require a separately registered P1 experiment.
 
+The registered P1 fitter is also offline-only and rejects any path containing
+`holdout`. Once a fresh P1 source campaign has passed its own audit, run it
+only on the registered train and validation trace files:
+
+```bash
+python3 scripts/fit-shegerd-policy.py \
+  --train testing/shegerd-p1/train.trace.tsv \
+  --validation testing/shegerd-p1/validation.trace.tsv \
+  --float-output testing/shegerd-p1/policy.float.json \
+  --quantized-output testing/shegerd-p1/policy.bin \
+  --report testing/shegerd-p1/fit-result.json
+```
+
+It uses the frozen twelve-epoch pairwise-logistic configuration and emits a
+float artifact, a signed-`i16` artifact and a deterministic report. It does
+not embed or load a policy in the playing engine; P2 needs a separate
+registration after P1's offline gates pass.
+
 Version `v0.1.0` ARM64 release baseline on the development Apple Silicon host:
 
 - positions: 5

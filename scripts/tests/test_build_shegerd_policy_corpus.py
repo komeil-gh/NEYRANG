@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
+import json
 import subprocess
 import sys
 import tempfile
@@ -123,6 +125,56 @@ class BuildShegerdPolicyCorpusTests(unittest.TestCase):
                 populated_count,
                 sum(line.split("\t")[4] == "1" for line in trace_lines[1:]),
             )
+
+    def test_source_audit_binds_campaign_and_teacher_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source.pgn"
+            teacher = root / "teacher"
+            audit = root / "audit.json"
+            source.write_text("", encoding="utf-8")
+            teacher.write_bytes(b"teacher")
+            teacher_hash = hashlib.sha256(b"teacher").hexdigest()
+            metadata = {
+                **corpus.MATCH_METADATA,
+                "engine_a_sha256": teacher_hash,
+                "engine_b_sha256": "1" * 64,
+                "fastchess_sha256": "2" * 64,
+                "openings_sha256": "3" * 64,
+            }
+            report = {
+                "format": "neyrang-match-audit-v1",
+                "ok": True,
+                "pgn": str(source),
+                "candidate": corpus.SOURCE_ENGINES[0],
+                "opponent": corpus.SOURCE_ENGINES[1],
+                "games": 2000,
+                "pairs": 1000,
+                "unique_opening_fens": 1000,
+                "expected_openings": {"path": "openings.epd", "pairs": 1000},
+                "terminations": {"normal": 2000},
+                "time_controls": {"0.5+0.005": 2000},
+                "telemetry_missing": {},
+                "allowed_log_warnings": [],
+                "log_anomaly_counts": {"warning": 0, "timeout": 0},
+                "metadata": metadata,
+            }
+            audit.write_text(json.dumps(report), encoding="utf-8")
+            config = corpus.Config(
+                corpus.SOURCE_ID, source, teacher, root / "output", "sample", "split", 80000, 64,
+                source_audit=audit,
+            )
+            evidence = corpus.validate_source_audit(
+                config, {"engines": sorted(corpus.SOURCE_ENGINES)}, teacher_hash,
+            )
+            self.assertEqual(teacher_hash, evidence["engine_a_sha256"])
+
+            report["metadata"]["engine_a_sha256"] = "4" * 64
+            audit.write_text(json.dumps(report), encoding="utf-8")
+            with self.assertRaisesRegex(corpus.CorpusError, "teacher binary differs"):
+                corpus.validate_source_audit(
+                    config, {"engines": sorted(corpus.SOURCE_ENGINES)}, teacher_hash,
+                )
 
 
 if __name__ == "__main__":

@@ -96,15 +96,19 @@ registered extractor and teacher labeler run in one fail-closed step:
 
 ```bash
 python3 scripts/build-shegerd-policy-corpus.py \
-  --source testing/shegerd-p1/selfplay.pgn \
+  --source testing/shegerd-p1/t6-f1.pgn \
+  --source-audit testing/shegerd-p1/match-audit.json \
   --teacher builds/neyrang-p1-parent \
   --output-dir testing/shegerd-p1/corpus
 ```
 
-It requires exactly 1,000 normal reversed opening pairs at `0.5+0.005`, uses
-the frozen 80,000-node teacher, and writes three headerless P0 label inputs plus
-an identity manifest. It refuses an incomplete campaign, changed sampling or
-teacher limits, existing output, or a corpus below the registered minima.
+It requires exactly 1,000 normal T6-versus-F1 reversed opening pairs at
+`0.5+0.005` and a passing independent match audit for that exact PGN. The
+audited T6 executable must also be the frozen 80,000-node teacher. It writes
+three headerless P0 label inputs plus a manifest binding the source audit,
+builder, runtime, PGN and teacher identities. It refuses an incomplete or
+mismatched campaign, changed sampling or teacher limits, existing output, or a
+corpus below the registered minima.
 
 Version `v0.1.0` ARM64 release baseline on the development Apple Silicon host:
 

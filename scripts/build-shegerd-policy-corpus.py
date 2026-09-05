@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import platform
 import re
 import shutil
 import sys
@@ -23,6 +24,37 @@ import chess.pgn
 SCHEMA = "neyrang-shegerd-p1-corpus-v1"
 SAMPLE_SCHEMA = "neyrang-shegerd-p1-sample-v1"
 SPLIT_SCHEMA = "neyrang-shegerd-p1-split-v1"
+SOURCE_ID = "shegerd-p1-t6-f1-v1"
+SOURCE_ENGINES = ("NEYRANG-T6-P1", "NEYRANG-F1-P1")
+SOURCE_COMMITS = {
+    "engine_a_git_sha": "7c2b72bd20dbd4ac8f744aa7d7af5e1beab32b52",
+    "engine_b_git_sha": "52737b51a1d7b68c3c52b6bf819aa2a292e94153",
+}
+MATCH_METADATA = {
+    "format": "neyrang-match-v1",
+    "engine_a_name": SOURCE_ENGINES[0],
+    "engine_b_name": SOURCE_ENGINES[1],
+    **SOURCE_COMMITS,
+    "games": "2000",
+    "pairs": "1000",
+    "opening_order": "sequential",
+    "opening_seed": "2026090501",
+    "limit_mode": "time",
+    "time_control": "0.5+0.005",
+    "thread_mode": "shared",
+    "threads": "1",
+    "engine_a_threads": "1",
+    "engine_b_threads": "1",
+    "hash_mb": "64",
+    "move_overhead_ms": "100",
+    "concurrency": "1",
+    "time_margin_ms": "0",
+    "show_latency": "1",
+    "strict": "1",
+    "warning_policy": "reject-all",
+    "adjudication": "fastchess-default",
+    "status": "completed",
+}
 PARTITIONS = ("train", "validation", "sealed_holdout")
 MINIMUMS = {
     "positions_total": 4000,
@@ -72,12 +104,14 @@ class Config:
     min_sample_gap: int = 8
     time_control: str = "0.5+0.005"
     enforce_minimums: bool = True
+    source_audit: Path | None = None
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", required=True, type=Path)
-    parser.add_argument("--source-id", default="shegerd-p1-selfplay-v1")
+    parser.add_argument("--source-id", default=SOURCE_ID)
+    parser.add_argument("--source-audit", required=True, type=Path)
     parser.add_argument("--teacher", required=True, type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--sample-seed", default="20260905-shegerd-p1-sample-v1")
@@ -203,6 +237,15 @@ def assign_partitions(openings: set[str], seed: str) -> dict[str, str]:
 
 def extract_records(config: Config) -> tuple[list[Record], dict[str, Any]]:
     pairs = read_pairs(config.source, config.time_control)
+    engines = sorted(
+        {
+            name
+            for _, left, right in pairs
+            for game in (left, right)
+            for name in (game.headers.get("White"), game.headers.get("Black"))
+            if name
+        }
+    )
     opening_by_pair = {
         pair_index: canonical_fen(left.headers.get("FEN", chess.STARTING_FEN))
         for pair_index, left, _ in pairs
@@ -232,6 +275,7 @@ def extract_records(config: Config) -> tuple[list[Record], dict[str, Any]]:
     retained, deduplication = deduplicate(records)
     return retained, {
         "pairs": len(pairs),
+        "engines": engines,
         "sampling": dict(sorted(counters.items())),
         "deduplication": deduplication,
         "partition_opening_groups": dict(Counter(partitions.values())),
@@ -288,6 +332,91 @@ def label_records(records: list[Record], teacher: Path, nodes: int, hash_mb: int
     return output, identity
 
 
+def validate_source_audit(
+    config: Config, extraction: dict[str, Any], teacher_hash: str
+) -> dict[str, Any] | None:
+    if not config.enforce_minimums:
+        return None
+    if config.source_audit is None or not config.source_audit.is_file():
+        raise CorpusError("registered P1 source requires a match audit report")
+    report = json.loads(config.source_audit.read_text(encoding="utf-8"))
+    if (
+        not isinstance(report, dict)
+        or report.get("format") != "neyrang-match-audit-v1"
+        or report.get("ok") is not True
+    ):
+        raise CorpusError("source match audit is missing, unsupported or failed")
+    if (
+        report.get("candidate") != SOURCE_ENGINES[0]
+        or report.get("opponent") != SOURCE_ENGINES[1]
+    ):
+        raise CorpusError("source match audit engine labels differ")
+    if report.get("games") != 2000 or report.get("pairs") != 1000:
+        raise CorpusError("source match audit game or pair count differs")
+    if report.get("unique_opening_fens") != 1000:
+        raise CorpusError("source match audit opening count differs")
+    expected_openings = report.get("expected_openings")
+    if not isinstance(expected_openings, dict) or expected_openings.get("pairs") != 1000:
+        raise CorpusError("source match audit did not verify the frozen opening list")
+    if report.get("terminations") != {"normal": 2000} or report.get(
+        "time_controls"
+    ) != {config.time_control: 2000}:
+        raise CorpusError("source match audit termination or time control differs")
+    if report.get("telemetry_missing") != {} or report.get("allowed_log_warnings") != []:
+        raise CorpusError("source match audit telemetry or warning evidence differs")
+    anomalies = report.get("log_anomaly_counts")
+    if (
+        not isinstance(anomalies, dict)
+        or not anomalies
+        or any(value != 0 for value in anomalies.values())
+    ):
+        raise CorpusError("source match audit did not prove zero log anomalies")
+    audited_pgn = Path(str(report.get("pgn", "")))
+    audited_pgn = (
+        audited_pgn
+        if audited_pgn.is_absolute()
+        else Path(__file__).resolve().parent.parent / audited_pgn
+    )
+    if audited_pgn.resolve() != config.source.resolve():
+        raise CorpusError("source match audit belongs to a different PGN")
+    metadata = report.get("metadata")
+    if not isinstance(metadata, dict) or any(
+        metadata.get(key) != value for key, value in MATCH_METADATA.items()
+    ):
+        raise CorpusError("source match metadata differs from the registered P1 campaign")
+    if extraction.get("engines") != sorted(SOURCE_ENGINES):
+        raise CorpusError("source PGN engine labels differ from the registered P1 campaign")
+    for field in (
+        "engine_a_sha256",
+        "engine_b_sha256",
+        "fastchess_sha256",
+        "openings_sha256",
+    ):
+        if re.fullmatch(r"[0-9a-f]{64}", metadata.get(field, "")) is None:
+            raise CorpusError(f"source match metadata lacks a valid {field}")
+    if metadata["engine_a_sha256"] != teacher_hash:
+        raise CorpusError("teacher binary differs from audited source engine A")
+    audit_hash, audit_bytes = sha256_file(config.source_audit)
+    return {
+        "bytes": audit_bytes,
+        "sha256": audit_hash,
+        "format": report["format"],
+        "candidate": report["candidate"],
+        "opponent": report["opponent"],
+        **{
+            field: metadata[field]
+            for field in (
+                "engine_a_git_sha",
+                "engine_a_sha256",
+                "engine_b_git_sha",
+                "engine_b_sha256",
+                "fastchess_sha256",
+                "openings_sha256",
+            )
+        },
+    }
+
+
 def enforce_minimums(records: list[Record], enabled: bool) -> dict[str, dict[str, int]]:
     counts = {partition: {"records": 0, "groups": 0} for partition in PARTITIONS}
     for partition in PARTITIONS:
@@ -310,7 +439,9 @@ def enforce_minimums(records: list[Record], enabled: bool) -> dict[str, dict[str
 def build(config: Config) -> dict[str, Any]:
     if not config.source.is_file() or not config.teacher.is_file():
         raise CorpusError("source and teacher must be files")
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", config.source_id):
+    if config.enforce_minimums and config.source_id != SOURCE_ID:
+        raise CorpusError("source id differs from the registered P1 campaign")
+    if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", config.source_id) is None:
         raise CorpusError("source id is invalid")
     if not config.sample_seed or not config.split_seed:
         raise CorpusError("sampling and split seeds must be non-empty")
@@ -323,6 +454,8 @@ def build(config: Config) -> dict[str, Any]:
     records, extraction = extract_records(config)
     if config.enforce_minimums and extraction["pairs"] != 1000:
         raise CorpusError("registered P1 source must contain exactly 1000 opening pairs")
+    teacher_hash, teacher_bytes = sha256_file(config.teacher)
+    source_audit = validate_source_audit(config, extraction, teacher_hash)
     counts = enforce_minimums(records, config.enforce_minimums)
     labels, teacher_identity = label_records(records, config.teacher, config.nodes, config.hash_mb)
     temporary = config.output_dir.with_name(f".{config.output_dir.name}.tmp-{os.getpid()}")
@@ -337,11 +470,31 @@ def build(config: Config) -> dict[str, Any]:
             path.write_bytes(payload)
             artifacts[partition] = {"path": path.name, "bytes": len(payload), "sha256": hashlib.sha256(payload).hexdigest(), **counts[partition]}
         source_hash, source_bytes = sha256_file(config.source)
-        teacher_hash, teacher_bytes = sha256_file(config.teacher)
+        builder_path = Path(__file__).resolve()
+        builder_hash, builder_bytes = sha256_file(builder_path)
         manifest = {
             "schema": SCHEMA,
-            "source": {"id": config.source_id, "bytes": source_bytes, "sha256": source_hash, "pairs": extraction["pairs"]},
+            "source": {
+                "id": config.source_id,
+                "bytes": source_bytes,
+                "sha256": source_hash,
+                "pairs": extraction["pairs"],
+                "engines": extraction["engines"],
+                "audit": source_audit,
+            },
             "teacher": {"bytes": teacher_bytes, "sha256": teacher_hash, "uci_id": teacher_identity, "nodes": config.nodes, "threads": 1, "hash_mb": config.hash_mb, "clear_hash_per_position": True},
+            "builder": {
+                "path": "scripts/build-shegerd-policy-corpus.py",
+                "bytes": builder_bytes,
+                "sha256": builder_hash,
+            },
+            "runtime": {
+                "python": platform.python_version(),
+                "implementation": platform.python_implementation(),
+                "python_chess": chess.__version__,
+                "system": platform.system(),
+                "machine": platform.machine(),
+            },
             "sampling": {"schema": SAMPLE_SCHEMA, "seed": config.sample_seed, "min_ply": config.min_ply, "tail_plies": config.tail_plies, "samples_per_game": config.samples_per_game, "min_sample_gap": config.min_sample_gap, "pair_balanced": True},
             "split": {"schema": SPLIT_SCHEMA, "seed": config.split_seed, "unit": "canonical starting FEN", "fractions": {"train": 0.8, "validation": 0.1, "sealed_holdout": 0.1}},
             "extraction": extraction,
@@ -360,9 +513,9 @@ def main() -> int:
     try:
         manifest = build(Config(
             args.source_id, args.source.resolve(), args.teacher.resolve(), args.output_dir.resolve(), args.sample_seed,
-            args.split_seed, args.nodes, args.hash_mb,
+            args.split_seed, args.nodes, args.hash_mb, source_audit=args.source_audit.resolve(),
         ))
-    except (CorpusError, OSError, ValueError, chess.engine.EngineError) as error:
+    except (CorpusError, OSError, ValueError, json.JSONDecodeError, chess.engine.EngineError) as error:
         print(f"build-shegerd-policy-corpus: {error}", file=sys.stderr)
         return 1
     print(json.dumps({"ok": True, "artifacts": manifest["artifacts"]}, sort_keys=True))

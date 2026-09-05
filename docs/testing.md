@@ -110,6 +110,30 @@ builder, runtime, PGN and teacher identities. It refuses an incomplete or
 mismatched campaign, changed sampling or teacher limits, existing output, or a
 corpus below the registered minima.
 
+Export all three frozen P0 traces, then run the independent replay before any
+fit:
+
+```bash
+mkdir -p testing/shegerd-p1/trace
+for partition in train validation sealed_holdout; do
+  cargo run --quiet --release --locked \
+    --manifest-path tools/policy-trace/Cargo.toml -- \
+    "testing/shegerd-p1/corpus/${partition}.labels.tsv" \
+    > "testing/shegerd-p1/trace/${partition}.trace.tsv"
+done
+python3 scripts/audit-shegerd-policy-corpus.py \
+  --source testing/shegerd-p1/t6-f1.pgn \
+  --source-audit testing/shegerd-p1/match-audit.json \
+  --corpus-dir testing/shegerd-p1/corpus \
+  --trace-dir testing/shegerd-p1/trace
+```
+
+The auditor independently reproduces every sampling, group split and
+deduplication decision, checks each legal teacher label, and verifies complete
+15-column legal-sibling traces without importing the builder or exporter. Its
+sealed-holdout report contains only row/record counts, width, byte count, hash
+and pass/fail; it emits no holdout row, move, feature or score aggregate.
+
 Version `v0.1.0` ARM64 release baseline on the development Apple Silicon host:
 
 - positions: 5

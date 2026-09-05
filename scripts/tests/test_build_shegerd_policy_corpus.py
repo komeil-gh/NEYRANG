@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 import tempfile
 import textwrap
@@ -12,6 +13,8 @@ import chess.pgn
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "build-shegerd-policy-corpus.py"
+ROOT = SCRIPT.parent.parent
+POLICY_TRACE_MANIFEST = ROOT / "tools" / "policy-trace" / "Cargo.toml"
 SPEC = importlib.util.spec_from_file_location("build_shegerd_policy_corpus", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 corpus = importlib.util.module_from_spec(SPEC)
@@ -90,13 +93,36 @@ class BuildShegerdPolicyCorpusTests(unittest.TestCase):
             manifest = corpus.build(config)
             self.assertEqual(corpus.SCHEMA, manifest["schema"])
             total = 0
+            populated: Path | None = None
+            populated_count = 0
             for partition in corpus.PARTITIONS:
-                lines = (output / f"{partition}.labels.tsv").read_text(encoding="utf-8").splitlines()
-                self.assertEqual(corpus.LABEL_HEADER.strip(), lines[0])
-                total += len(lines) - 1
-                for line in lines[1:]:
+                path = output / f"{partition}.labels.tsv"
+                lines = path.read_text(encoding="utf-8").splitlines()
+                total += len(lines)
+                if lines:
+                    populated = path
+                    populated_count = len(lines)
+                for line in lines:
                     self.assertEqual(5, len(line.split("\t")))
             self.assertGreater(total, 0)
+            assert populated is not None
+            traced = subprocess.run(
+                [
+                    "cargo", "run", "--quiet", "--release", "--locked",
+                    "--manifest-path", str(POLICY_TRACE_MANIFEST), "--", str(populated),
+                ],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(0, traced.returncode, traced.stderr)
+            trace_lines = traced.stdout.splitlines()
+            self.assertGreater(len(trace_lines), 1)
+            self.assertEqual(15, len(trace_lines[0].split("\t")))
+            self.assertEqual(
+                populated_count,
+                sum(line.split("\t")[4] == "1" for line in trace_lines[1:]),
+            )
 
 
 if __name__ == "__main__":

@@ -102,8 +102,8 @@ python3 scripts/build-shegerd-policy-corpus.py \
 ```
 
 It requires exactly 1,000 normal reversed opening pairs at `0.5+0.005`, uses
-the frozen 80,000-node teacher, and writes the three P0 label inputs plus an
-identity manifest. It refuses an incomplete campaign, changed sampling or
+the frozen 80,000-node teacher, and writes three headerless P0 label inputs plus
+an identity manifest. It refuses an incomplete campaign, changed sampling or
 teacher limits, existing output, or a corpus below the registered minima.
 
 Version `v0.1.0` ARM64 release baseline on the development Apple Silicon host:

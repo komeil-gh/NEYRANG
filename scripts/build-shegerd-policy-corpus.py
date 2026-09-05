@@ -24,7 +24,6 @@ SCHEMA = "neyrang-shegerd-p1-corpus-v1"
 SAMPLE_SCHEMA = "neyrang-shegerd-p1-sample-v1"
 SPLIT_SCHEMA = "neyrang-shegerd-p1-split-v1"
 PARTITIONS = ("train", "validation", "sealed_holdout")
-LABEL_HEADER = "record_id\tgroup_id\tprevious_to\tteacher_move\tfen\n"
 MINIMUMS = {
     "positions_total": 4000,
     "positions_train": 3000,
@@ -268,7 +267,7 @@ def configure_teacher(engine: chess.engine.SimpleEngine, hash_mb: int) -> dict[s
 
 
 def label_records(records: list[Record], teacher: Path, nodes: int, hash_mb: int) -> tuple[dict[str, list[str]], dict[str, str]]:
-    output = {partition: [LABEL_HEADER] for partition in PARTITIONS}
+    output = {partition: [] for partition in PARTITIONS}
     engine = chess.engine.SimpleEngine.popen_uci(str(teacher))
     try:
         identity = configure_teacher(engine, hash_mb)

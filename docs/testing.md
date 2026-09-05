@@ -91,6 +91,21 @@ float artifact, a signed-`i16` artifact and a deterministic report. It does
 not embed or load a policy in the playing engine; P2 needs a separate
 registration after P1's offline gates pass.
 
+After the separately audited 2,000-game P1 source campaign is complete, the
+registered extractor and teacher labeler run in one fail-closed step:
+
+```bash
+python3 scripts/build-shegerd-policy-corpus.py \
+  --source testing/shegerd-p1/selfplay.pgn \
+  --teacher builds/neyrang-p1-parent \
+  --output-dir testing/shegerd-p1/corpus
+```
+
+It requires exactly 1,000 normal reversed opening pairs at `0.5+0.005`, uses
+the frozen 80,000-node teacher, and writes the three P0 label inputs plus an
+identity manifest. It refuses an incomplete campaign, changed sampling or
+teacher limits, existing output, or a corpus below the registered minima.
+
 Version `v0.1.0` ARM64 release baseline on the development Apple Silicon host:
 
 - positions: 5

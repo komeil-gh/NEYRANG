@@ -1,96 +1,128 @@
-# NEYRANG
+# NEYRANG · نیرنگ
 
-NEYRANG is an independent UCI chess engine written from scratch in stable Rust. Version `0.2.0` is a correct, single-threaded, classical engine developed through isolated search experiments: Perft and tactical correctness first, then deterministic benchmarks, paired engine matches, and SPRT.
+An independent UCI chess engine written from scratch in Rust, with its own
+chess rules, search, and evaluation. The playing core uses only the Rust
+standard library. NEYRANG runs inside a UCI-compatible chess interface or
+directly from the terminal.
 
-NEYRANG does not wrap an existing chess library or engine. The runtime chess core uses only the Rust standard library.
+[Build](#build-and-run) · [UCI](#using-a-chess-interface) ·
+[Development](#development) · [Documentation](#documentation) ·
+[تقدیم‌نامه](#dedication)
 
-## Current status
+<a id="dedication"></a>
+<div dir="rtl" lang="fa" align="right">
 
-Implemented:
+<h2>به رسم سپاس</h2>
 
-- 64-bit bitboards plus a synchronized mailbox (`a1 = 0`, `h8 = 63`)
-- FEN parse/serialize with recoverable validation errors
-- compile-time pawn, knight, and king attacks; portable ray-based sliders
-- complete legal move generation, including castling, en passant, and underpromotions
-- reversible make/unmake and deterministic incremental Zobrist hashing
-- fixed-capacity move lists with no per-node heap allocation
-- classical tapered evaluation
-- iterative deepening, alpha-beta, quiescence, PVS, aspiration windows
-- transposition table with mate-score normalization
-- TT/SEE-capture/killer/history move ordering with losing captures deferred
-- legal static exchange evaluation and conservative qsearch SEE pruning
-- conservative one-ply late move reductions with mandatory full-depth re-search
-- 50-move, threefold repetition, checkmate, and stalemate detection
-- cooperative atomic stop plus soft/hard time limits
-- asynchronous UCI loop and deterministic benchmark command
+<blockquote>
+<p>
+مردمانِ بخرد اندر هر زمان<br>
+رازِ دانش را به‌هر گونه زبان<br>
+گِرد کردند و گرامی داشتند<br>
+تا به سنگ اندر همی بنگاشتند
+</p>
+<p>— <a href="https://ganjoor.net/roodaki/masnaviha/kalila-sand/sh13">رودکی</a></p>
+</blockquote>
 
-Not implemented yet: SMP, Syzygy, NNUE, null-move pruning, LMP, futility pruning, continuation/capture history, or an optimized sliding-attack backend. `Threads` is accepted by UCI but search remains deliberately single-threaded. A guarded null-move implementation was tested and deliberately reverted because its capped SPRT did not accept the positive hypothesis.
+<p>آنچه امروز از شطرنج ایران به ما رسیده، میراث رنج و همت کسانی است که پیش از ما راه گشودند، آموختند و دانش خویش را به دیگری سپردند.</p>
 
-No project license has been selected yet.
+<p>از این رو <strong>نیرنگ</strong> را، به رسم سپاس و حق‌شناسی، به یاد و حرمت <strong>عبدالحسین نوابی، یوسف صفوت، خسرو شیخ هرندی، عباس لطفی و سید محمدکاظم مرتضوی</strong>، و به همهٔ آنان تقدیم می‌کنم که چیزی بر میراث شطرنج ایران افزودند.</p>
 
-## Requirements and build
+<p>و در زندگی خود، به <strong>پدربزرگم که نخستین بار مرا با شطرنج آشنا کرد</strong>؛ و به همهٔ کسانی که پس از او، دانسته‌ای به من آموختند، اندیشه‌ای در من برانگیختند یا چیزی از این بازی را با من قسمت کردند. اگر امروز من نیز چیزی بر این راه می‌افزایم، سهمی از آن از ایشان است.</p>
 
-NEYRANG pins the stable channel and requires Rust 1.98 or newer with Edition 2024.
+<p>
+با احترام،<br>
+<strong>کمیل</strong><br>
+<em>عضوی کوچک از جامعهٔ شطرنج ایران</em><br>
+طهران — ۱۴۰۳ هجری خورشیدی
+</p>
 
-```bash
-xcode-select --install
-rustup update stable
-cargo build --release
-```
+</div>
 
-Portable release binary:
+## Versions
 
-```text
-target/release/neyrang
-```
+| Branch | Engine version | Scope |
+| --- | --- | --- |
+| [`main`](https://github.com/komeil-gh/NEYRANG/tree/main) | `0.2.0` | Stable baseline; single-threaded search and classical evaluation |
+| [`dev/0.3-search`](https://github.com/komeil-gh/NEYRANG/tree/dev/0.3-search) | `0.3.0-dev` | Search and timing improvements, parallel search, and experimental evaluation tooling |
 
-Apple Silicon native tuning is optional and should not be used for portable artifacts:
+The development branch is unreleased. Classical evaluation remains the default;
+experimental NNUE requires a separate feature build and network file. No NNUE
+network is bundled or recommended for play.
 
-```bash
-RUSTFLAGS="-C target-cpu=native" cargo build --profile maxperf
-```
+## Build and run
 
-## UCI usage
-
-Run `target/release/neyrang` without arguments and configure it as a UCI engine in a chess GUI. Supported commands include `uci`, `isready`, `ucinewgame`, `position`, `setoption`, `go`, `stop`, and `quit`.
-
-Smoke test:
-
-```bash
-printf "uci\nisready\nposition startpos\ngo depth 5\nquit\n" | target/release/neyrang
-```
-
-Options:
-
-- `Hash` (default 64 MB)
-- `Threads` (accepted; current implementation uses one search thread)
-- `Move Overhead` (default 10 ms)
-
-## En Croissant
-
-NEYRANG can be loaded directly as a local UCI engine in En Croissant. On macOS, build a stable versioned executable with:
+You need Git, Rust **1.98 or newer**, Cargo, and a native linker. The repository
+selects the stable Rust toolchain and uses Edition 2024. On macOS, install
+Apple's command-line tools with `xcode-select --install` if they are missing.
 
 ```bash
-scripts/en-croissant.sh prepare
+git clone --branch main https://github.com/komeil-gh/NEYRANG.git
+cd NEYRANG
+cargo build --release --locked
 ```
 
-Select the printed path from En Croissant's **Engines** page. A bundled PGN of the complete paired smoke games can then be opened with:
+The executable is `target/release/neyrang` on macOS/Linux and
+`target/release/neyrang.exe` on Windows. Run a deterministic benchmark:
 
 ```bash
-scripts/en-croissant.sh open
+target/release/neyrang bench
 ```
 
-See [the En Croissant integration guide](docs/en-croissant.md) for engine registration, arbitrary PGNs, and reproducible game generation.
+To build the development version from the same clone:
 
-## Perft
+```bash
+git switch dev/0.3-search
+cargo build --release --locked
+```
+
+## Using a chess interface
+
+Add the executable as a **UCI engine** in your chess interface. NEYRANG provides
+the engine; the interface provides the board, clocks, and game controls.
+The [En Croissant guide](docs/en-croissant.md) covers engine registration and
+versioned local builds on macOS.
+
+| UCI option | `0.2.0` | `0.3.0-dev` |
+| --- | --- | --- |
+| `Hash` | 64 MB by default | 64 MB by default |
+| `Threads` | Accepted; search uses one thread | Defaults to 1; higher values enable Lazy SMP |
+| `Move Overhead` | 10 ms by default | 30 ms by default |
+| `EvalFile` | Not available | Available with the `nnue` feature; empty selects classical evaluation |
+
+For a protocol check in a POSIX shell:
+
+```bash
+printf 'uci\nisready\nquit\n' | target/release/neyrang
+```
+
+The response includes the engine identity, available options, `uciok`, and
+`readyok`. Run the executable without arguments for an interactive UCI session.
+
+## Inside the engine
+
+- **Chess rules:** bitboards, FEN parsing, full legal move generation, reversible
+  make/unmake, Zobrist hashing, and repetition and draw detection.
+- **Search:** iterative deepening, alpha-beta/PVS, quiescence, aspiration
+  windows, transposition tables, SEE-based move ordering, and late move reductions.
+- **Evaluation:** a handcrafted tapered evaluator. The development branch also
+  provides opt-in NNUE inference and separate data and training tools.
+- **Verification:** Perft fixtures, tactical and protocol tests, deterministic
+  benchmarks, paired engine matches, and sequential probability ratio tests (SPRT).
+
+On the development branch, **REKHNE** owns search, **SANJ** owns evaluation,
+and **SHEGERD** owns move ordering. Their boundaries are documented in the
+[naming guide](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/docs/naming.md).
+
+## Verification and benchmarks
 
 ```bash
 target/release/neyrang perft 5
 target/release/neyrang divide 4
-target/release/neyrang perft-fen "<FEN>" 4
+target/release/neyrang bench
 ```
 
-Verified release results:
+Recorded Perft reference results:
 
 | Position | Depth | Nodes |
 | --- | ---: | ---: |
@@ -98,51 +130,65 @@ Verified release results:
 | Canonical Kiwipete | 4 | 4,085,603 |
 | Rook/pawn endgame | 5 | 674,624 |
 
-The similarly named FEN `r3k2r/p1ppqpb1/bn2pnp1/2pP4/1p2P3/2N2N2/PPQBBPPP/R3K2R w KQkq - 0 1` has 45 legal root moves, not 48. That result was independently cross-checked; the canonical 48-move Kiwipete fixture is kept separately in the tests.
+Exact FENs and test commands are in the [testing guide](docs/testing.md).
+The `0.2.0` depth-5 benchmark visits **196,627 nodes** with checksum
+`4a4c31e290740db3`. Node counts and checksums identify a particular version and
+workload; elapsed time and nodes per second depend on the machine and build.
 
-## Benchmark
+Playing-strength results are reported with their opponents, time controls,
+sample sizes, and decision rules in the
+[experiment ledger](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/docs/development/experiments.md).
+Perft, benchmark speed, and offline training results are not Elo ratings.
 
-```bash
-target/release/neyrang bench
-RUNS=5 scripts/bench.sh
-```
+## Development
 
-The benchmark searches five fixed positions at depth 5 and reports deterministic nodes and checksum plus machine-dependent time/NPS. See [testing documentation](docs/testing.md) for the recorded baseline and measurement caveats.
-
-The `0.2.0` search visits 196,627 nodes with checksum `4a4c31e290740db3` on this workload, down from 448,136 nodes in `0.1.0`. Its final normalized SPRT against the immutable `v0.1.0` binary accepted H1 after 786 games; the full configuration and the reported estimate are recorded in the [experiment ledger](docs/development/experiments.md). This controlled result is relative to that exact baseline and time control, not a universal Elo claim.
-
-## Tests and engine matches
+Run the core checks from either branch:
 
 ```bash
 cargo fmt --check
-cargo clippy --all-targets --all-features
-cargo test
-cargo test --features stats
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --locked --all-features
 scripts/test-match-config.sh
 ```
 
-For paired fastchess testing:
+The development branch adds Python infrastructure checks, independent NNUE
+reference tests, and the OpenBench build contract. Follow the
+[contribution guide](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/CONTRIBUTING.md)
+for prerequisites and the full set of checks. Search and evaluation experiments
+record their hypothesis, baseline, test conditions, and acceptance rule before
+collecting results.
+
+Experimental NNUE, on `dev/0.3-search` only:
 
 ```bash
-ENGINE_B=/path/to/parent/neyrang GAMES=400 scripts/regression.sh
-ENGINE_A=target/release/neyrang ENGINE_B=/path/to/opponent scripts/match.sh
-ENGINE_B=/path/to/parent/neyrang scripts/sprt.sh
+cargo build --release --locked --features nnue
 ```
 
-`OPENING_SEED`, `OPENING_ORDER`, `TC`, `HASH_MB`, `THREADS`, and `CONCURRENCY` are explicit inputs. Set `NODES` on `match.sh` for a node-limited comparison; omit it for a time-controlled match. Each run writes PGN telemetry plus adjacent `.log` and `.meta.txt` files containing engine, Git, binary, opening, and fastchess identities. Pass `ENGINE_A_GIT_SHA`, `ENGINE_B_GIT_SHA`, `OPENINGS_SOURCE`, and `OPENINGS_LICENSE` for an auditable experiment.
+This build does not embed a network. Loading a compatible, separately validated
+network requires the UCI `EvalFile` option. The
+[NNUE reference specification](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/docs/development/nnue-reference.md)
+and [data and training guide](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/docs/development/nnue-data.md)
+describe formats, reproducibility requirements, and experimental results.
 
-The bundled opening file is intentionally small; replace `OPENINGS_FILE` with a larger audited balanced suite for strength testing. Do not infer Elo from Perft, NPS, tactical puzzles, or a small game sample.
+## Documentation
 
-## Architecture
+The local [architecture](docs/architecture.md), [testing](docs/testing.md), and
+[changelog](CHANGELOG.md) describe the checked-out branch. The following links
+open the development documentation:
 
-- [Architecture](docs/architecture.md)
-- [Search](docs/search.md)
-- [Evaluation](docs/evaluation.md)
-- [Testing and benchmarks](docs/testing.md)
-- [En Croissant integration](docs/en-croissant.md)
-- [0.2.0 frozen baseline](docs/development/0.2.0-baseline.md)
-- [Search experiment ledger](docs/development/experiments.md)
+- **Engine:** [REKHNE search](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/docs/rekhne.md)
+  and [SANJ evaluation](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/docs/sanj.md).
+- **Integration:** [OpenBench](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/docs/openbench.md)
+  and [search profiling](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/docs/development/search-observability.md).
+- **Research:** [development roadmap](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/docs/development/competitive-roadmap.md)
+  and [experiment records](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/docs/development/experiments.md).
 
-## Roadmap
+## Contributing, security, and license
 
-The next strength work should remain empirical: reduce SEE/ordering cost, add capture and continuation history as isolated experiments, and improve evaluation with a measured pawn hash. SMP, NNUE, and Syzygy remain later milestones after the single-thread testing pipeline matures.
+Read [CONTRIBUTING.md](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/CONTRIBUTING.md)
+before proposing a change. Use the process in
+[SECURITY.md](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/SECURITY.md)
+for security-sensitive reports.
+
+No project license has been selected yet. The repository is publicly readable;
+an open-source license has not been granted.

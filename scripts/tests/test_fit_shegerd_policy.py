@@ -15,6 +15,13 @@ policy = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = policy
 SPEC.loader.exec_module(policy)
 
+AUDIT_SCRIPT = Path(__file__).resolve().parents[1] / "audit-shegerd-policy-fit.py"
+AUDIT_SPEC = importlib.util.spec_from_file_location("audit_shegerd_policy_fit", AUDIT_SCRIPT)
+assert AUDIT_SPEC is not None and AUDIT_SPEC.loader is not None
+auditor = importlib.util.module_from_spec(AUDIT_SPEC)
+sys.modules[AUDIT_SPEC.name] = auditor
+AUDIT_SPEC.loader.exec_module(auditor)
+
 
 def row(record: str, group: str, move: str, selected: int, square: int) -> str:
     return "\t".join(
@@ -56,6 +63,16 @@ class FitShegerdPolicyTests(unittest.TestCase):
             self.assertGreater(first["validation"]["top1_accuracy"], first["validation"]["first_legal_top1_accuracy"])
             self.assertEqual(first, second)
             self.assertEqual(json.loads((root / "first.json").read_text())["schema"], policy.REPORT_SCHEMA)
+            audit = auditor.audit(
+                validation,
+                root / "first.float.json",
+                root / "first.bin",
+                root / "first.json",
+                root / "second.float.json",
+                root / "second.bin",
+                root / "second.json",
+            )
+            self.assertTrue(audit["ok"])
 
     def test_rejects_noncontiguous_rows_and_holdout_paths(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

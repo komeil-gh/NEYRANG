@@ -7,7 +7,6 @@
 pub(crate) mod fischer;
 pub mod history;
 pub(crate) mod ordering;
-mod policy;
 mod see;
 
 pub use see::{see, see_ge};

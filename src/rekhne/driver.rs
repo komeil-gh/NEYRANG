@@ -8,7 +8,7 @@ use std::{
 #[cfg(feature = "nnue")]
 use crate::sanj::nnue::AccumulatorPair;
 use crate::{
-    chess::{Move, MoveList, PieceType, Position, Square},
+    chess::{Move, MoveList, PieceType, Position},
     sanj,
     shegerd::{fischer, history::HistoryTable, ordering},
 };
@@ -28,7 +28,6 @@ const NULL_MOVE_REDUCTION: i32 = 2;
 #[derive(Clone, Copy)]
 struct SearchContext {
     preferred: Option<Move>,
-    previous_to: Option<Square>,
     null_allowed: bool,
     in_null_subtree: bool,
 }
@@ -37,7 +36,6 @@ impl SearchContext {
     const fn normal(preferred: Option<Move>) -> Self {
         Self {
             preferred,
-            previous_to: None,
             null_allowed: true,
             in_null_subtree: false,
         }
@@ -47,16 +45,14 @@ impl SearchContext {
     const fn without_null(preferred: Option<Move>) -> Self {
         Self {
             preferred,
-            previous_to: None,
             null_allowed: false,
             in_null_subtree: false,
         }
     }
 
-    fn after_move(self, mv: Move) -> Self {
+    const fn after_move(self) -> Self {
         Self {
             preferred: None,
-            previous_to: Some(mv.to()),
             null_allowed: self.null_allowed,
             in_null_subtree: self.in_null_subtree,
         }
@@ -65,7 +61,6 @@ impl SearchContext {
     const fn after_null(self) -> Self {
         Self {
             preferred: None,
-            previous_to: None,
             null_allowed: false,
             in_null_subtree: true,
         }
@@ -731,14 +726,8 @@ impl<'a> Searcher<'a> {
         let moving_color = position.side_to_move();
         let tt_move = tt_data.map(|data| data.best_move);
         let ordering_preferred = tt_move.or(context.preferred);
-        let mut picker = ordering::MovePicker::main(
-            moves,
-            ordering_preferred,
-            self.killers[ply],
-            moving_color,
-            context.previous_to,
-            !in_check,
-        );
+        let mut picker =
+            ordering::MovePicker::main(moves, ordering_preferred, self.killers[ply], moving_color);
 
         let mut best = -VALUE_INFINITE;
         let mut best_move = Move::NONE;
@@ -786,7 +775,7 @@ impl<'a> Searcher<'a> {
                     ply + 1,
                     -beta,
                     -alpha,
-                    context.after_move(mv),
+                    context.after_move(),
                 );
             } else {
                 #[cfg(feature = "stats")]
@@ -804,7 +793,7 @@ impl<'a> Searcher<'a> {
                         ply + 1,
                         -alpha - 1,
                         -alpha,
-                        context.after_move(mv),
+                        context.after_move(),
                     );
                     if score > alpha {
                         #[cfg(feature = "stats")]
@@ -818,7 +807,7 @@ impl<'a> Searcher<'a> {
                             ply + 1,
                             -alpha - 1,
                             -alpha,
-                            context.after_move(mv),
+                            context.after_move(),
                         );
                     }
                 } else {
@@ -828,7 +817,7 @@ impl<'a> Searcher<'a> {
                         ply + 1,
                         -alpha - 1,
                         -alpha,
-                        context.after_move(mv),
+                        context.after_move(),
                     );
                 }
                 if score > alpha && score < beta {
@@ -842,7 +831,7 @@ impl<'a> Searcher<'a> {
                         ply + 1,
                         -beta,
                         -alpha,
-                        context.after_move(mv),
+                        context.after_move(),
                     );
                 }
             }
@@ -951,13 +940,8 @@ impl<'a> Searcher<'a> {
             };
         }
         let moving_color = position.side_to_move();
-        let mut picker = ordering::MovePicker::quiescence(
-            moves,
-            in_check,
-            self.killers[ply],
-            moving_color,
-            context.previous_to,
-        );
+        let mut picker =
+            ordering::MovePicker::quiescence(moves, in_check, self.killers[ply], moving_color);
         #[cfg(feature = "stats")]
         let mut exhausted = true;
         while let Some(mv) = picker.next_move(position, &self.history) {
@@ -979,7 +963,7 @@ impl<'a> Searcher<'a> {
             if !context.in_null_subtree {
                 self.hashes.push(position.repetition_hash());
             }
-            let score = -self.qsearch(position, ply + 1, -beta, -alpha, context.after_move(mv));
+            let score = -self.qsearch(position, ply + 1, -beta, -alpha, context.after_move());
             if !context.in_null_subtree {
                 self.hashes.pop();
             }

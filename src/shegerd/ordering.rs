@@ -1,6 +1,6 @@
-use crate::chess::{Color, Move, MoveList, PieceType, Position, Square};
+use crate::chess::{Color, Move, MoveList, PieceType, Position};
 
-use super::{history::HistoryTable, policy, see::see};
+use super::{history::HistoryTable, see::see};
 
 const PIECE_VALUE: [i32; 6] = [100, 320, 330, 500, 900, 20_000];
 const GOOD_TACTICAL_SCORE: i32 = 200_000;
@@ -60,8 +60,6 @@ pub(crate) struct MovePicker {
     preferred: Option<Move>,
     killers: [Move; 2],
     color: Color,
-    previous_to: Option<Square>,
-    policy_enabled: bool,
     tactical_only: bool,
     stage: Stage,
     stage_initialized: bool,
@@ -75,18 +73,8 @@ impl MovePicker {
         preferred: Option<Move>,
         killers: [Move; 2],
         color: Color,
-        previous_to: Option<Square>,
-        policy_enabled: bool,
     ) -> Self {
-        Self::new(
-            moves,
-            preferred,
-            killers,
-            color,
-            previous_to,
-            policy_enabled,
-            false,
-        )
+        Self::new(moves, preferred, killers, color, false)
     }
 
     pub(crate) fn quiescence(
@@ -94,9 +82,8 @@ impl MovePicker {
         in_check: bool,
         killers: [Move; 2],
         color: Color,
-        previous_to: Option<Square>,
     ) -> Self {
-        Self::new(moves, None, killers, color, previous_to, false, !in_check)
+        Self::new(moves, None, killers, color, !in_check)
     }
 
     fn new(
@@ -104,8 +91,6 @@ impl MovePicker {
         preferred: Option<Move>,
         killers: [Move; 2],
         color: Color,
-        previous_to: Option<Square>,
-        policy_enabled: bool,
         tactical_only: bool,
     ) -> Self {
         Self {
@@ -115,8 +100,6 @@ impl MovePicker {
             preferred,
             killers,
             color,
-            previous_to,
-            policy_enabled,
             tactical_only,
             stage: Stage::Preferred,
             stage_initialized: false,
@@ -190,7 +173,7 @@ impl MovePicker {
                         {
                             self.statistics.quiet_stage_visits += 1;
                         }
-                        self.classify_quiets(position, history);
+                        self.classify_quiets(history);
                         self.stage_initialized = true;
                     }
                     if let Some(mv) = self.pick_best(MoveClass::Quiet) {
@@ -281,17 +264,12 @@ impl MovePicker {
         }
     }
 
-    fn classify_quiets(&mut self, position: &Position, history: &HistoryTable) {
+    fn classify_quiets(&mut self, history: &HistoryTable) {
         for (index, &mv) in self.moves.iter().enumerate() {
             if self.classes[index] != MoveClass::Unclassified {
                 continue;
             }
-            self.scores[index] = quiet_score(mv, self.killers, history, self.color)
-                + if self.policy_enabled {
-                    policy::score(position, mv, self.previous_to, 0)
-                } else {
-                    0
-                };
+            self.scores[index] = quiet_score(mv, self.killers, history, self.color);
             self.classes[index] = MoveClass::Quiet;
             #[cfg(feature = "stats")]
             {
@@ -381,7 +359,7 @@ fn quiet_score(mv: Move, killers: [Move; 2], history: &HistoryTable, color: Colo
 mod tests {
     use crate::{
         chess::{Move, Position},
-        shegerd::{policy, see},
+        shegerd::see,
     };
 
     use super::{HistoryTable, MovePicker, OrderingStatistics, quiet_score, tactical_score};
@@ -427,8 +405,6 @@ mod tests {
             Some(preferred),
             [killer, Move::NONE],
             position.side_to_move(),
-            None,
-            true,
         );
 
         let picked = collect(&mut picker, &position, &history);
@@ -464,8 +440,6 @@ mod tests {
             Some(preferred),
             [preferred, preferred],
             position.side_to_move(),
-            None,
-            true,
         );
 
         assert_eq!(picker.next_move(&position, &history), Some(preferred));
@@ -498,7 +472,6 @@ mod tests {
             false,
             [Move::NONE; 2],
             position.side_to_move(),
-            None,
         );
 
         let picked = collect(&mut picker, &position, &history);
@@ -522,7 +495,6 @@ mod tests {
             true,
             [Move::NONE; 2],
             position.side_to_move(),
-            None,
         );
 
         let picked = collect(&mut picker, &position, &history);
@@ -534,135 +506,6 @@ mod tests {
                 1
             );
         }
-    }
-
-    #[test]
-    fn policy_changes_only_eligible_stage_ordering() {
-        let mut quiet_position = Position::startpos();
-        let quiet_moves = quiet_position.legal_moves();
-        let history = HistoryTable::default();
-        let mut legacy_quiets = MovePicker::main(
-            quiet_moves.clone(),
-            None,
-            [Move::NONE; 2],
-            quiet_position.side_to_move(),
-            None,
-            false,
-        );
-        let mut policy_quiets = MovePicker::main(
-            quiet_moves,
-            None,
-            [Move::NONE; 2],
-            quiet_position.side_to_move(),
-            None,
-            true,
-        );
-        assert_ne!(
-            collect(&mut legacy_quiets, &quiet_position, &history),
-            collect(&mut policy_quiets, &quiet_position, &history)
-        );
-
-        let mut tactical_position =
-            Position::from_fen("6k1/8/5p2/3qp3/2P1Q3/8/8/6K1 w - - 0 1").unwrap();
-        let bad_capture = tactical_position.find_legal_move("e4e5").unwrap();
-        let mut statistics = OrderingStatistics::default();
-        let legacy = tactical_score(&tactical_position, bad_capture, &mut statistics);
-        let policy = tactical_score(&tactical_position, bad_capture, &mut statistics);
-        assert!(!legacy.1);
-        assert_eq!(legacy, policy, "bad-tactical score must remain unchanged");
-        let mut probe = Position::startpos();
-        let mut state = 0x5EED_2026_0911_u64;
-        let mut checked_good_tacticals = false;
-        for _ in 0..512 {
-            let moves = probe.legal_moves();
-            if moves.is_empty() {
-                probe = Position::startpos();
-                continue;
-            }
-            if !probe.is_in_check(probe.side_to_move()) {
-                let mut legacy_tacticals = MovePicker::new(
-                    moves.clone(),
-                    None,
-                    [Move::NONE; 2],
-                    probe.side_to_move(),
-                    None,
-                    false,
-                    true,
-                );
-                let mut policy_tacticals = MovePicker::quiescence(
-                    moves.clone(),
-                    false,
-                    [Move::NONE; 2],
-                    probe.side_to_move(),
-                    None,
-                );
-                let legacy_order = collect(&mut legacy_tacticals, &probe, &history);
-                let policy_order = collect(&mut policy_tacticals, &probe, &history);
-                assert_eq!(
-                    legacy_order, policy_order,
-                    "tactical ordering must be unchanged"
-                );
-                checked_good_tacticals |= !legacy_order.is_empty();
-            }
-            state = state
-                .wrapping_mul(6_364_136_223_846_793_005)
-                .wrapping_add(1_442_695_040_888_963_407);
-            probe.make_move(moves.as_slice()[(state as usize) % moves.len()]);
-        }
-        assert!(
-            checked_good_tacticals,
-            "deterministic replay must cover at least one good-tactical set"
-        );
-
-        let in_check = "k5r1/8/8/8/8/7q/4Q1r1/6K1 w - - 0 1";
-        let mut position = Position::from_fen(in_check).unwrap();
-        let moves = position.legal_moves();
-        let mut absent = MovePicker::quiescence(
-            moves.clone(),
-            true,
-            [Move::NONE; 2],
-            position.side_to_move(),
-            None,
-        );
-        let mut present = MovePicker::quiescence(
-            moves,
-            true,
-            [Move::NONE; 2],
-            position.side_to_move(),
-            Some(bad_capture.to()),
-        );
-        assert_eq!(
-            collect(&mut absent, &position, &history),
-            collect(&mut present, &position, &history),
-            "in-check ordering must ignore policy context"
-        );
-    }
-
-    #[cfg(feature = "stats")]
-    #[test]
-    fn policy_does_not_add_see_calls() {
-        let mut position = Position::from_fen("6k1/8/5p2/3qp3/2P1Q3/8/8/6K1 w - - 0 1").unwrap();
-        let moves = position.legal_moves();
-        let history = HistoryTable::default();
-        let mut legacy = MovePicker::main(
-            moves.clone(),
-            None,
-            [Move::NONE; 2],
-            position.side_to_move(),
-            None,
-            false,
-        );
-        let mut policy = MovePicker::main(
-            moves,
-            None,
-            [Move::NONE; 2],
-            position.side_to_move(),
-            None,
-            true,
-        );
-        collect(&mut legacy, &position, &history);
-        collect(&mut policy, &position, &history);
-        assert_eq!(legacy.statistics().see_calls, policy.statistics().see_calls);
     }
 
     #[test]
@@ -693,27 +536,12 @@ mod tests {
                 Some(preferred),
                 killers,
                 position.side_to_move(),
-                None,
-                true,
             );
 
-            let mut repeat = MovePicker::main(
-                legal.clone(),
-                Some(preferred),
-                killers,
-                position.side_to_move(),
-                None,
-                true,
-            );
             let picked = collect(&mut picker, &position, &history);
 
             assert_eq!(picked.len(), legal.len(), "sample {sample}");
             assert_eq!(picked[0], preferred, "sample {sample}");
-            assert_eq!(
-                picked,
-                collect(&mut repeat, &position, &history),
-                "sample {sample} must be deterministic"
-            );
             let mut score_statistics = OrderingStatistics::default();
             let ordered_scores = picked
                 .iter()
@@ -722,11 +550,8 @@ mod tests {
                         1_000_000
                     } else if mv.is_capture() || mv.is_promotion() {
                         tactical_score(&position, mv, &mut score_statistics).0
-                    } else if killers.contains(&mv) {
-                        quiet_score(mv, killers, &history, position.side_to_move())
                     } else {
                         quiet_score(mv, killers, &history, position.side_to_move())
-                            + policy::score(&position, mv, None, 0)
                     }
                 })
                 .collect::<Vec<_>>();

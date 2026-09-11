@@ -10,7 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "audit-shegerd-policy-embed.py"
-MODEL = ROOT / "src" / "shegerd" / "neyrang-shegerd-policy-v1.bin"
+MODEL = ROOT / "docs" / "evidence" / "shegerd-p1-policy.bin"
 FIXTURE = ROOT / "docs" / "evidence" / "shegerd-p2-score-parity.tsv"
 
 

@@ -41,8 +41,8 @@ def pair(round_id: str) -> str:
 
 
 class BuildShegerdPolicyCorpusTests(unittest.TestCase):
-    def write_teacher(self, path: Path) -> None:
-        path.write_text(textwrap.dedent("""\
+    def write_teacher(self, path: Path, *, clear_hash: bool = True) -> None:
+        source = textwrap.dedent("""\
             #!/usr/bin/env python3
             import sys
             side = "w"
@@ -64,7 +64,27 @@ class BuildShegerdPolicyCorpusTests(unittest.TestCase):
                     print(f"bestmove {move}", flush=True)
                 elif command == "quit":
                     break
-        """))
+        """)
+        if not clear_hash:
+            source = source.replace(
+                '        print("option name Clear Hash type button")\n',
+                "",
+            )
+            source = source.replace('side = "w"\n', 'side = "w"\nreset = False\n')
+            source = source.replace(
+                '    elif command.startswith("position fen "):\n',
+                '    elif command == "ucinewgame":\n'
+                '        reset = True\n'
+                '    elif command.startswith("position fen "):\n',
+            )
+            source = source.replace(
+                '    elif command.startswith("go nodes"):\n',
+                '    elif command.startswith("go nodes"):\n'
+                '        if not reset:\n'
+                '            sys.exit(9)\n'
+                '        reset = False\n',
+            )
+        path.write_text(source)
         path.chmod(0o755)
 
     def test_sampler_preserves_previous_destination_and_gap(self) -> None:
@@ -94,6 +114,7 @@ class BuildShegerdPolicyCorpusTests(unittest.TestCase):
             config = corpus.Config("fixture", source, teacher, output, "sample", "split", 80000, 64, enforce_minimums=False)
             manifest = corpus.build(config)
             self.assertEqual(corpus.SCHEMA, manifest["schema"])
+            self.assertEqual("clear-hash-button", manifest["teacher"]["reset_method"])
             total = 0
             populated: Path | None = None
             populated_count = 0
@@ -124,6 +145,22 @@ class BuildShegerdPolicyCorpusTests(unittest.TestCase):
             self.assertEqual(
                 populated_count,
                 sum(line.split("\t")[4] == "1" for line in trace_lines[1:]),
+            )
+
+    def test_builder_uses_ucinewgame_when_clear_hash_is_unavailable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source.pgn"
+            teacher = root / "teacher.py"
+            output = root / "output"
+            source.write_text(pair("1") + pair("2"), encoding="utf-8")
+            self.write_teacher(teacher, clear_hash=False)
+            manifest = corpus.build(corpus.Config(
+                "fixture", source, teacher, output, "sample", "split", 80000, 64,
+                enforce_minimums=False,
+            ))
+            self.assertEqual(
+                "ucinewgame-per-position", manifest["teacher"]["reset_method"]
             )
 
     def test_source_audit_binds_campaign_and_teacher_identity(self) -> None:

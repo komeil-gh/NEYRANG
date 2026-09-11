@@ -302,23 +302,30 @@ def deduplicate(records: list[Record]) -> tuple[list[Record], dict[str, int]]:
     }
 
 
-def configure_teacher(engine: chess.engine.SimpleEngine, hash_mb: int) -> dict[str, str]:
-    for option in ("Threads", "Hash", "Clear Hash"):
+def configure_teacher(engine: chess.engine.SimpleEngine, hash_mb: int) -> tuple[dict[str, str], str]:
+    for option in ("Threads", "Hash"):
         if option not in engine.options:
             raise CorpusError(f"teacher lacks required UCI option {option}")
     engine.configure({"Threads": 1, "Hash": hash_mb})
-    return dict(engine.id)
+    reset_method = "clear-hash-button" if "Clear Hash" in engine.options else "ucinewgame-per-position"
+    return dict(engine.id), reset_method
 
 
-def label_records(records: list[Record], teacher: Path, nodes: int, hash_mb: int) -> tuple[dict[str, list[str]], dict[str, str]]:
+def label_records(records: list[Record], teacher: Path, nodes: int, hash_mb: int) -> tuple[dict[str, list[str]], dict[str, str], str]:
     output = {partition: [] for partition in PARTITIONS}
     engine = chess.engine.SimpleEngine.popen_uci(str(teacher))
     try:
-        identity = configure_teacher(engine, hash_mb)
+        identity, reset_method = configure_teacher(engine, hash_mb)
         for record in records:
             board = chess.Board(record.fen)
-            engine.configure({"Clear Hash": None})
-            analysis = engine.analyse(board, chess.engine.Limit(nodes=nodes), info=chess.engine.INFO_PV)
+            if reset_method == "clear-hash-button":
+                engine.configure({"Clear Hash": None})
+            analysis = engine.analyse(
+                board,
+                chess.engine.Limit(nodes=nodes),
+                game=record.record_id if reset_method == "ucinewgame-per-position" else None,
+                info=chess.engine.INFO_PV,
+            )
             pv = analysis.get("pv") or []
             if not pv or pv[0] not in board.legal_moves:
                 raise CorpusError(f"teacher produced no legal PV move for {record.record_id}")
@@ -329,7 +336,7 @@ def label_records(records: list[Record], teacher: Path, nodes: int, hash_mb: int
         raise CorpusError(f"teacher failure: {error}") from error
     finally:
         engine.quit()
-    return output, identity
+    return output, identity, reset_method
 
 
 def validate_source_audit(
@@ -457,7 +464,7 @@ def build(config: Config) -> dict[str, Any]:
     teacher_hash, teacher_bytes = sha256_file(config.teacher)
     source_audit = validate_source_audit(config, extraction, teacher_hash)
     counts = enforce_minimums(records, config.enforce_minimums)
-    labels, teacher_identity = label_records(records, config.teacher, config.nodes, config.hash_mb)
+    labels, teacher_identity, reset_method = label_records(records, config.teacher, config.nodes, config.hash_mb)
     temporary = config.output_dir.with_name(f".{config.output_dir.name}.tmp-{os.getpid()}")
     if temporary.exists():
         raise CorpusError("temporary output directory already exists")
@@ -482,7 +489,7 @@ def build(config: Config) -> dict[str, Any]:
                 "engines": extraction["engines"],
                 "audit": source_audit,
             },
-            "teacher": {"bytes": teacher_bytes, "sha256": teacher_hash, "uci_id": teacher_identity, "nodes": config.nodes, "threads": 1, "hash_mb": config.hash_mb, "clear_hash_per_position": True},
+            "teacher": {"bytes": teacher_bytes, "sha256": teacher_hash, "uci_id": teacher_identity, "nodes": config.nodes, "threads": 1, "hash_mb": config.hash_mb, "clear_hash_per_position": True, "reset_method": reset_method},
             "builder": {
                 "path": "scripts/build-shegerd-policy-corpus.py",
                 "bytes": builder_bytes,

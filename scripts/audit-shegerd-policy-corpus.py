@@ -644,6 +644,11 @@ def audit(
     }
     if any(teacher_entry.get(key) != value for key, value in expected_teacher.items()):
         raise AuditError("teacher contract differs")
+    if teacher_entry.get("reset_method") not in {
+        "clear-hash-button",
+        "ucinewgame-per-position",
+    }:
+        raise AuditError("teacher reset method differs")
     if source_audit is None and source_entry.get("audit") is not None:
         raise AuditError("source audit input is required")
     source_audit_evidence = (

@@ -96,15 +96,7 @@ impl MovePicker {
         color: Color,
         previous_to: Option<Square>,
     ) -> Self {
-        Self::new(
-            moves,
-            None,
-            killers,
-            color,
-            previous_to,
-            !in_check,
-            !in_check,
-        )
+        Self::new(moves, None, killers, color, previous_to, false, !in_check)
     }
 
     fn new(
@@ -264,13 +256,7 @@ impl MovePicker {
             {
                 continue;
             }
-            let (score, is_good) = tactical_score(
-                position,
-                mv,
-                &mut self.statistics,
-                self.policy_enabled,
-                self.previous_to,
-            );
+            let (score, is_good) = tactical_score(position, mv, &mut self.statistics);
             self.scores[index] = score;
             self.classes[index] = if is_good {
                 MoveClass::GoodTactical
@@ -335,8 +321,6 @@ fn tactical_score(
     position: &Position,
     mv: Move,
     _statistics: &mut OrderingStatistics,
-    policy_enabled: bool,
-    previous_to: Option<Square>,
 ) -> (i32, bool) {
     #[cfg(feature = "stats")]
     {
@@ -367,13 +351,8 @@ fn tactical_score(
         if mv.is_capture() {
             _statistics.good_captures += 1;
         }
-        let policy_score = if policy_enabled {
-            policy::score(position, mv, previous_to, exchange)
-        } else {
-            0
-        };
         (
-            GOOD_TACTICAL_SCORE + promotion_bonus + mvv_lva + exchange + policy_score,
+            GOOD_TACTICAL_SCORE + promotion_bonus + mvv_lva + exchange,
             true,
         )
     } else {
@@ -587,19 +566,13 @@ mod tests {
             Position::from_fen("6k1/8/5p2/3qp3/2P1Q3/8/8/6K1 w - - 0 1").unwrap();
         let bad_capture = tactical_position.find_legal_move("e4e5").unwrap();
         let mut statistics = OrderingStatistics::default();
-        let legacy = tactical_score(
-            &tactical_position,
-            bad_capture,
-            &mut statistics,
-            false,
-            None,
-        );
-        let policy = tactical_score(&tactical_position, bad_capture, &mut statistics, true, None);
+        let legacy = tactical_score(&tactical_position, bad_capture, &mut statistics);
+        let policy = tactical_score(&tactical_position, bad_capture, &mut statistics);
         assert!(!legacy.1);
         assert_eq!(legacy, policy, "bad-tactical score must remain unchanged");
         let mut probe = Position::startpos();
         let mut state = 0x5EED_2026_0911_u64;
-        let mut reordered_good_tacticals = false;
+        let mut checked_good_tacticals = false;
         for _ in 0..512 {
             let moves = probe.legal_moves();
             if moves.is_empty() {
@@ -623,12 +596,13 @@ mod tests {
                     probe.side_to_move(),
                     None,
                 );
-                if collect(&mut legacy_tacticals, &probe, &history)
-                    != collect(&mut policy_tacticals, &probe, &history)
-                {
-                    reordered_good_tacticals = true;
-                    break;
-                }
+                let legacy_order = collect(&mut legacy_tacticals, &probe, &history);
+                let policy_order = collect(&mut policy_tacticals, &probe, &history);
+                assert_eq!(
+                    legacy_order, policy_order,
+                    "tactical ordering must be unchanged"
+                );
+                checked_good_tacticals |= !legacy_order.is_empty();
             }
             state = state
                 .wrapping_mul(6_364_136_223_846_793_005)
@@ -636,8 +610,8 @@ mod tests {
             probe.make_move(moves.as_slice()[(state as usize) % moves.len()]);
         }
         assert!(
-            reordered_good_tacticals,
-            "policy must reorder at least one deterministic good-tactical set"
+            checked_good_tacticals,
+            "deterministic replay must cover at least one good-tactical set"
         );
 
         let in_check = "k5r1/8/8/8/8/7q/4Q1r1/6K1 w - - 0 1";
@@ -747,7 +721,7 @@ mod tests {
                     if mv == preferred {
                         1_000_000
                     } else if mv.is_capture() || mv.is_promotion() {
-                        tactical_score(&position, mv, &mut score_statistics, true, None).0
+                        tactical_score(&position, mv, &mut score_statistics).0
                     } else if killers.contains(&mv) {
                         quiet_score(mv, killers, &history, position.side_to_move())
                     } else {

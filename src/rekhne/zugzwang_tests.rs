@@ -79,3 +79,15 @@ fn sparse_major_piece_windows_keep_the_reference_bound_classification() {
         assert_eq!(candidate_stats.null_move_verifications, 0, "FEN: {fen}");
     }
 }
+
+#[test]
+fn adaptive_null_fail_high_is_verified_and_restores_the_position() {
+    let position = Position::startpos();
+    let beta = sanj::evaluate(&position) - 500;
+    let (_, statistics) = search_window(position, 8, beta, SearchContext::normal(None));
+
+    assert!(statistics.null_move_attempts > 0, "{statistics:?}");
+    assert!(statistics.null_move_fail_highs > 0, "{statistics:?}");
+    assert!(statistics.null_move_verifications > 0, "{statistics:?}");
+    assert!(statistics.null_move_cutoffs <= statistics.null_move_fail_highs);
+}

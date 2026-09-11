@@ -32,7 +32,7 @@ fn valid_model(bytes: &[u8]) -> bool {
         && u32_at(bytes, 28) as usize == PIECE_TO_LEN
 }
 
-fn material_phase(position: &Position) -> usize {
+pub(super) fn material_phase(position: &Position) -> usize {
     let mut material = 0_u32;
     for color in [Color::White, Color::Black] {
         for (piece, value) in [
@@ -53,7 +53,7 @@ fn material_phase(position: &Position) -> usize {
     }
 }
 
-fn normalized_square(index: usize, side: Color) -> usize {
+pub(super) fn normalized_square(index: usize, side: Color) -> usize {
     if side == Color::White {
         index
     } else {

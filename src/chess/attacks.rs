@@ -1,5 +1,4 @@
-//! Portable attack generation. Leaper tables are built at compile time;
-//! sliders use straightforward occupancy rays until profiling justifies tables.
+//! Portable attack generation using compile-time leaper and directional-ray tables.
 
 use super::{Bitboard, Color, Square};
 
@@ -25,6 +24,55 @@ const KING_ATTACKS: [Bitboard; 64] = generate_leaper_table(&[
 ]);
 const WHITE_PAWN_ATTACKS: [Bitboard; 64] = generate_leaper_table(&[(-1, 1), (1, 1)]);
 const BLACK_PAWN_ATTACKS: [Bitboard; 64] = generate_leaper_table(&[(-1, -1), (1, -1)]);
+
+// Each group of four has decreasing square indices first, then increasing ones.
+static RAYS: [[Bitboard; 64]; 8] = generate_rays();
+
+const fn generate_rays() -> [[Bitboard; 64]; 8] {
+    let directions = [
+        (-1, -1),
+        (1, -1),
+        (-1, 1),
+        (1, 1),
+        (-1, 0),
+        (0, -1),
+        (0, 1),
+        (1, 0),
+    ];
+    let mut rays = [[0; 64]; 8];
+    let mut direction = 0;
+    while direction < 8 {
+        let mut square = 0;
+        while square < 64 {
+            let mut file = (square & 7) as i8 + directions[direction].0;
+            let mut rank = (square >> 3) as i8 + directions[direction].1;
+            while file >= 0 && file < 8 && rank >= 0 && rank < 8 {
+                rays[direction][square] |= 1_u64 << (rank * 8 + file);
+                file += directions[direction].0;
+                rank += directions[direction].1;
+            }
+            square += 1;
+        }
+        direction += 1;
+    }
+    rays
+}
+
+#[inline]
+fn directional_attacks<const D: usize>(square: Square, occupancy: Bitboard) -> Bitboard {
+    let ray = RAYS[D][square.index()];
+    let blockers = ray & occupancy;
+    if blockers == 0 {
+        return ray;
+    }
+    let first = if D % 4 < 2 {
+        63 - blockers.leading_zeros()
+    } else {
+        blockers.trailing_zeros()
+    } as usize;
+    // The ray from the blocker excludes the blocker itself: keep its attack bit.
+    ray & !RAYS[D][first]
+}
 
 const fn generate_leaper_table(offsets: &[(i8, i8)]) -> [Bitboard; 64] {
     let mut table = [0; 64];
@@ -68,34 +116,21 @@ pub const fn pawn_attacks(color: Color, square: Square) -> Bitboard {
 
 #[inline]
 pub fn bishop_attacks(square: Square, occupancy: Bitboard) -> Bitboard {
-    ray_attacks(square, occupancy, &[(-1, -1), (-1, 1), (1, -1), (1, 1)])
+    directional_attacks::<0>(square, occupancy)
+        | directional_attacks::<1>(square, occupancy)
+        | directional_attacks::<2>(square, occupancy)
+        | directional_attacks::<3>(square, occupancy)
 }
 
 #[inline]
 pub fn rook_attacks(square: Square, occupancy: Bitboard) -> Bitboard {
-    ray_attacks(square, occupancy, &[(-1, 0), (0, -1), (0, 1), (1, 0)])
+    directional_attacks::<4>(square, occupancy)
+        | directional_attacks::<5>(square, occupancy)
+        | directional_attacks::<6>(square, occupancy)
+        | directional_attacks::<7>(square, occupancy)
 }
 
 #[inline]
 pub fn queen_attacks(square: Square, occupancy: Bitboard) -> Bitboard {
     bishop_attacks(square, occupancy) | rook_attacks(square, occupancy)
-}
-
-fn ray_attacks(square: Square, occupancy: Bitboard, directions: &[(i8, i8)]) -> Bitboard {
-    let mut attacks = 0_u64;
-    for &(file_step, rank_step) in directions {
-        let mut file = square.file() as i8 + file_step;
-        let mut rank = square.rank() as i8 + rank_step;
-        while (0..8).contains(&file) && (0..8).contains(&rank) {
-            let target = Square::from_coords(file as u8, rank as u8)
-                .expect("validated ray coordinates are on the board");
-            attacks |= target.bit();
-            if occupancy & target.bit() != 0 {
-                break;
-            }
-            file += file_step;
-            rank += rank_step;
-        }
-    }
-    attacks
 }

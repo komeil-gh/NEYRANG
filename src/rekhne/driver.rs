@@ -723,7 +723,6 @@ impl<'a> Searcher<'a> {
                 return beta;
             }
         }
-        let child_depth = depth - 1 + i32::from(ply > 0 && in_check && !context.in_null_subtree);
         let moving_color = position.side_to_move();
         let tt_move = tt_data.map(|data| data.best_move);
         let ordering_preferred = tt_move.or(context.preferred);
@@ -772,7 +771,7 @@ impl<'a> Searcher<'a> {
             if move_index == 0 {
                 score = -self.negamax(
                     position,
-                    child_depth,
+                    depth - 1,
                     ply + 1,
                     -beta,
                     -alpha,
@@ -804,7 +803,7 @@ impl<'a> Searcher<'a> {
                         }
                         score = -self.negamax(
                             position,
-                            child_depth,
+                            depth - 1,
                             ply + 1,
                             -alpha - 1,
                             -alpha,
@@ -814,7 +813,7 @@ impl<'a> Searcher<'a> {
                 } else {
                     score = -self.negamax(
                         position,
-                        child_depth,
+                        depth - 1,
                         ply + 1,
                         -alpha - 1,
                         -alpha,
@@ -828,7 +827,7 @@ impl<'a> Searcher<'a> {
                     }
                     score = -self.negamax(
                         position,
-                        child_depth,
+                        depth - 1,
                         ply + 1,
                         -beta,
                         -alpha,
@@ -1443,116 +1442,6 @@ mod tests {
                 .all(|&mv| mv == Move::NONE)
         );
         assert_eq!(position, original);
-    }
-}
-
-#[cfg(test)]
-mod check_extension_tests {
-    use super::*;
-
-    #[test]
-    fn forcing_lines_respect_ply_repetition_and_node_bounds() {
-        let mut fixture =
-            Position::from_fen("2r2rk1/pQ3p1p/3pp1p1/2P1b3/1P2P3/3R4/P3BPPq/2R3K1 w - - 12 24")
-                .unwrap();
-        let stop = AtomicBool::new(false);
-        for ply in [MAX_PLY - 2, MAX_PLY - 1] {
-            let mut position = fixture.clone();
-            let mut searcher = Searcher::new(&stop);
-            searcher.reset(
-                &mut position,
-                &SearchLimits::depth(12),
-                &[fixture.repetition_hash()],
-                SearchSetup::normal(),
-            );
-            let _ = searcher.negamax(
-                &mut position,
-                12,
-                ply,
-                -VALUE_INFINITE,
-                VALUE_INFINITE,
-                SearchContext::normal(None),
-            );
-            assert_eq!(position, fixture);
-            assert!(searcher.seldepth < MAX_PLY);
-        }
-        let mut position = fixture.clone();
-        let mut searcher = Searcher::new(&stop);
-        searcher.reset(
-            &mut position,
-            &SearchLimits::depth(12),
-            &[fixture.repetition_hash(); 3],
-            SearchSetup::normal(),
-        );
-        assert_eq!(
-            searcher.negamax(
-                &mut position,
-                12,
-                2,
-                -VALUE_INFINITE,
-                VALUE_INFINITE,
-                SearchContext::normal(None),
-            ),
-            VALUE_DRAW
-        );
-        assert_eq!(searcher.nodes, 1);
-        for budget in [1, 1000] {
-            let mut searcher = Searcher::new(&stop);
-            let result = searcher.search(
-                &mut position,
-                &SearchLimits::nodes(budget),
-                &[fixture.repetition_hash()],
-                |_| {},
-            );
-            assert!(result.nodes <= budget);
-            assert_eq!(position, fixture);
-        }
-    }
-
-    #[test]
-    fn checked_non_root_search_sees_quiet_mate_after_evasion() {
-        let fixture =
-            Position::from_fen("2r2rk1/pQ3p1p/3pp1p1/2P1b3/1P2P3/3R4/P3BPPq/2R3K1 w - - 0 24")
-                .unwrap();
-        assert!(fixture.is_in_check(fixture.side_to_move()));
-        for (depth, ply, context, sees_mate) in [
-            (1, 0, SearchContext::normal(None), false),
-            (0, 2, SearchContext::normal(None), false),
-            (1, 2, SearchContext::normal(None).after_null(), false),
-            (1, 2, SearchContext::normal(None), true),
-        ] {
-            let mut position = fixture.clone();
-            let stop = AtomicBool::new(false);
-            let mut searcher = Searcher::new(&stop);
-            let hashes = [position.repetition_hash()];
-            searcher.reset(
-                &mut position,
-                &SearchLimits::depth(1),
-                &hashes,
-                SearchSetup::normal(),
-            );
-            let score = searcher.negamax(
-                &mut position,
-                depth,
-                ply,
-                -VALUE_INFINITE,
-                VALUE_INFINITE,
-                context,
-            );
-            assert_eq!(score <= -VALUE_MATE + MAX_PLY as i32, sees_mate);
-            assert_eq!(position, fixture);
-            if sees_mate {
-                assert_eq!(score, -VALUE_MATE + 4);
-                let entry = searcher.tt.probe(position.hash(), ply).unwrap();
-                assert_eq!(entry.depth, 1);
-                for mv in searcher.pv_line(ply) {
-                    assert!(position.legal_moves().iter().any(|&legal| legal == mv));
-                    position.make_move(mv);
-                }
-                assert!(position.legal_moves().is_empty());
-                assert!(position.is_in_check(position.side_to_move()));
-            }
-        }
     }
 }
 

@@ -9,19 +9,27 @@ use crate::{AccumulatorPair, Network, king_bucket_mirrored_3};
 const EVAL_SCALE: f64 = 400.0;
 const WDL_PROPORTION: f64 = 0.75;
 
-/// Linear score-fit statistics in centipawns.
+/// Frozen parent-label encoding: mate 30000 minus maximum search ply 128.
+/// This describes corpus provenance, not a threshold for static evaluator outputs.
+pub const SEARCH_LABEL_MATE_BOUND: u32 = 29_872;
+
+/// Finite-reference cp statistics; absent denominators produce None.
+/// Mate-coded search labels contribute only to the separate mate sign counts.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ScoreFitReport {
     pub samples: u64,
-    pub reference_mean_cp: f64,
-    pub prediction_mean_cp: f64,
-    pub mean_error_cp: f64,
-    pub mean_absolute_error_cp: f64,
-    pub root_mean_square_error_cp: f64,
+    pub reference_mean_cp: Option<f64>,
+    pub prediction_mean_cp: Option<f64>,
+    pub mean_error_cp: Option<f64>,
+    pub mean_absolute_error_cp: Option<f64>,
+    pub root_mean_square_error_cp: Option<f64>,
     pub pearson_correlation: Option<f64>,
     pub sign_samples: u64,
     pub sign_agreements: u64,
-    pub sign_agreement_rate: f64,
+    pub sign_agreement_rate: Option<f64>,
+    pub mate_samples: u64,
+    pub mate_sign_agreements: u64,
+    pub mate_sign_agreement_rate: Option<f64>,
 }
 
 /// Deterministic exposure to the position filters recommended by Viriformat/Bullet.
@@ -46,7 +54,7 @@ pub struct NetworkDiagnosticReport {
     pub positions: u64,
     pub network_score_range_cp: (i32, i32),
     pub classical_score_range_cp: (i32, i32),
-    pub teacher_score_range_cp: (i32, i32),
+    pub teacher_score_range_raw: (i32, i32),
     pub network_vs_search: ScoreFitReport,
     pub classical_vs_search: ScoreFitReport,
     pub network_vs_classical: ScoreFitReport,
@@ -95,9 +103,20 @@ struct ScoreFitAccumulator {
     squared_error_sum: f64,
     sign_samples: u64,
     sign_agreements: u64,
+    mate_samples: u64,
+    mate_sign_agreements: u64,
 }
 
 impl ScoreFitAccumulator {
+    fn push_search(&mut self, reference: i32, prediction: i32) {
+        if reference.unsigned_abs() >= SEARCH_LABEL_MATE_BOUND {
+            self.mate_samples += 1;
+            self.mate_sign_agreements += u64::from(reference.signum() == prediction.signum());
+        } else {
+            self.push(reference, prediction);
+        }
+    }
+
     fn push(&mut self, reference: i32, prediction: i32) {
         let reference_f64 = f64::from(reference);
         let prediction_f64 = f64::from(prediction);
@@ -130,19 +149,21 @@ impl ScoreFitAccumulator {
         let pearson_correlation = (denominator > 0.0).then_some(covariance / denominator);
         ScoreFitReport {
             samples: self.samples,
-            reference_mean_cp: self.reference_sum / samples,
-            prediction_mean_cp: self.prediction_sum / samples,
-            mean_error_cp: self.error_sum / samples,
-            mean_absolute_error_cp: self.absolute_error_sum / samples,
-            root_mean_square_error_cp: (self.squared_error_sum / samples).sqrt(),
+            reference_mean_cp: (self.samples > 0).then(|| self.reference_sum / samples),
+            prediction_mean_cp: (self.samples > 0).then(|| self.prediction_sum / samples),
+            mean_error_cp: (self.samples > 0).then(|| self.error_sum / samples),
+            mean_absolute_error_cp: (self.samples > 0).then(|| self.absolute_error_sum / samples),
+            root_mean_square_error_cp: (self.samples > 0)
+                .then(|| (self.squared_error_sum / samples).sqrt()),
             pearson_correlation,
             sign_samples: self.sign_samples,
             sign_agreements: self.sign_agreements,
-            sign_agreement_rate: if self.sign_samples == 0 {
-                0.0
-            } else {
-                self.sign_agreements as f64 / self.sign_samples as f64
-            },
+            sign_agreement_rate: (self.sign_samples > 0)
+                .then(|| self.sign_agreements as f64 / self.sign_samples as f64),
+            mate_samples: self.mate_samples,
+            mate_sign_agreements: self.mate_sign_agreements,
+            mate_sign_agreement_rate: (self.mate_samples > 0)
+                .then(|| self.mate_sign_agreements as f64 / self.mate_samples as f64),
         }
     }
 }
@@ -188,8 +209,8 @@ pub fn diagnose_network(
             network_range = extend_range(network_range, network_cp);
             classical_range = extend_range(classical_range, classical_cp);
             teacher_range = extend_range(teacher_range, teacher_cp);
-            network_vs_search.push(teacher_cp, network_cp);
-            classical_vs_search.push(teacher_cp, classical_cp);
+            network_vs_search.push_search(teacher_cp, network_cp);
+            classical_vs_search.push_search(teacher_cp, classical_cp);
             network_vs_classical.push(classical_cp, network_cp);
 
             let network_probability = logistic_cp(network_cp, EVAL_SCALE);
@@ -227,7 +248,7 @@ pub fn diagnose_network(
         positions,
         network_score_range_cp: network_range,
         classical_score_range_cp: classical_range,
-        teacher_score_range_cp: teacher_range,
+        teacher_score_range_raw: teacher_range,
         network_vs_search: network_vs_search.report(),
         classical_vs_search: classical_vs_search.report(),
         network_vs_classical: network_vs_classical.report(),
@@ -239,6 +260,23 @@ pub fn diagnose_network(
         mean_result_probability: result_probability_sum / count,
         composition,
     })
+}
+
+#[cfg(test)]
+mod score_fit_tests {
+    use super::ScoreFitAccumulator;
+
+    #[test]
+    fn static_reference_magnitude_does_not_imply_a_mate_code() {
+        let mut fit = ScoreFitAccumulator::default();
+        fit.push(29_999, 30_000);
+        fit.push_search(29_999, 30_000);
+        let report = fit.report();
+        assert_eq!(report.samples, 1);
+        assert_eq!(report.mean_absolute_error_cp, Some(1.0));
+        assert_eq!(report.mate_samples, 1);
+        assert_eq!(report.mate_sign_agreements, 1);
+    }
 }
 
 const fn game_result_probability(result: GameResult) -> f64 {

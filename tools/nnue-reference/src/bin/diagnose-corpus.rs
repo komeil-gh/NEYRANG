@@ -1,7 +1,9 @@
 use std::{env, fs, path::PathBuf, process::ExitCode};
 
 use neyrang_nnue_data::decode_games;
-use neyrang_nnue_reference::{CorpusCompositionReport, Network, ScoreFitReport, diagnose_network};
+use neyrang_nnue_reference::{
+    CorpusCompositionReport, Network, SEARCH_LABEL_MATE_BOUND, ScoreFitReport, diagnose_network,
+};
 
 fn main() -> ExitCode {
     match run() {
@@ -31,12 +33,14 @@ fn run() -> Result<(), String> {
 
     println!(
         concat!(
-            "{{\"schema\":\"neyrang-nnue-search-diagnostics-v1\",",
+            "{{\"schema\":\"neyrang-nnue-search-diagnostics-v2\",",
+            "\"teacher_score_encoding\":\"neyrang-parent-30000-128\",",
+            "\"teacher_mate_abs_min\":{},",
             "\"network\":{:?},\"corpus\":{:?},",
             "\"games\":{},\"positions\":{},",
             "\"network_score_range_cp\":[{},{}],",
             "\"classical_score_range_cp\":[{},{}],",
-            "\"teacher_score_range_cp\":[{},{}],",
+            "\"teacher_score_range_raw\":[{},{}],",
             "\"network_vs_search\":{},",
             "\"classical_vs_search\":{},",
             "\"network_vs_classical\":{},",
@@ -49,6 +53,7 @@ fn run() -> Result<(), String> {
             "\"composition\":{},",
             "\"eval_scale\":400.0,\"wdl_proportion\":0.75}}"
         ),
+        SEARCH_LABEL_MATE_BOUND,
         network_path.to_string_lossy(),
         corpus_path.to_string_lossy(),
         report.games,
@@ -57,8 +62,8 @@ fn run() -> Result<(), String> {
         report.network_score_range_cp.1,
         report.classical_score_range_cp.0,
         report.classical_score_range_cp.1,
-        report.teacher_score_range_cp.0,
-        report.teacher_score_range_cp.1,
+        report.teacher_score_range_raw.0,
+        report.teacher_score_range_raw.1,
         score_fit_json(&report.network_vs_search),
         score_fit_json(&report.classical_vs_search),
         score_fit_json(&report.network_vs_classical),
@@ -77,25 +82,30 @@ fn score_fit_json(report: &ScoreFitReport) -> String {
     format!(
         concat!(
             "{{\"samples\":{},",
-            "\"reference_mean_cp\":{:.12},",
-            "\"prediction_mean_cp\":{:.12},",
-            "\"mean_error_cp\":{:.12},",
-            "\"mean_absolute_error_cp\":{:.12},",
-            "\"root_mean_square_error_cp\":{:.12},",
+            "\"reference_mean_cp\":{},",
+            "\"prediction_mean_cp\":{},",
+            "\"mean_error_cp\":{},",
+            "\"mean_absolute_error_cp\":{},",
+            "\"root_mean_square_error_cp\":{},",
             "\"pearson_correlation\":{},",
             "\"sign_samples\":{},\"sign_agreements\":{},",
-            "\"sign_agreement_rate\":{:.12}}}"
+            "\"sign_agreement_rate\":{},",
+            "\"mate_samples\":{},\"mate_sign_agreements\":{},",
+            "\"mate_sign_agreement_rate\":{}}}"
         ),
         report.samples,
-        report.reference_mean_cp,
-        report.prediction_mean_cp,
-        report.mean_error_cp,
-        report.mean_absolute_error_cp,
-        report.root_mean_square_error_cp,
+        optional_f64_json(report.reference_mean_cp),
+        optional_f64_json(report.prediction_mean_cp),
+        optional_f64_json(report.mean_error_cp),
+        optional_f64_json(report.mean_absolute_error_cp),
+        optional_f64_json(report.root_mean_square_error_cp),
         optional_f64_json(report.pearson_correlation),
         report.sign_samples,
         report.sign_agreements,
-        report.sign_agreement_rate,
+        optional_f64_json(report.sign_agreement_rate),
+        report.mate_samples,
+        report.mate_sign_agreements,
+        optional_f64_json(report.mate_sign_agreement_rate),
     )
 }
 

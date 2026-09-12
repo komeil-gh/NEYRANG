@@ -43,9 +43,12 @@ fn corpus_diagnostic_measures_score_fit_and_filter_exposure() {
     assert_eq!(report.games, 2);
     assert_eq!(report.positions, 2);
     assert_eq!(report.network_score_range_cp, (0, 0));
-    assert_eq!(report.teacher_score_range_cp, (-400, 400));
-    assert!((report.network_vs_search.mean_absolute_error_cp - 400.0).abs() < 1.0e-12);
-    assert!((report.network_vs_search.root_mean_square_error_cp - 400.0).abs() < 1.0e-12);
+    assert_eq!(report.teacher_score_range_raw, (-400, 400));
+    assert_eq!(report.network_vs_search.mean_absolute_error_cp, Some(400.0));
+    assert_eq!(
+        report.network_vs_search.root_mean_square_error_cp,
+        Some(400.0)
+    );
     assert_eq!(report.network_vs_search.pearson_correlation, None);
     assert_eq!(report.network_vs_search.sign_samples, 2);
     assert_eq!(report.network_vs_search.sign_agreements, 0);
@@ -79,6 +82,73 @@ fn corpus_diagnostic_rejects_empty_corpora_and_empty_games() {
         diagnose_network(&network, &[empty]),
         Err(NetworkDiagnosticError::EmptyGame { index: 0 })
     );
+}
+
+#[test]
+fn mate_labels_do_not_enter_finite_centipawn_statistics() {
+    let network = constant_network(0);
+    let games: Vec<_> = [400, 29871, 29872, -29872, 29999, -29999]
+        .into_iter()
+        .map(|score| {
+            game_with_score(
+                "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+                "e2e4",
+                score,
+                GameResult::WhiteWin,
+            )
+        })
+        .collect();
+    let report = diagnose_network(&network, &games).unwrap();
+    assert_eq!(report.positions, 6);
+    assert_eq!(report.network_vs_search.samples, 2);
+    assert_eq!(report.classical_vs_search.samples, 2);
+    assert_eq!(report.network_vs_classical.samples, 6);
+    assert_eq!(report.network_vs_search.mate_samples, 4);
+    assert_eq!(report.network_vs_search.mate_sign_agreements, 0);
+    assert_eq!(
+        report.network_vs_search.mean_absolute_error_cp,
+        Some(15135.5)
+    );
+    assert_eq!(report.network_vs_search.mate_sign_agreement_rate, Some(0.0));
+    assert_eq!(report.network_vs_classical.mate_samples, 0);
+}
+
+#[test]
+fn all_mate_labels_have_no_cp_metrics_and_keep_oriented_sign_outcomes() {
+    let network = constant_network(1);
+    let games: Vec<_> = [
+        ("w", "e2e4", 29999),
+        ("b", "e7e5", 29999),
+        ("w", "e2e4", -29872),
+        ("b", "e7e5", -29872),
+    ]
+    .into_iter()
+    .map(|(side, mv, score)| {
+        game_with_score(
+            &format!("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR {side} KQkq - 0 1"),
+            mv,
+            score,
+            GameResult::WhiteWin,
+        )
+    })
+    .collect();
+    let report = diagnose_network(&network, &games).unwrap();
+    let fit = report.network_vs_search;
+    assert_eq!(fit.samples, 0);
+    assert_eq!(fit.reference_mean_cp, None);
+    assert_eq!(fit.prediction_mean_cp, None);
+    assert_eq!(fit.mean_error_cp, None);
+    assert_eq!(fit.mean_absolute_error_cp, None);
+    assert_eq!(fit.root_mean_square_error_cp, None);
+    assert_eq!(fit.pearson_correlation, None);
+    assert_eq!(fit.sign_samples, 0);
+    assert_eq!(fit.sign_agreement_rate, None);
+    assert_eq!(fit.mate_samples, 4);
+    assert_eq!(fit.mate_sign_agreements, 2);
+    assert_eq!(fit.mate_sign_agreement_rate, Some(0.5));
+    assert_eq!(report.network_vs_classical.samples, 4);
+    assert_eq!(report.composition.high_eval_default, 0);
+    assert_eq!(report.composition.bullet_default_rejected, 4);
 }
 
 fn constant_network(output_bias: i32) -> Network {

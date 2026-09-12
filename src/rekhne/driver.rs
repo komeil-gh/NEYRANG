@@ -25,10 +25,6 @@ pub const VALUE_INFINITE: i32 = 32_000;
 const NULL_MOVE_MIN_DEPTH: i32 = 4;
 const NULL_MOVE_REDUCTION: i32 = 2;
 
-fn late_move_reduction(depth: i32, searched_moves: usize) -> i32 {
-    1 + i32::from(depth >= 5 && searched_moves >= 8)
-}
-
 #[derive(Clone, Copy)]
 struct SearchContext {
     preferred: Option<Move>,
@@ -793,7 +789,7 @@ impl<'a> Searcher<'a> {
                     }
                     score = -self.negamax(
                         position,
-                        depth - 1 - late_move_reduction(depth, move_index),
+                        depth - 2,
                         ply + 1,
                         -alpha - 1,
                         -alpha,
@@ -1258,18 +1254,6 @@ mod tests {
         chess::{Move, Position},
         rekhne::{SearchLimits, Searcher, VALUE_INFINITE, VALUE_MATE, tt::Bound},
     };
-
-    #[test]
-    fn late_move_reduction_requires_both_depth_and_searched_rank() {
-        assert_eq!(super::late_move_reduction(5, 8), 2);
-        for depth in 3..super::MAX_PLY as i32 {
-            for searched in 4..=218 {
-                let reduction = super::late_move_reduction(depth, searched);
-                assert_eq!(reduction, if depth >= 5 && searched >= 8 { 2 } else { 1 });
-                assert!(depth - 1 - reduction >= 1);
-            }
-        }
-    }
 
     #[test]
     fn qsearch_never_prunes_losing_capture_evasions() {

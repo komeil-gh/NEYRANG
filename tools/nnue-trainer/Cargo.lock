@@ -212,11 +212,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4caf9c718f831a8568f030576e6a6e6aa487ed5f8732ddb0ba79e9a3ea0421ca"
 
 [[package]]
+name = "neyrang"
+version = "0.3.0-dev"
+
+[[package]]
 name = "neyrang-nnue-trainer"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bullet-trainer",
  "bullet_lib",
+ "neyrang",
 ]
 
 [[package]]

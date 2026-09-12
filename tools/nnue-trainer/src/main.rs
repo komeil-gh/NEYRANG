@@ -16,9 +16,10 @@ use bullet::{
     },
     value::ValueTrainerBuilder,
 };
+use bullet_trainer::reader::DataReader;
 use neyrang_nnue_trainer::{
     ACTIVATION_QUANT, DeterministicViriLoader, EpochPlan, OUTPUT_BIAS_QUANT, OUTPUT_QUANT,
-    POSITION_SHUFFLE_SEED, PositionFilter,
+    POSITION_SHUFFLE_SEED, PositionFilter, TeacherTextLoader,
 };
 
 const HIDDEN_SIZE: usize = 128;
@@ -65,6 +66,7 @@ struct Args {
     position_filter: PositionFilter,
     wdl_proportion: f32,
     feature_set: TrainerFeatureSet,
+    input_format: String,
 }
 
 fn main() -> ExitCode {
@@ -93,6 +95,23 @@ fn run(args: Args) -> Result<(), String> {
         return Err("buffer size and loader thread count must be positive".to_string());
     }
 
+    let chunk_positions = args
+        .buffer_megabytes
+        .checked_mul(1024 * 1024)
+        .and_then(|bytes| bytes.checked_div(std::mem::size_of::<ChessBoard>()))
+        .ok_or("loader buffer size overflow")?;
+    if args.input_format == "teacher-text-v1" {
+        let loader = TeacherTextLoader::new(&args.train, plan.positions, chunk_positions)?;
+        train(args, plan, loader)
+    } else {
+        let loader = DeterministicViriLoader::new(&args.train, chunk_positions)
+            .map_err(|error| error.to_string())?
+            .with_filter(args.position_filter);
+        train(args, plan, loader)
+    }
+}
+
+fn train(args: Args, plan: EpochPlan, loader: impl DataReader<ChessBoard>) -> Result<(), String> {
     let schedule = TrainingSchedule {
         net_id: args.net_id.clone(),
         eval_scale: EVAL_SCALE as f32,
@@ -114,17 +133,8 @@ fn run(args: Args) -> Result<(), String> {
         output_directory: &args.output_directory,
         batch_queue_size: 32,
     };
-    let chunk_positions = args
-        .buffer_megabytes
-        .checked_mul(1024 * 1024)
-        .and_then(|bytes| bytes.checked_div(std::mem::size_of::<ChessBoard>()))
-        .ok_or("loader buffer size overflow")?;
-    let loader = DeterministicViriLoader::new(&args.train, chunk_positions)
-        .map_err(|error| error.to_string())?
-        .with_filter(args.position_filter);
-
     println!(
-        "NEYRANG epoch contract: positions={} batch_size={} batches={} position_filter={} wdl_proportion={} feature_set={} network_seed={} position_shuffle_seed={} activation_quant={} output_quant={} bullet_rev=629ee50000b2afb7b3337595401c830d3b1e0f42",
+        "NEYRANG epoch contract: positions={} batch_size={} batches={} position_filter={} wdl_proportion={} feature_set={} network_seed={} position_shuffle_seed={} activation_quant={} output_quant={} input_format={} bullet_rev=629ee50000b2afb7b3337595401c830d3b1e0f42",
         plan.positions,
         plan.batch_size,
         plan.batches,
@@ -135,6 +145,7 @@ fn run(args: Args) -> Result<(), String> {
         POSITION_SHUFFLE_SEED,
         ACTIVATION_QUANT,
         OUTPUT_QUANT,
+        args.input_format,
     );
     match args.feature_set {
         TrainerFeatureSet::Chess768 => {
@@ -242,6 +253,7 @@ fn parse_args_from(mut values: impl Iterator<Item = String>) -> Result<Args, Str
     let mut position_filter = None;
     let mut wdl_proportion = None;
     let mut feature_set = None;
+    let mut input_format = "viriformat".to_string();
     while let Some(flag) = values.next() {
         let value = values
             .next()
@@ -257,10 +269,13 @@ fn parse_args_from(mut values: impl Iterator<Item = String>) -> Result<Args, Str
             "--position-filter" => position_filter = Some(value.parse()?),
             "--wdl-proportion" => wdl_proportion = Some(parse_probability(&flag, &value)?),
             "--feature-set" => feature_set = Some(parse_feature_set(&value)?),
+            "--input-format" if matches!(value.as_str(), "viriformat" | "teacher-text-v1") => {
+                input_format = value;
+            }
             _ => return Err(format!("unknown argument: {flag}")),
         }
     }
-    Ok(Args {
+    let args = Args {
         train: train.ok_or("missing --train")?,
         output_directory: output_directory.ok_or("missing --output-dir")?,
         net_id: net_id.ok_or("missing --net-id")?,
@@ -271,7 +286,14 @@ fn parse_args_from(mut values: impl Iterator<Item = String>) -> Result<Args, Str
         position_filter: position_filter.ok_or("missing --position-filter")?,
         wdl_proportion: wdl_proportion.ok_or("missing --wdl-proportion")?,
         feature_set: feature_set.ok_or("missing --feature-set")?,
-    })
+        input_format,
+    };
+    if args.input_format == "teacher-text-v1"
+        && (args.position_filter != PositionFilter::None || args.wdl_proportion != 0.0)
+    {
+        return Err("teacher-text-v1 requires --position-filter none --wdl-proportion 0; export owns eligibility".into());
+    }
+    Ok(args)
 }
 
 fn parse_feature_set(value: &str) -> Result<TrainerFeatureSet, String> {
@@ -303,6 +325,46 @@ fn parse_probability(flag: &str, value: &str) -> Result<f32, String> {
 #[cfg(test)]
 mod tests {
     use super::{PositionFilter, TrainerFeatureSet, parse_args_from};
+
+    #[test]
+    fn teacher_input_is_explicit_and_rejects_incompatible_filter_or_blend() {
+        let base = [
+            "--train",
+            "train.txt",
+            "--output-dir",
+            "new-output",
+            "--net-id",
+            "synthetic",
+            "--positions",
+            "8",
+            "--batch-size",
+            "4",
+            "--buffer-mb",
+            "1",
+            "--threads",
+            "1",
+            "--position-filter",
+            "none",
+            "--wdl-proportion",
+            "0",
+            "--feature-set",
+            "chess768",
+        ];
+        assert!(parse_args_from(base.map(str::to_owned).into_iter()).is_ok());
+        let mut text: Vec<String> = base.into_iter().map(str::to_owned).collect();
+        text.extend(["--input-format".into(), "teacher-text-v1".into()]);
+        assert!(parse_args_from(text.clone().into_iter()).is_ok());
+        for (flag, value) in [
+            ("--position-filter", "bullet-default"),
+            ("--wdl-proportion", "0.75"),
+            ("--input-format", "unknown"),
+        ] {
+            let mut bad = text.clone();
+            let index = bad.iter().position(|v| v == flag).unwrap();
+            bad[index + 1] = value.into();
+            assert!(parse_args_from(bad.into_iter()).is_err());
+        }
+    }
 
     #[test]
     fn trainer_cli_requires_an_explicit_supported_filter_name() {

@@ -9,6 +9,9 @@ use std::{
 use bullet::game::formats::{bulletformat::ChessBoard, viriformat::dataformat::Game};
 use bullet_trainer::reader::DataReader;
 
+mod teacher_text;
+pub use teacher_text::TeacherTextLoader;
+
 pub const POSITION_SHUFFLE_SEED: u64 = 2_026_090_111;
 pub const ACTIVATION_QUANT: i16 = 511;
 pub const OUTPUT_QUANT: i16 = 768;

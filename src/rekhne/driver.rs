@@ -24,11 +24,6 @@ pub const VALUE_MATE: i32 = 30_000;
 pub const VALUE_INFINITE: i32 = 32_000;
 const NULL_MOVE_MIN_DEPTH: i32 = 4;
 const NULL_MOVE_REDUCTION: i32 = 2;
-const NULL_MOVE_ADAPTIVE_MIN_DEPTH: i32 = 8;
-
-const fn null_move_reduction(depth: i32) -> i32 {
-    NULL_MOVE_REDUCTION + (depth >= NULL_MOVE_ADAPTIVE_MIN_DEPTH) as i32
-}
 
 #[derive(Clone, Copy)]
 struct SearchContext {
@@ -68,14 +63,6 @@ impl SearchContext {
             preferred: None,
             null_allowed: false,
             in_null_subtree: true,
-        }
-    }
-
-    const fn with_null_disabled(self) -> Self {
-        Self {
-            preferred: self.preferred,
-            null_allowed: false,
-            in_null_subtree: self.in_null_subtree,
         }
     }
 }
@@ -712,12 +699,11 @@ impl<'a> Searcher<'a> {
             {
                 self.statistics.null_move_attempts += 1;
             }
-            let reduction = null_move_reduction(depth);
             self.push_null_accumulator(ply);
             let undo = position.make_null_move();
             let score = -self.negamax(
                 position,
-                depth - 1 - reduction,
+                depth - 1 - NULL_MOVE_REDUCTION,
                 ply + 1,
                 -beta,
                 -beta + 1,
@@ -732,34 +718,9 @@ impl<'a> Searcher<'a> {
                 #[cfg(feature = "stats")]
                 {
                     self.statistics.null_move_fail_highs += 1;
+                    self.statistics.null_move_cutoffs += 1;
                 }
-                let verified = if reduction > NULL_MOVE_REDUCTION {
-                    #[cfg(feature = "stats")]
-                    {
-                        self.statistics.null_move_verifications += 1;
-                    }
-                    let verification = self.negamax(
-                        position,
-                        depth - 1 - reduction,
-                        ply,
-                        beta - 1,
-                        beta,
-                        context.with_null_disabled(),
-                    );
-                    if self.stopped {
-                        return VALUE_DRAW;
-                    }
-                    verification >= beta
-                } else {
-                    true
-                };
-                if verified {
-                    #[cfg(feature = "stats")]
-                    {
-                        self.statistics.null_move_cutoffs += 1;
-                    }
-                    return beta;
-                }
+                return beta;
             }
         }
         let moving_color = position.side_to_move();
@@ -1288,7 +1249,7 @@ mod timing_tests {
 mod tests {
     use std::sync::atomic::AtomicBool;
 
-    use super::{SearchContext, SearchSetup, SearchStatistics, null_move_reduction};
+    use super::{SearchContext, SearchSetup, SearchStatistics};
     use crate::{
         chess::{Move, Position},
         rekhne::{SearchLimits, Searcher, VALUE_INFINITE, VALUE_MATE, tt::Bound},
@@ -1323,14 +1284,6 @@ mod tests {
 
         assert!(searcher.statistics.bad_captures > 0);
         assert_eq!(searcher.statistics.see_prunes, 0);
-    }
-
-    #[test]
-    fn adaptive_null_reduction_changes_only_at_depth_eight() {
-        assert_eq!(null_move_reduction(4), 2);
-        assert_eq!(null_move_reduction(7), 2);
-        assert_eq!(null_move_reduction(8), 3);
-        assert_eq!(null_move_reduction(32), 3);
     }
 
     #[test]

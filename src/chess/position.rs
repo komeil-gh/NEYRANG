@@ -216,6 +216,10 @@ impl Position {
         super::movegen::generate_legal(self)
     }
 
+    pub fn has_legal_move(&mut self) -> bool {
+        super::movegen::has_legal_move(self)
+    }
+
     pub fn is_in_check(&self, color: Color) -> bool {
         super::movegen::is_in_check(self, color)
     }

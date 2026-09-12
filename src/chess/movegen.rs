@@ -29,6 +29,23 @@ pub(crate) fn generate_legal(position: &mut Position) -> MoveList {
     legal
 }
 
+pub(crate) fn has_legal_move(position: &mut Position) -> bool {
+    let color = position.side_to_move();
+    let Some(king) = single_square(position.pieces(color, PieceType::King)) else {
+        return false;
+    };
+    // A legal pawn move proves non-terminal status without generating every piece.
+    let mut pawns = MoveList::new();
+    generate_pawns(position, &mut pawns);
+    if pawns
+        .iter()
+        .any(|&mv| king_is_safe_after_move(position, mv, color, king))
+    {
+        return true;
+    }
+    !generate_legal(position).is_empty()
+}
+
 #[cfg(test)]
 fn generate_legal_reference(position: &mut Position) -> MoveList {
     let pseudo = generate_pseudo_legal(position);
@@ -510,6 +527,7 @@ mod tests {
             "reference generation must restore position"
         );
         let candidate = generate_legal(position);
+        assert_eq!(has_legal_move(position), !reference.is_empty());
         assert_eq!(
             *position, before,
             "candidate generation must not mutate position"

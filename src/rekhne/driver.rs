@@ -921,7 +921,11 @@ impl<'a> Searcher<'a> {
         if !in_check {
             let stand_pat = self.evaluate_position(position, ply);
             if stand_pat >= beta {
-                return stand_pat;
+                return if position.has_legal_move() {
+                    stand_pat
+                } else {
+                    VALUE_DRAW
+                };
             }
             alpha = alpha.max(stand_pat);
         }
@@ -1221,6 +1225,36 @@ mod timing_tests {
         assert!(result.best_move.is_some());
         assert!(result.elapsed >= Duration::from_millis(15));
         assert_eq!(result.hashfull, 0);
+    }
+
+    #[test]
+    fn qsearch_resolves_terminal_positions_before_stand_pat() {
+        for (fen, expected) in [
+            ("7k/5Q2/6K1/8/8/8/8/8 b - - 0 1", VALUE_DRAW),
+            ("k7/1r1N4/8/1N1Q4/8/8/8/7K b - - 0 1", VALUE_DRAW),
+            ("7k/6Q1/6K1/8/8/8/8/8 b - - 0 1", -super::VALUE_MATE + 1),
+        ] {
+            for (alpha, beta) in [(-10_001, -10_000), (-1, 1), (10_000, 10_001)] {
+                let mut position = Position::from_fen(fen).unwrap();
+                assert!(position.legal_moves().is_empty());
+                let original = position.clone();
+                let stop = AtomicBool::new(false);
+                let mut searcher = Searcher::new(&stop);
+                let hashes = [position.repetition_hash()];
+                searcher.reset(
+                    &mut position,
+                    &SearchLimits::depth(1),
+                    &hashes,
+                    super::SearchSetup::normal(),
+                );
+                assert_eq!(
+                    searcher.qsearch(&mut position, 1, alpha, beta, SearchContext::normal(None)),
+                    expected,
+                    "{fen}, window [{alpha}, {beta}]"
+                );
+                assert_eq!(position, original);
+            }
+        }
     }
 
     #[test]

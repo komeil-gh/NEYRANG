@@ -5,6 +5,7 @@ use std::{
     io::Write,
     path::PathBuf,
     process::{Command, Stdio},
+    sync::atomic::{AtomicU64, Ordering},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -116,9 +117,11 @@ fn crc32(bytes: &[u8]) -> u32 {
 }
 
 fn unique_temp_directory() -> PathBuf {
+    static NEXT_ID: AtomicU64 = AtomicU64::new(0);
+    let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    std::env::temp_dir().join(format!("neyrang-nnue-uci-{}-{nonce}", std::process::id()))
+    std::env::temp_dir().join(format!("neyrang-nnue-uci-{}-{nonce}-{id}", std::process::id()))
 }

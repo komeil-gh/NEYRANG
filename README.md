@@ -164,9 +164,8 @@ workload; elapsed time and nodes per second depend on the machine and build.
 
 Search changes are checked with tactical tests, deterministic benchmarks,
 color-reversed engine matches, and sequential probability ratio tests (SPRT).
-Playing-strength results are recorded with their opponents, time controls,
-sample sizes, and decision rules in the
-[experiment ledger](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/docs/development/experiments.md).
+Playing-strength results should record opponents, time controls, sample sizes,
+and decision rules.
 Perft, benchmark speed, and offline training results are not Elo ratings.
 
 ## Development
@@ -187,8 +186,8 @@ lists their prerequisites and commands.
 
 Keep each search or evaluation experiment focused. Record the hypothesis,
 baseline, test conditions, and acceptance rule before collecting results;
-retain or reject the change against that rule. Store detailed results in the
-experiment ledger so they can be reviewed alongside the code.
+retain or reject the change against that rule. Keep machine-specific paths,
+host details, private datasets, and raw experiment artifacts outside Git.
 
 ### Experimental NNUE
 
@@ -206,15 +205,12 @@ training documentation is linked below.
 ## Documentation
 
 Start with the [architecture](docs/architecture.md), [testing guide](docs/testing.md),
-or [changelog](CHANGELOG.md) for the checked-out branch. Detailed development
-guides are grouped by task:
+or [changelog](CHANGELOG.md) for the checked-out branch:
 
-| Task | Development documentation |
+| Task | Documentation |
 | --- | --- |
-| Understand search and evaluation | [REKHNE](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/docs/rekhne.md) · [SANJ](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/docs/sanj.md) |
-| Integrate or profile the engine | [OpenBench](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/docs/openbench.md) · [Search profiling](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/docs/development/search-observability.md) |
-| Plan and assess experiments | [Roadmap](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/docs/development/competitive-roadmap.md) · [Experiment ledger](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/docs/development/experiments.md) |
-| Work on NNUE | [Reference implementation](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/docs/development/nnue-reference.md) · [Data and training](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/docs/development/nnue-data.md) |
+| Understand the engine | [Search](docs/search.md) · [Evaluation](docs/evaluation.md) |
+| Integrate the engine | [En Croissant](docs/en-croissant.md) |
 
 ## Contributing and security
 

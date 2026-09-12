@@ -17,7 +17,7 @@ import numpy as np
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-REGISTRATION_PATH = REPO_ROOT / "docs/evidence/sanj-h3b-fitter-registration.json"
+REGISTRATION_PATH = REPO_ROOT / "testing/private/sanj-h3b-fitter-registration.json"
 COMMIT = re.compile(r"^[0-9a-f]{40}$")
 
 

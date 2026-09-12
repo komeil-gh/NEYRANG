@@ -34,6 +34,28 @@ pub(crate) fn has_legal_move(position: &mut Position) -> bool {
     let Some(king) = single_square(position.pieces(color, PieceType::King)) else {
         return false;
     };
+    // Prove a single push legal before materializing all pawn moves.
+    let pawns = position.pieces(color, PieceType::Pawn);
+    let mut pushes = match color {
+        Color::White => pawns << 8,
+        Color::Black => pawns >> 8,
+    } & !position.all_occupancy();
+    while let Some(to) = pop_square(&mut pushes) {
+        let from_rank = match color {
+            Color::White => to.rank() - 1,
+            Color::Black => to.rank() + 1,
+        };
+        let from = Square::from_coords(to.file(), from_rank)
+            .expect("a shifted pawn has an on-board origin");
+        let flag = if to.rank() == promotion_rank(color) {
+            MoveFlag::QueenPromotion
+        } else {
+            MoveFlag::Quiet
+        };
+        if king_is_safe_after_move(position, Move::new(from, to, flag), color, king) {
+            return true;
+        }
+    }
     // A legal pawn move proves non-terminal status without generating every piece.
     let mut pawns = MoveList::new();
     generate_pawns(position, &mut pawns);
@@ -443,7 +465,7 @@ fn pop_square(bitboard: &mut Bitboard) -> Option<Square> {
 mod tests {
     use super::*;
 
-    const CURATED_FENS: [&str; 8] = [
+    const CURATED_FENS: [&str; 12] = [
         Position::STARTPOS_FEN,
         "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
         "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
@@ -452,6 +474,10 @@ mod tests {
         "4r2k/8/8/8/1b6/8/8/4K3 w - - 0 1",
         "4r2k/8/8/8/8/8/4R3/4K3 w - - 0 1",
         "7k/P7/8/8/8/8/7p/K7 w - - 0 1",
+        "7k/P7/8/8/8/8/7p/K7 b - - 0 1",
+        "7k/5Q2/6K1/8/8/8/8/8 b - - 0 1",
+        "7k/6Q1/6K1/8/8/8/8/8 b - - 0 1",
+        "4r2k/8/8/8/8/8/3PK3/8 w - - 0 1",
     ];
 
     #[derive(Default)]

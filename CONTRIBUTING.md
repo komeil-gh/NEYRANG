@@ -55,4 +55,10 @@ Keep commits scoped and use the pull-request evidence template. Documentation-on
 
 ## License boundary
 
-The project owner has not selected a project license yet. Until that decision is recorded, source availability does not grant permission to copy, redistribute, or create derivative releases. Discuss substantial external contributions with the maintainer before investing work so authorship and future licensing terms are explicit.
+Contributions are accepted under the project's
+[`GPL-3.0-or-later`](LICENSE) license. By submitting a contribution, you confirm
+that you have the right to provide it under those terms. Preserve copyright and
+license notices on code or data that may legally be redistributed, and keep
+externally licensed networks, datasets, books, and generated artifacts out of
+the repository unless their provenance and compatible distribution terms are
+documented.

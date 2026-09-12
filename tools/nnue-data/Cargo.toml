@@ -5,6 +5,7 @@ edition = "2024"
 rust-version = "1.98"
 publish = false
 description = "Lossless game-record codec for NEYRANG NNUE training data"
+license = "GPL-3.0-or-later"
 
 [dependencies]
 neyrang = { path = "../.." }

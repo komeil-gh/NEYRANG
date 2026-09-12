@@ -216,7 +216,7 @@ guides are grouped by task:
 | Plan and assess experiments | [Roadmap](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/docs/development/competitive-roadmap.md) · [Experiment ledger](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/docs/development/experiments.md) |
 | Work on NNUE | [Reference implementation](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/docs/development/nnue-reference.md) · [Data and training](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/docs/development/nnue-data.md) |
 
-## Contributing, security, and license
+## Contributing and security
 
 Bug reports should include the branch and commit, build command, input position
 or UCI commands, and expected and observed behavior. Follow
@@ -225,5 +225,13 @@ for changes and experiment proposals. Use the process in
 [SECURITY.md](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/SECURITY.md)
 for security-sensitive reports.
 
-No project license has been selected yet. The repository is publicly readable;
-an open-source license has not been granted.
+## License
+
+NEYRANG is free software licensed under the
+[GNU General Public License v3.0 or later](LICENSE) (`GPL-3.0-or-later`).
+See [AUTHORS](AUTHORS) for project authorship.
+
+No NNUE network or training dataset is bundled with the engine. Experimental
+networks and corpora mentioned in the development records are separate local
+artifacts, not release assets; any future distributed artifact must state its
+own license and data provenance.

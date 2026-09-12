@@ -542,11 +542,14 @@ mod tests {
         let completed_move = legal_move("d2d4");
         let late_move = legal_move("e2e4");
         let (sender, receiver) = mpsc::sync_channel(1);
+        let (closed_sender, closed_receiver) = mpsc::sync_channel(1);
         let child = thread::spawn(move || {
             sender
                 .send(SearchMessage::Info(search_info(completed_move)))
                 .expect("supervisor receives completed info");
-            thread::sleep(Duration::from_millis(20));
+            closed_receiver
+                .recv_timeout(Duration::from_secs(5))
+                .expect("supervisor closes output before late messages");
             sender
                 .send(SearchMessage::Info(search_info(late_move)))
                 .expect("supervisor drains late info");
@@ -566,16 +569,25 @@ mod tests {
             Arc::clone(&stop),
             Some(Instant::now() + Duration::from_millis(2)),
             Some(fallback),
-            |line| lines.push(line.to_owned()),
+            |line| {
+                lines.push(line.to_owned());
+                if line.starts_with("bestmove ") {
+                    closed_sender.send(()).expect("child waits for closure");
+                }
+            },
         );
 
-        assert!(lines[0].starts_with("info depth 1 "), "{lines:?}");
-        assert_eq!(lines.last().map(String::as_str), Some("bestmove d2d4"));
-        assert_eq!(
-            lines.len(),
-            2,
-            "late output escaped the closed gate: {lines:?}"
-        );
+        // The deadline may win before the child is scheduled. Both outcomes
+        // must suppress every message sent after bestmove closes the gate.
+        match lines.as_slice() {
+            [best] => assert_eq!(best, "bestmove a2a3"),
+            [info, best] => {
+                assert!(info.starts_with("info depth 1 "), "{lines:?}");
+                assert!(info.ends_with(" pv d2d4"), "{lines:?}");
+                assert_eq!(best, "bestmove d2d4");
+            }
+            _ => panic!("late output escaped the closed gate: {lines:?}"),
+        }
         assert!(stop.load(Ordering::Relaxed));
     }
 

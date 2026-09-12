@@ -123,5 +123,8 @@ fn unique_temp_directory() -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    std::env::temp_dir().join(format!("neyrang-nnue-uci-{}-{nonce}-{id}", std::process::id()))
+    std::env::temp_dir().join(format!(
+        "neyrang-nnue-uci-{}-{nonce}-{id}",
+        std::process::id()
+    ))
 }

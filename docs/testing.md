@@ -98,3 +98,29 @@ python3 -m unittest scripts.tests.test_protocol_log
 Generated games, corpora, networks, profiles, machine inventories, absolute
 paths, credentials, and host-specific launch files belong under ignored local
 directories such as `testing/private/`, never in Git.
+
+### Teacher corpus preparation
+
+`python3 -m scripts.teacher_corpus` consumes completed `teacher_export` directories
+in registered group order. Supply repeated `--input` arguments, the full ordered
+`--groups` JSON, a new `--output` directory, and explicit `--count`, `--exposures`
+and `--seed` values from the experiment registration.
+
+It verifies export hashes, policy, text/provenance alignment and complete group
+coverage before selecting the exact unique-row quota. Selection keeps the first
+eligible canonical first-four-field FEN occurrence, then ranks by SHA-256 of
+`seed + TAB + group + TAB + decimal ply`, with group/ply tie-breaking. The derived
+training text streams repeated copies of the selected base file; repetitions
+are exposures, not new positions or independently shuffled epochs. Unique keys
+and candidate records remain in memory; this is a bounded-corpus utility, not
+an unlimited streaming index.
+
+The manifest binds inputs, output hashes, byte counts and selection settings.
+`position-keys.txt` contains all observed TRAIN keys, including ineligible and
+capped-game rows, for later evaluation exclusions. The caller must first require
+the full campaign's independent source audits, bind the export list and keep
+evaluation sets sealed. This command does not launch training or promote an engine.
+
+```bash
+python3 -m unittest scripts.tests.test_teacher_corpus
+```

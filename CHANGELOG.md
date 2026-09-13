@@ -6,6 +6,8 @@ All notable changes to NEYRANG are documented here.
 
 ### Added
 
+- Exact-quota teacher corpus selection with registered-order transposition
+  deduplication, input/output hash binding, and streamed exposure expansion.
 - Exclusive-create protocol evidence logging with expected-byte SHA-256 checks
   and persistent write-error detection, outside the playing engine.
 - A no-clobber fixed-partition SANJ corpus mode for separately sourced final

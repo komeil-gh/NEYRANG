@@ -140,6 +140,20 @@ points and final untouched holdout remain unfinished. N2a now supplies
 bit-exact scalar engine parity and opt-in playing integration; SIMD, distributed
 NNUE games and any retention decision require separate registration.
 
+Raw Bullet checkpoints can be converted directly into a no-clobber NEYRANG
+artifact with an explicit quantization contract:
+
+```bash
+cargo run --release --manifest-path tools/nnue-reference/Cargo.toml \
+  --bin quantize-raw -- RAW.bin NETWORK.nnue QA QB SCALE \
+  --feature-set chess768x3hm
+```
+
+This conversion validates tensor geometry, finite weights, integer ranges and
+the versioned artifact checksum. Quantization values must be frozen before an
+untouched evaluation partition is opened; a successful conversion or parity
+screen is not strength evidence.
+
 ## Primary references
 
 - [OpenBench public-engine requirements](https://github.com/AndyGrant/OpenBench/wiki/Requirements-For-Public-Engines)

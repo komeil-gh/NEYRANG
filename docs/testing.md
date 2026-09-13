@@ -80,6 +80,21 @@ loss as Elo evidence.
 
 ## Private artifacts
 
+### Protocol evidence
+
+Use `scripts.protocol_log.ProtocolLog` for new Python engine-collection logs.
+It creates a new file exclusively, without append mode, and compares the final
+on-disk bytes with the bytes submitted to the handler. Call `verify()` after
+the engine exits and before closing the handler or publishing success. A write
+error or hash mismatch invalidates collection even if the engine exited zero.
+This storage check does not replace independent raw-UCI, history, or game audits.
+
+Run its regression check with:
+
+```bash
+python3 -m unittest scripts.tests.test_protocol_log
+```
+
 Generated games, corpora, networks, profiles, machine inventories, absolute
 paths, credentials, and host-specific launch files belong under ignored local
 directories such as `testing/private/`, never in Git.

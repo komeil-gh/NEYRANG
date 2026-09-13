@@ -6,6 +6,8 @@ All notable changes to NEYRANG are documented here.
 
 ### Added
 
+- Exclusive-create protocol evidence logging with expected-byte SHA-256 checks
+  and persistent write-error detection, outside the playing engine.
 - A no-clobber fixed-partition SANJ corpus mode for separately sourced final
   holdouts, with independent PGN replay that verifies every record remains in
   the registered sealed partition while legacy 80/10/10 builds stay unchanged.

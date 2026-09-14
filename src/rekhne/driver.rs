@@ -25,6 +25,10 @@ pub const VALUE_INFINITE: i32 = 32_000;
 const NULL_MOVE_MIN_DEPTH: i32 = 4;
 const NULL_MOVE_REDUCTION: i32 = 2;
 
+const fn null_move_reduction(depth: i32) -> i32 {
+    if depth >= 6 { 3 } else { NULL_MOVE_REDUCTION }
+}
+
 #[derive(Clone, Copy)]
 struct SearchContext {
     preferred: Option<Move>,
@@ -701,9 +705,10 @@ impl<'a> Searcher<'a> {
             }
             self.push_null_accumulator(ply);
             let undo = position.make_null_move();
+            let reduction = null_move_reduction(depth);
             let score = -self.negamax(
                 position,
-                depth - 1 - NULL_MOVE_REDUCTION,
+                depth - 1 - reduction,
                 ply + 1,
                 -beta,
                 -beta + 1,
@@ -1283,7 +1288,7 @@ mod timing_tests {
 mod tests {
     use std::sync::atomic::AtomicBool;
 
-    use super::{SearchContext, SearchSetup, SearchStatistics};
+    use super::{SearchContext, SearchSetup, SearchStatistics, null_move_reduction};
     use crate::{
         chess::{Move, Position},
         rekhne::{SearchLimits, Searcher, VALUE_INFINITE, VALUE_MATE, tt::Bound},
@@ -1318,6 +1323,13 @@ mod tests {
 
         assert!(searcher.statistics.bad_captures > 0);
         assert_eq!(searcher.statistics.see_prunes, 0);
+    }
+
+    #[test]
+    fn null_move_reduction_deepens_only_from_depth_six() {
+        assert_eq!(null_move_reduction(4), 2);
+        assert_eq!(null_move_reduction(5), 2);
+        assert_eq!(null_move_reduction(6), 3);
     }
 
     #[test]

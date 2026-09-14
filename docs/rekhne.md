@@ -24,7 +24,7 @@ SEE builds one compact exchange board, computes attackers to the fixed target on
 
 At non-root, non-PV nodes, sufficiently late quiet moves may be reduced by one ply. The reduction starts with the fifth searched move at depth three, excludes TT moves, killers, strong-history moves, captures, promotions, checks, and nodes already in check, and always performs a normal-depth zero-window re-search when the reduced result raises alpha. The ordinary PVS full-window re-search remains authoritative when needed.
 
-The retained development branch also uses conservative fixed-R2 null-move pruning at eligible null-window nodes. It requires depth four, no check or earlier null, a non-mate beta, static evaluation at least beta, and meaningful friendly non-pawn material. Pawn-only and lone-minor endings are excluded. Legal terminal detection precedes the probe. Synthetic null descendants cannot use real-game repetition/fifty-move adjudication, the TT, or persistent killer/history training, and null state is restored exactly. There is no dynamic reduction or verification search in this variant.
+The retained development branch also uses conservative depth-scaled null-move pruning at eligible null-window nodes: R2 at depths four and five, then R3 from depth six. It requires no check or earlier null, a non-mate beta, static evaluation at least beta, and meaningful friendly non-pawn material. Pawn-only and lone-minor endings are excluded. Legal terminal detection precedes the probe. Synthetic null descendants cannot use real-game repetition/fifty-move adjudication, the TT, or persistent killer/history training, and null state is restored exactly. There is no verification search in this variant.
 
 ## Parallel search
 
@@ -83,5 +83,14 @@ trees, passed 1,500 direct deadline samples across Threads 1/2/4, and completed
 1,000 fresh same-binary games with zero timing or protocol anomaly. T1 is
 retained as infrastructure only; it provides no strength or Elo claim and does
 not retroactively prove the cause of the interrupted S4 games.
+
+The next isolated NMP refinement changed only deep eligible probes from R2 to
+R3, starting at depth six. It reduced the deterministic depth-8 tree from
+3,984,069 to 3,691,765 nodes (-7.34%). Audited 1,000-game paired UHO screens
+were neutral-positive at both 20,000 fixed nodes (`+1.04 +/-3.91 Elo`) and
+`0.5+0.005` equal time (`+3.13 +/-16.71 Elo`), so the cheaper search was
+retained without claiming a statistically proven Elo gain. Starting R3 one ply
+earlier was rejected after its separate 1,000-game equal-time screen scored
+`-6.95 +/-14.45 Elo`.
 
 NEYRANG does not learn merely by playing games; improvements still require an explicit, tested patch. Pawn hashing remains deferred. Any future baseline-protocol repair, null-move refinement, reverse futility, LMP, ProbCut, or singular-extension work must be pre-registered and isolated rather than bundled into the accepted candidate. The complete outcome is in the [0.3 final report](development/0.3.0-final-report.md).

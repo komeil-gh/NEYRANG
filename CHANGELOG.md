@@ -54,6 +54,9 @@ All notable changes to NEYRANG are documented here.
 
 ### Changed
 
+- Teacher shard export now creates a missing parent directory for its exclusive
+  output directory, preventing audited multi-shard runs from failing before the
+  first manifest is written.
 - The tracked source, documentation, examples, package names, executable, UCI
   identity, and current data contracts now use NEYRANG exclusively. A repository
   contract test rejects any tracked path or byte sequence containing the retired

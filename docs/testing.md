@@ -99,6 +99,14 @@ Generated games, corpora, networks, profiles, machine inventories, absolute
 paths, credentials, and host-specific launch files belong under ignored local
 directories such as `testing/private/`, never in Git.
 
+`scripts.teacher_export` creates the complete parent chain for a new shard
+output, but still refuses to reuse an existing output directory. Its focused
+regression check is:
+
+```bash
+python3 -m unittest scripts.tests.test_teacher_export
+```
+
 ### Teacher corpus preparation
 
 `python3 -m scripts.teacher_corpus` consumes completed `teacher_export` directories

@@ -120,7 +120,7 @@ class TeacherExportTest(unittest.TestCase):
                      "max_plies": 4, "max_nodes": 1100, "teacher_sha256": "0" * 64,
                      "sha256": {name: hashlib.sha256(contents.encode()).hexdigest() for name, contents in payloads.items()}}
             (inputs / "source-audit.json").write_text(json.dumps(audit))
-            output = root / "export"
+            output = root / "exports" / "00"
             report = export_shard(inputs, output, "train", 4, 1100)
             self.assertEqual(report["positions"], 4)
             self.assertEqual((output / "train.txt").read_text().splitlines()[0], "# " + ENCODING)

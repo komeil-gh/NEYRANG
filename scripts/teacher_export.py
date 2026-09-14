@@ -140,7 +140,7 @@ def export_shard(input_dir, output_dir, partition, max_plies, max_nodes):
             and all(isinstance(s, dict) and isinstance(s.get("group"), str) for s in sources),
             "empty/invalid opening groups")
     require(len({s["group"] for s in sources}) == len(sources), "duplicate opening groups")
-    output_dir.mkdir()
+    output_dir.mkdir(parents=True)
     count = completed = 0
     # A failed export retains its partial files, but never publishes manifest.json.
     with (input_dir / "games.jsonl").open("rb") as summaries, (input_dir / "labels.jsonl").open("rb") as labels, \

@@ -26,6 +26,11 @@ const NULL_MOVE_MIN_DEPTH: i32 = 4;
 const NULL_MOVE_REDUCTION: i32 = 2;
 const REVERSE_FUTILITY_MAX_DEPTH: i32 = 3;
 const REVERSE_FUTILITY_MARGIN: i32 = 150;
+const LATE_MOVE_PRUNING_MAX_DEPTH: i32 = 3;
+
+const fn late_move_pruning_threshold(depth: i32) -> usize {
+    (3 + depth * depth) as usize
+}
 
 const fn null_move_reduction(depth: i32) -> i32 {
     if depth >= 6 { 3 } else { NULL_MOVE_REDUCTION }
@@ -765,6 +770,20 @@ impl<'a> Searcher<'a> {
         let mut searched_moves = MoveList::new();
         while let Some(mv) = picker.next_move(position, &self.history) {
             let move_index = searched_moves.len();
+            if ply != 0
+                && !is_pv_node
+                && !in_check
+                && depth <= LATE_MOVE_PRUNING_MAX_DEPTH
+                && move_index >= late_move_pruning_threshold(depth)
+                && best > -mate_bound
+                && !mv.is_capture()
+                && !mv.is_promotion()
+                && ordering_preferred != Some(mv)
+                && !self.killers[ply].contains(&mv)
+            {
+                picker.skip_quiet_moves();
+                continue;
+            }
             #[cfg(feature = "stats")]
             {
                 self.statistics.moves_searched += 1;

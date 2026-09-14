@@ -24,6 +24,8 @@ SEE builds one compact exchange board, computes attackers to the fixed target on
 
 At non-root, non-PV nodes, sufficiently late quiet moves may be reduced by one ply. The reduction starts with the fifth searched move at depth three, excludes TT moves, killers, strong-history moves, captures, promotions, checks, and nodes already in check, and always performs a normal-depth zero-window re-search when the reduced result raises alpha. The ordinary PVS full-window re-search remains authoritative when needed.
 
+At depths one through three, H3f can stop the ordinary-quiet stage after `3 + depth * depth` searched moves once at least one non-mating line is known. Root and PV nodes, nodes in check, preferred moves, killers, promotions, captures, and every later bad-capture candidate remain searchable.
+
 The retained development branch also uses conservative depth-scaled null-move pruning at eligible null-window nodes: R2 at depths four and five, then R3 from depth six. It requires no check or earlier null, a non-mate beta, static evaluation at least beta, and meaningful friendly non-pawn material. Pawn-only and lone-minor endings are excluded. Legal terminal detection precedes the probe. Synthetic null descendants cannot use real-game repetition/fifty-move adjudication, the TT, or persistent killer/history training, and null state is restored exactly. There is no verification search in this variant.
 
 Before the null-move probe, a separately tested reverse-futility guard can return the static SANJ score at non-root, non-PV depths one through three when it exceeds beta by at least `150 * depth`. The guard is disabled in check, null subtrees, mate-score windows, low-material endings, and nodes whose TT move is quiet. Legal terminal detection remains authoritative.
@@ -103,5 +105,13 @@ nodes. Independent audits accepted both 1,000-game paired UHO gates: the
 `0.5+0.005` equal-time screen scored 57.05% (`+49.32 +/-16.85 Elo`). All
 2,000 games terminated normally with zero timing, legality, crash, warning, or
 protocol anomaly, so H3e was retained.
+
+H3f then added the guarded shallow late-move rule above. It reduced the
+depth-8 tree again, from 1,712,758 to 687,111 nodes (-59.89%), and the default
+depth-5 OpenBench tree from 105,187 to 45,540 nodes. Independent audits accepted
+both 1,000-game paired UHO gates: the 20,000-node screen scored 63.70%
+(`+97.69 +/-17.84 Elo`) and the `0.5+0.005` equal-time screen scored 55.90%
+(`+41.19 +/-16.93 Elo`). All 2,000 games terminated normally with no timing,
+legality, crash, warning, or protocol anomaly, so H3f was retained.
 
 NEYRANG does not learn merely by playing games; improvements still require an explicit, tested patch. Pawn hashing remains deferred. Any future baseline-protocol repair, null-move refinement, LMP, ProbCut, or singular-extension work must be pre-registered and isolated rather than bundled into the accepted candidate. The complete outcome is in the [0.3 final report](development/0.3.0-final-report.md).

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-expected_bench="${OPENBENCH_EXPECTED_BENCH:-105187}"
+expected_bench="${OPENBENCH_EXPECTED_BENCH:-45540}"
 profile="${OPENBENCH_TEST_PROFILE:-release}"
 exe_name="neyrang-openbench-contract-$$"
 engine="$root/$exe_name"

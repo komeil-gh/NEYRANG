@@ -28,6 +28,6 @@ fn sanj_trace_cli_streams_stdin_without_touching_uci() {
     let lines: Vec<_> = stdout.lines().collect();
     assert_eq!(lines.len(), 2);
     assert!(lines[0].starts_with("schema\trecord_id\ttarget\tfen\tstm\tphase\t"));
-    assert!(lines[1].starts_with("neyrang-sanj-trace-v1\tstart\t0.5\t"));
+    assert!(lines[1].starts_with("neyrang-sanj-trace-v2\tstart\t0.5\t"));
     assert_eq!(lines[0].split('\t').count(), lines[1].split('\t').count());
 }

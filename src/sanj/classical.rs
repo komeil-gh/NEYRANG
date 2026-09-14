@@ -119,5 +119,66 @@ fn king_safety(position: &Position, color: Color) -> i32 {
             }
         }
     }
-    shield * 14
+    shield * 14 - king_pressure(position, color, king)
+}
+
+fn king_pressure(position: &Position, color: Color, king: Square) -> i32 {
+    let enemy = color.opposite();
+    let occupancy = position.all_occupancy();
+    let zone = attacks::king_attacks(king) | king.bit();
+    let mut pressure = 0;
+
+    let mut pawns = position.pieces(enemy, PieceType::Pawn);
+    while pawns != 0 {
+        let index = pawns.trailing_zeros() as u8;
+        pawns &= pawns - 1;
+        let square = Square::from_index(index).expect("piece bit is a valid square");
+        pressure += (attacks::pawn_attacks(enemy, square) & zone).count_ones() as i32;
+    }
+
+    let mut attackers = 0;
+    for (kind, weight) in [
+        (PieceType::Knight, 2),
+        (PieceType::Bishop, 2),
+        (PieceType::Rook, 3),
+        (PieceType::Queen, 5),
+    ] {
+        let mut pieces = position.pieces(enemy, kind);
+        while pieces != 0 {
+            let index = pieces.trailing_zeros() as u8;
+            pieces &= pieces - 1;
+            let square = Square::from_index(index).expect("piece bit is a valid square");
+            let hits = match kind {
+                PieceType::Knight => attacks::knight_attacks(square),
+                PieceType::Bishop => attacks::bishop_attacks(square, occupancy),
+                PieceType::Rook => attacks::rook_attacks(square, occupancy),
+                PieceType::Queen => attacks::queen_attacks(square, occupancy),
+                _ => 0,
+            } & zone;
+            if hits != 0 {
+                attackers += 1;
+                pressure += weight + hits.count_ones() as i32;
+            }
+        }
+    }
+
+    if attackers < 2 && (attackers == 0 || position.pieces(enemy, PieceType::Queen) == 0) {
+        return 0;
+    }
+    (pressure * (attackers + 1)).min(120)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn coordinated_attack_scores_more_than_a_lone_minor() {
+        let lone = Position::from_fen("k7/8/8/8/8/5n2/8/6K1 w - - 0 1").unwrap();
+        let coordinated = Position::from_fen("k7/8/8/8/8/5n2/7r/6K1 w - - 0 1").unwrap();
+        let king = Square::G1;
+
+        assert_eq!(king_pressure(&lone, Color::White, king), 0);
+        assert!(king_pressure(&coordinated, Color::White, king) > 0);
+    }
 }

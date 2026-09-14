@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::chess::{Color, PieceType, Position, Square, attacks};
 
-pub const TRACE_SCHEMA: &str = "neyrang-sanj-trace-v1";
+pub const TRACE_SCHEMA: &str = "neyrang-sanj-trace-v2";
 
 pub const TRACE_COLUMNS: &str = concat!(
     "stm\tphase\t",
@@ -16,7 +16,7 @@ pub const TRACE_COLUMNS: &str = concat!(
     "passed_rank_sq_delta\t",
     "mobility_n_delta\tmobility_b_delta\tmobility_r_delta\t",
     "mobility_q_delta\t",
-    "rook_open_delta\trook_semi_open_delta\tking_shield_delta\t",
+    "rook_open_delta\trook_semi_open_delta\tking_shield_delta\tking_danger_delta\t",
     "middlegame_cp\tendgame_cp\twhite_cp\ttempo_cp\tstm_cp"
 );
 
@@ -53,6 +53,7 @@ pub struct EvalTrace {
     pub rook_open: i32,
     pub rook_semi_open: i32,
     pub king_shield: i32,
+    pub king_danger: i32,
     pub middlegame: i32,
     pub endgame: i32,
     pub white_score: i32,
@@ -97,6 +98,7 @@ pub fn trace(position: &Position) -> EvalTrace {
         rook_open: 0,
         rook_semi_open: 0,
         king_shield: 0,
+        king_danger: 0,
         middlegame: 0,
         endgame: 0,
         white_score: 0,
@@ -137,6 +139,7 @@ pub fn trace(position: &Position) -> EvalTrace {
         result.rook_open += sign * open;
         result.rook_semi_open += sign * semi_open;
         result.king_shield += sign * king_shield_coefficient(position, color);
+        result.king_danger += sign * king_danger_coefficient(position, color);
     }
 
     result.phase = result.phase.clamp(0, MAX_PHASE);
@@ -181,7 +184,8 @@ impl EvalTrace {
             + self.mobility[3] * 3
             + self.rook_open * 27
             + self.rook_semi_open * 15
-            + self.king_shield * 14;
+            + self.king_shield * 14
+            - self.king_danger;
         let endgame = material_eg + psqt_eg + self.bishop_pair * 41
             - self.doubled_extra * 14
             - self.isolated_pawn * 9
@@ -215,7 +219,7 @@ impl fmt::Display for EvalTrace {
                 "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t",
                 "{}\t{}\t{}\t{}\t",
                 "{}\t{}\t{}\t{}\t",
-                "{}\t{}\t{}\t",
+                "{}\t{}\t{}\t{}\t",
                 "{}\t{}\t{}\t{}\t{}"
             ),
             stm,
@@ -247,6 +251,7 @@ impl fmt::Display for EvalTrace {
             self.rook_open,
             self.rook_semi_open,
             self.king_shield,
+            self.king_danger,
             self.middlegame,
             self.endgame,
             self.white_score,
@@ -383,6 +388,57 @@ fn king_shield_coefficient(position: &Position, color: Color) -> i32 {
     shield
 }
 
+fn king_danger_coefficient(position: &Position, color: Color) -> i32 {
+    let king = position.pieces(color, PieceType::King);
+    if king == 0 {
+        return 0;
+    }
+    let king = Square::from_index(king.trailing_zeros() as u8).expect("king bit is valid");
+    let enemy = color.opposite();
+    let occupancy = position.all_occupancy();
+    let zone = attacks::king_attacks(king) | king.bit();
+    let mut pressure = 0;
+
+    let mut pawns = position.pieces(enemy, PieceType::Pawn);
+    while pawns != 0 {
+        let index = pawns.trailing_zeros() as u8;
+        pawns &= pawns - 1;
+        let square = Square::from_index(index).expect("piece bit is a valid square");
+        pressure += (attacks::pawn_attacks(enemy, square) & zone).count_ones() as i32;
+    }
+
+    let mut attackers = 0;
+    for (kind, weight) in [
+        (PieceType::Knight, 2),
+        (PieceType::Bishop, 2),
+        (PieceType::Rook, 3),
+        (PieceType::Queen, 5),
+    ] {
+        let mut pieces = position.pieces(enemy, kind);
+        while pieces != 0 {
+            let index = pieces.trailing_zeros() as u8;
+            pieces &= pieces - 1;
+            let square = Square::from_index(index).expect("piece bit is a valid square");
+            let hits = match kind {
+                PieceType::Knight => attacks::knight_attacks(square),
+                PieceType::Bishop => attacks::bishop_attacks(square, occupancy),
+                PieceType::Rook => attacks::rook_attacks(square, occupancy),
+                PieceType::Queen => attacks::queen_attacks(square, occupancy),
+                _ => 0,
+            } & zone;
+            if hits != 0 {
+                attackers += 1;
+                pressure += weight + hits.count_ones() as i32;
+            }
+        }
+    }
+
+    if attackers < 2 && (attackers == 0 || position.pieces(enemy, PieceType::Queen) == 0) {
+        return 0;
+    }
+    (pressure * (attackers + 1)).min(120)
+}
+
 const fn color_sign(color: Color) -> i32 {
     match color {
         Color::White => 1,
@@ -461,14 +517,15 @@ mod tests {
         mobility: bool,
         rook_file: bool,
         king_shield: bool,
+        king_danger: bool,
     }
 
     #[test]
     fn trace_header_and_row_have_stable_width() {
         let row = trace(&Position::startpos()).to_string();
-        assert_eq!(TRACE_SCHEMA, "neyrang-sanj-trace-v1");
+        assert_eq!(TRACE_SCHEMA, "neyrang-sanj-trace-v2");
         assert_eq!(TRACE_COLUMNS.split('\t').count(), row.split('\t').count());
-        assert_eq!(row.split('\t').count(), 34);
+        assert_eq!(row.split('\t').count(), 35);
     }
 
     #[test]
@@ -523,6 +580,7 @@ mod tests {
         assert!(coverage.mobility);
         assert!(coverage.rook_file);
         assert!(coverage.king_shield);
+        assert!(coverage.king_danger);
     }
 
     impl Coverage {
@@ -536,6 +594,7 @@ mod tests {
             self.mobility |= trace.mobility.iter().any(|value| *value != 0);
             self.rook_file |= trace.rook_open != 0 || trace.rook_semi_open != 0;
             self.king_shield |= trace.king_shield != 0;
+            self.king_danger |= trace.king_danger != 0;
         }
     }
 

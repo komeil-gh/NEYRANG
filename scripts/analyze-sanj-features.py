@@ -104,7 +104,7 @@ RECORD_ID = re.compile(
     r"^(?P<group>[A-Za-z0-9][A-Za-z0-9._-]*:pair-[0-9]{6,}):"
     r"game-[12]:ply-[0-9]{3,}$"
 )
-CURRENT_TRACE_SCHEMA = "neyrang-sanj-trace-v1"
+CURRENT_TRACE_SCHEMA = "neyrang-sanj-trace-v2"
 PRE_CONTRACT_TRACE_SCHEMA = re.compile(
     r"^[a-z0-9][a-z0-9-]*-eval-trace-v1$"
 )

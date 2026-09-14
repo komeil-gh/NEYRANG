@@ -170,7 +170,7 @@ class EvalFeatureAnalysisTests(unittest.TestCase):
                 values = {name: "0" for name in header}
                 values.update(
                     {
-                        "schema": "neyrang-sanj-trace-v1",
+                        "schema": "neyrang-sanj-trace-v2",
                         "record_id": f"source:pair-{index:06d}:game-1:ply-016",
                         "target": "0.5",
                         "fen": "8/8/8/8/8/8/8/K6k w - - 0 1",

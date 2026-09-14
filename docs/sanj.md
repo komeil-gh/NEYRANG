@@ -13,12 +13,15 @@ Implemented terms:
 - legal-geometry mobility approximation
 - isolated, doubled, and passed pawns
 - rook open and semi-open files
-- basic king pawn shield
+- king pawn shield
+- bounded nonlinear king-ring pressure from coordinated attackers
 - tempo
 
 The compact formula-based PSQT is intentionally inspectable and avoids importing unexplained tables. All terms are symmetric under color/rank mirroring. Tests confirm symmetric positions and material sign.
 
-Known limitations include limited king attack modeling, no pawn hash, no threats/space/outposts, and no tuning against game data. The evaluator is a clean bootstrap for search, not a strength claim.
+King danger uses a deliberately bounded coordination gate: a lone minor-piece gesture scores nothing, while multiple attackers—or one attacker backed by a queen—combine attacked king-zone squares and attacker weights into a middlegame penalty capped at 120 centipawns. It is a compact SANJ-specific model, not a copied evaluation table.
+
+Known limitations include no pawn hash, no general threats/space/outposts, and no systematic tuning against game data. The evaluator remains an inspectable bootstrap rather than a claim that handcrafted weights are finished.
 
 ## Experimental NNUE judgment
 
@@ -70,14 +73,14 @@ Use `-` instead of a path to read stdin. Each non-comment input row is exactly:
 record_id<TAB>target<TAB>FEN
 ```
 
-`target` is White-relative WDL space: `0` is a Black win, `0.5` is a draw, and `1` is a White win. Soft labels within `[0,1]` are accepted, but their provenance must be recorded. Output schema `neyrang-sanj-trace-v1` canonicalizes the FEN and writes fixed-order White-minus-Black coefficients for:
+`target` is White-relative WDL space: `0` is a Black win, `0.5` is a draw, and `1` is a White win. Soft labels within `[0,1]` are accepted, but their provenance must be recorded. Output schema `neyrang-sanj-trace-v2` canonicalizes the FEN and writes fixed-order White-minus-Black coefficients for:
 
 - piece counts and all ten raw PSQT rank/edge/center bases
 - bishop pair
 - doubled-extra, isolated, and squared passed-pawn advancement
 - knight, bishop, rook, and queen mobility
 - open and semi-open rook files
-- king-shield pawns
+- king-shield pawns and bounded coordinated king danger
 - phase plus exact middlegame, endgame, White-relative, tempo, and side-to-move scores
 
 The raw coefficients reconstruct every current constant and formula exactly. A deterministic 100,000-position oracle compares the reconstruction with production evaluation. The schema is accounting infrastructure, not permission to change weights or add terms.

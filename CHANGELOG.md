@@ -29,7 +29,7 @@ All notable changes to NEYRANG are documented here.
 - A reusable paired-match auditor that independently parses PGNs, reconstructs W/D/L and pentanomial counts, verifies opening/color pairs and complete telemetry, audits metadata, and scans strict logs for failure classes.
 - A 100,000-position exact-list/order legality oracle covering checks, double checks, pins, en passant, castling, and promotions.
 - A test-only immutable pre-G1 SEE oracle, exercised over 100,000 legal positions, 336,083 tactical moves, and 7,393,826 threshold queries.
-- A feature-gated `neyrang-sanj-trace-v1` coefficient schema and streaming TSV exporter, verified against production SANJ evaluation over 100,000 legal positions.
+- A feature-gated `neyrang-sanj-trace-v2` coefficient schema and streaming TSV exporter, including bounded king danger and verified against production SANJ evaluation over 100,000 legal positions.
 - A deterministic pair-first evaluation-corpus builder with provenance manifests, opening-group splits, quiet-position sampling, cross-partition leakage removal, and independently replayable records.
 - An independent corpus auditor that reconstructs every sampled position from PGN and rejects content tampering even when manifest hashes are rewritten.
 - A deterministic fresh-opening selector with PGN/EPD exclusion sets, canonical-FEN deduplication, fixed hash ranking, provenance output, and fail-closed capacity/overwrite checks.
@@ -81,6 +81,7 @@ All notable changes to NEYRANG are documented here.
 - H3f adds shallow late-move pruning after a depth-scaled searched-move floor while preserving preferred moves, killers, tactical moves, nodes in check, PV/root nodes, and mate safety.
 - H3g adds a check-aware shallow parent futility gate with a `100 * depth` SANJ margin and conservative move, material, mate-window, PV/root, and null-subtree guards.
 - H3h reuses the staged MovePicker's exact SEE result to prune sufficiently losing late captures through depth six without a second SEE call, while preserving first/preferred moves, checks, promotions, PV/root nodes, null subtrees, and mate defense.
+- H3l adds a SANJ-specific bounded king-ring term that rewards coordinated pressure rather than lone-piece gestures. It requires multiple non-pawn attackers, or queen backing for one attacker, and caps middlegame danger at 120 centipawns.
 
 ### Evidence
 
@@ -115,6 +116,7 @@ All notable changes to NEYRANG are documented here.
 - H3f reduced the retained depth-8 tree by a further 59.89% and passed two independently audited 1,000-game paired UHO gates: `+97.69 +/-17.84 Elo` at 20,000 fixed nodes and `+41.19 +/-16.93 Elo` at `0.5+0.005`, again with 2,000 normal terminations and no timing, legality, crash, warning, or protocol anomaly.
 - H3g reduced the retained depth-8 tree by 5.85%; its independently audited 1,000-game gates scored `+21.92 +/-17.00 Elo` at 20,000 nodes and `+4.86 +/-16.01 Elo` at `0.5+0.005`, with 2,000 normal terminations and no timing, legality, crash, warning, or protocol anomaly. The equal-time gain is not statistically proven.
 - H3h reduced the retained depth-8 tree by 12.34%; its independently audited 1,000-game gates scored `+13.21 +/-16.17 Elo` at 20,000 nodes and `+6.25 +/-17.43 Elo` at `0.5+0.005`, with 2,000 normal terminations and no timing, legality, crash, warning, or protocol anomaly. Neither gain is statistically proven.
+- H3l reduced the retained depth-8 tree from 567,113 to 536,259 nodes while its five-run local median changed from 275 to 292 ms. Its independently audited 1,000-game gates scored `+2.43 +/-16.98 Elo` at 20,000 nodes and `+2.78 +/-18.26 Elo` at `0.5+0.005`, with positive point estimates and no audit error. Neither gain is statistically proven.
 
 ## [0.2.0] - 2026-08-29
 

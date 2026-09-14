@@ -57,6 +57,7 @@ pub(crate) struct MovePicker {
     moves: MoveList,
     classes: [MoveClass; MoveList::CAPACITY],
     scores: [i32; MoveList::CAPACITY],
+    exchanges: [i32; MoveList::CAPACITY],
     preferred: Option<Move>,
     killers: [Move; 2],
     color: Color,
@@ -64,6 +65,7 @@ pub(crate) struct MovePicker {
     stage: Stage,
     stage_initialized: bool,
     last_move_was_scored: bool,
+    last_tactical_see: Option<i32>,
     statistics: OrderingStatistics,
 }
 
@@ -97,6 +99,7 @@ impl MovePicker {
             moves,
             classes: [MoveClass::Unclassified; MoveList::CAPACITY],
             scores: [i32::MIN; MoveList::CAPACITY],
+            exchanges: [0; MoveList::CAPACITY],
             preferred,
             killers,
             color,
@@ -104,6 +107,7 @@ impl MovePicker {
             stage: Stage::Preferred,
             stage_initialized: false,
             last_move_was_scored: false,
+            last_tactical_see: None,
             statistics: OrderingStatistics::default(),
         }
     }
@@ -114,6 +118,7 @@ impl MovePicker {
         history: &HistoryTable,
     ) -> Option<Move> {
         self.last_move_was_scored = false;
+        self.last_tactical_see = None;
         loop {
             match self.stage {
                 Stage::Preferred => {
@@ -220,6 +225,11 @@ impl MovePicker {
     }
 
     #[inline]
+    pub(crate) const fn last_tactical_see(&self) -> Option<i32> {
+        self.last_tactical_see
+    }
+
+    #[inline]
     #[cfg(feature = "stats")]
     pub(crate) const fn statistics(&self) -> OrderingStatistics {
         self.statistics
@@ -245,8 +255,9 @@ impl MovePicker {
             {
                 continue;
             }
-            let (score, is_good) = tactical_score(position, mv, &mut self.statistics);
+            let (score, is_good, exchange) = tactical_score(position, mv, &mut self.statistics);
             self.scores[index] = score;
+            self.exchanges[index] = exchange;
             self.classes[index] = if is_good {
                 MoveClass::GoodTactical
             } else {
@@ -296,6 +307,9 @@ impl MovePicker {
             }
         }
         let index = best_index?;
+        if matches!(class, MoveClass::GoodTactical | MoveClass::BadTactical) {
+            self.last_tactical_see = Some(self.exchanges[index]);
+        }
         self.classes[index] = MoveClass::Taken;
         Some(self.moves.as_slice()[index])
     }
@@ -305,7 +319,7 @@ fn tactical_score(
     position: &Position,
     mv: Move,
     _statistics: &mut OrderingStatistics,
-) -> (i32, bool) {
+) -> (i32, bool, i32) {
     #[cfg(feature = "stats")]
     {
         _statistics.moves_scored += 1;
@@ -338,13 +352,14 @@ fn tactical_score(
         (
             GOOD_TACTICAL_SCORE + promotion_bonus + mvv_lva + exchange,
             true,
+            exchange,
         )
     } else {
         #[cfg(feature = "stats")]
         {
             _statistics.bad_captures += 1;
         }
-        (BAD_CAPTURE_SCORE + mvv_lva + exchange, false)
+        (BAD_CAPTURE_SCORE + mvv_lva + exchange, false, exchange)
     }
 }
 
@@ -431,6 +446,32 @@ mod tests {
             assert_eq!(picker.statistics().bad_captures, 1);
             assert_eq!(picker.statistics().full_sorts, 0);
         }
+    }
+
+    #[test]
+    fn exposes_the_exact_see_already_paid_by_the_tactical_stage() {
+        let mut position = Position::from_fen("6k1/8/5p2/3qp3/2P1Q3/8/8/6K1 w - - 0 1")
+            .expect("ordering fixture must be valid");
+        let bad_capture = position
+            .find_legal_move("e4e5")
+            .expect("losing capture must be legal");
+        let expected = see(&position, bad_capture);
+        let history = HistoryTable::default();
+        let mut picker = MovePicker::main(
+            position.legal_moves(),
+            None,
+            [Move::NONE; 2],
+            position.side_to_move(),
+        );
+
+        while let Some(mv) = picker.next_move(&position, &history) {
+            if mv == bad_capture {
+                assert_eq!(picker.last_tactical_see(), Some(expected));
+                return;
+            }
+        }
+
+        panic!("bad capture was not returned");
     }
 
     #[test]

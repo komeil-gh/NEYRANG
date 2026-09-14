@@ -80,6 +80,7 @@ All notable changes to NEYRANG are documented here.
 - H3e adds guarded reverse-futility pruning only at non-root, non-PV depths one through three, preserving legal-terminal, check, mate-window, null-subtree, TT-quiet-move, and low-material safeguards.
 - H3f adds shallow late-move pruning after a depth-scaled searched-move floor while preserving preferred moves, killers, tactical moves, nodes in check, PV/root nodes, and mate safety.
 - H3g adds a check-aware shallow parent futility gate with a `100 * depth` SANJ margin and conservative move, material, mate-window, PV/root, and null-subtree guards.
+- H3h reuses the staged MovePicker's exact SEE result to prune sufficiently losing late captures through depth six without a second SEE call, while preserving first/preferred moves, checks, promotions, PV/root nodes, null subtrees, and mate defense.
 
 ### Evidence
 
@@ -113,6 +114,7 @@ All notable changes to NEYRANG are documented here.
 - H3e reduced the deterministic depth-8 tree by 53.60% and passed two independently audited 1,000-game paired UHO gates: `+32.76 +/-15.95 Elo` at 20,000 fixed nodes and `+49.32 +/-16.85 Elo` at `0.5+0.005`, with 2,000 normal terminations and no timing, legality, crash, warning, or protocol anomaly.
 - H3f reduced the retained depth-8 tree by a further 59.89% and passed two independently audited 1,000-game paired UHO gates: `+97.69 +/-17.84 Elo` at 20,000 fixed nodes and `+41.19 +/-16.93 Elo` at `0.5+0.005`, again with 2,000 normal terminations and no timing, legality, crash, warning, or protocol anomaly.
 - H3g reduced the retained depth-8 tree by 5.85%; its independently audited 1,000-game gates scored `+21.92 +/-17.00 Elo` at 20,000 nodes and `+4.86 +/-16.01 Elo` at `0.5+0.005`, with 2,000 normal terminations and no timing, legality, crash, warning, or protocol anomaly. The equal-time gain is not statistically proven.
+- H3h reduced the retained depth-8 tree by 12.34%; its independently audited 1,000-game gates scored `+13.21 +/-16.17 Elo` at 20,000 nodes and `+6.25 +/-17.43 Elo` at `0.5+0.005`, with 2,000 normal terminations and no timing, legality, crash, warning, or protocol anomaly. Neither gain is statistically proven.
 
 ## [0.2.0] - 2026-08-29
 

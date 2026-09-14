@@ -29,6 +29,8 @@ const REVERSE_FUTILITY_MARGIN: i32 = 150;
 const LATE_MOVE_PRUNING_MAX_DEPTH: i32 = 3;
 const FORWARD_FUTILITY_MAX_DEPTH: i32 = 4;
 const FORWARD_FUTILITY_MARGIN: i32 = 100;
+const STATIC_EXCHANGE_PRUNING_MAX_DEPTH: i32 = 6;
+const STATIC_EXCHANGE_PRUNING_MARGIN: i32 = 100;
 
 const fn late_move_pruning_threshold(depth: i32) -> usize {
     (3 + depth * depth) as usize
@@ -795,6 +797,19 @@ impl<'a> Searcher<'a> {
                 picker.skip_quiet_moves();
                 continue;
             }
+            let can_see_prune = ply != 0
+                && !is_pv_node
+                && !context.in_null_subtree
+                && !in_check
+                && depth <= STATIC_EXCHANGE_PRUNING_MAX_DEPTH
+                && move_index != 0
+                && best > -mate_bound
+                && mv.is_capture()
+                && !mv.is_promotion()
+                && ordering_preferred != Some(mv)
+                && picker
+                    .last_tactical_see()
+                    .is_some_and(|exchange| exchange < -STATIC_EXCHANGE_PRUNING_MARGIN * depth);
             #[cfg(feature = "stats")]
             {
                 self.statistics.moves_searched += 1;
@@ -824,8 +839,8 @@ impl<'a> Searcher<'a> {
                 && self.history.score(moving_color, mv) < HistoryTable::MAX_SCORE / 4;
             self.push_move_accumulator(position, mv, ply);
             let undo = position.make_move(mv);
-            let gives_check =
-                (can_reduce || can_futility_prune) && position.is_in_check(position.side_to_move());
+            let gives_check = (can_reduce || can_futility_prune || can_see_prune)
+                && position.is_in_check(position.side_to_move());
             if can_futility_prune
                 && move_index != 0
                 && !gives_check
@@ -839,6 +854,15 @@ impl<'a> Searcher<'a> {
                 #[cfg(feature = "stats")]
                 {
                     self.statistics.futility_prunes += 1;
+                }
+                continue;
+            }
+            if can_see_prune && !gives_check {
+                position.unmake_move(mv, undo);
+                self.pop_accumulator(ply);
+                #[cfg(feature = "stats")]
+                {
+                    self.statistics.see_prunes += 1;
                 }
                 continue;
             }

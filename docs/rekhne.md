@@ -26,6 +26,8 @@ At non-root, non-PV nodes, sufficiently late quiet moves may be reduced by one p
 
 The retained development branch also uses conservative depth-scaled null-move pruning at eligible null-window nodes: R2 at depths four and five, then R3 from depth six. It requires no check or earlier null, a non-mate beta, static evaluation at least beta, and meaningful friendly non-pawn material. Pawn-only and lone-minor endings are excluded. Legal terminal detection precedes the probe. Synthetic null descendants cannot use real-game repetition/fifty-move adjudication, the TT, or persistent killer/history training, and null state is restored exactly. There is no verification search in this variant.
 
+Before the null-move probe, a separately tested reverse-futility guard can return the static SANJ score at non-root, non-PV depths one through three when it exceeds beta by at least `150 * depth`. The guard is disabled in check, null subtrees, mate-score windows, low-material endings, and nodes whose TT move is quiet. Legal terminal detection remains authoritative.
+
 ## Parallel search
 
 P3 implements root-diversified Lazy SMP behind `Threads>1`; `Threads=1` continues through the old local table and search entry point. The main worker starts with the established root order. Helper `i` starts with legal root move `i mod root_move_count`, then private histories and the shared TT allow searches to diverge naturally. Only the main worker emits iterative information. After all workers finish, root moves receive the registered score vote `score - minimum_score + 14`; vote ties use completed depth, PV length, and main-worker priority. The chosen representative contributes score/PV while nodes, qnodes, seldepth, elapsed time, hashfull, and search statistics are aggregated.
@@ -93,4 +95,13 @@ retained without claiming a statistically proven Elo gain. Starting R3 one ply
 earlier was rejected after its separate 1,000-game equal-time screen scored
 `-6.95 +/-14.45 Elo`.
 
-NEYRANG does not learn merely by playing games; improvements still require an explicit, tested patch. Pawn hashing remains deferred. Any future baseline-protocol repair, null-move refinement, reverse futility, LMP, ProbCut, or singular-extension work must be pre-registered and isolated rather than bundled into the accepted candidate. The complete outcome is in the [0.3 final report](development/0.3.0-final-report.md).
+The next isolated H3e candidate added the shallow reverse-futility guard above.
+It reduced the deterministic depth-8 tree from 3,691,765 to 1,712,758 nodes
+(-53.60%) and the default depth-5 OpenBench tree from 165,444 to 105,187
+nodes. Independent audits accepted both 1,000-game paired UHO gates: the
+20,000-node screen scored 54.70% (`+32.76 +/-15.95 Elo`) and the
+`0.5+0.005` equal-time screen scored 57.05% (`+49.32 +/-16.85 Elo`). All
+2,000 games terminated normally with zero timing, legality, crash, warning, or
+protocol anomaly, so H3e was retained.
+
+NEYRANG does not learn merely by playing games; improvements still require an explicit, tested patch. Pawn hashing remains deferred. Any future baseline-protocol repair, null-move refinement, LMP, ProbCut, or singular-extension work must be pre-registered and isolated rather than bundled into the accepted candidate. The complete outcome is in the [0.3 final report](development/0.3.0-final-report.md).

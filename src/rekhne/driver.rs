@@ -24,6 +24,8 @@ pub const VALUE_MATE: i32 = 30_000;
 pub const VALUE_INFINITE: i32 = 32_000;
 const NULL_MOVE_MIN_DEPTH: i32 = 4;
 const NULL_MOVE_REDUCTION: i32 = 2;
+const REVERSE_FUTILITY_MAX_DEPTH: i32 = 3;
+const REVERSE_FUTILITY_MARGIN: i32 = 150;
 
 const fn null_move_reduction(depth: i32) -> i32 {
     if depth >= 6 { 3 } else { NULL_MOVE_REDUCTION }
@@ -688,6 +690,30 @@ impl<'a> Searcher<'a> {
             };
         }
         let mate_bound = VALUE_MATE - MAX_PLY as i32;
+        let tt_has_quiet_move = tt_data.is_some_and(|data| {
+            data.best_move != Move::NONE
+                && !data.best_move.is_capture()
+                && !data.best_move.is_promotion()
+        });
+        if ply != 0
+            && !is_pv_node
+            && !context.in_null_subtree
+            && !in_check
+            && depth <= REVERSE_FUTILITY_MAX_DEPTH
+            && beta > -mate_bound
+            && beta < mate_bound
+            && !tt_has_quiet_move
+            && has_meaningful_non_pawn_material(position)
+        {
+            let static_eval = self.evaluate_position(position, ply);
+            if static_eval - REVERSE_FUTILITY_MARGIN * depth >= beta {
+                #[cfg(feature = "stats")]
+                {
+                    self.statistics.futility_prunes += 1;
+                }
+                return static_eval;
+            }
+        }
         if ply != 0
             && !is_pv_node
             && context.null_allowed
@@ -1330,6 +1356,28 @@ mod tests {
         assert_eq!(null_move_reduction(4), 2);
         assert_eq!(null_move_reduction(5), 2);
         assert_eq!(null_move_reduction(6), 3);
+    }
+
+    #[test]
+    fn reverse_futility_prunes_a_clear_shallow_non_pv_win() {
+        let mut position = Position::from_fen("6k1/8/8/8/8/8/6Q1/6K1 w - - 0 1")
+            .expect("winning fixture must be valid");
+        let original = position.clone();
+        let stop = AtomicBool::new(false);
+        let mut searcher = Searcher::new(&stop);
+        let hashes = [position.repetition_hash()];
+        searcher.reset(
+            &mut position,
+            &SearchLimits::depth(2),
+            &hashes,
+            SearchSetup::normal(),
+        );
+
+        let score = searcher.negamax(&mut position, 2, 1, 99, 100, SearchContext::normal(None));
+
+        assert!(score >= 100);
+        assert_eq!(searcher.statistics.futility_prunes, 1);
+        assert_eq!(position, original);
     }
 
     #[test]

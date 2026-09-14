@@ -77,6 +77,7 @@ All notable changes to NEYRANG are documented here.
   fields consistently with fastchess, while still rejecting a legally
   capturable en-passant mismatch.
 - `Threads=1` retains the established local full-key TT and deterministic search entry point; `Threads>1` exercises the retained P3 shared-TT path after passing its binding scaling, deadline, and paired-game decisions.
+- H3e adds guarded reverse-futility pruning only at non-root, non-PV depths one through three, preserving legal-terminal, check, mate-window, null-subtree, TT-quiet-move, and low-material safeguards.
 
 ### Evidence
 
@@ -107,6 +108,7 @@ All notable changes to NEYRANG are documented here.
   sign agreement `0.904318802` missed the frozen `0.904808319` floor. The
   candidate was rejected before holdout generation with zero games and no Elo
   claim.
+- H3e reduced the deterministic depth-8 tree by 53.60% and passed two independently audited 1,000-game paired UHO gates: `+32.76 +/-15.95 Elo` at 20,000 fixed nodes and `+49.32 +/-16.85 Elo` at `0.5+0.005`, with 2,000 normal terminations and no timing, legality, crash, warning, or protocol anomaly.
 
 ## [0.2.0] - 2026-08-29
 

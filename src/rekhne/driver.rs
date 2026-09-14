@@ -27,6 +27,8 @@ const NULL_MOVE_REDUCTION: i32 = 2;
 const REVERSE_FUTILITY_MAX_DEPTH: i32 = 3;
 const REVERSE_FUTILITY_MARGIN: i32 = 150;
 const LATE_MOVE_PRUNING_MAX_DEPTH: i32 = 3;
+const FORWARD_FUTILITY_MAX_DEPTH: i32 = 4;
+const FORWARD_FUTILITY_MARGIN: i32 = 100;
 
 const fn late_move_pruning_threshold(depth: i32) -> usize {
     (3 + depth * depth) as usize
@@ -762,6 +764,15 @@ impl<'a> Searcher<'a> {
         let moving_color = position.side_to_move();
         let tt_move = tt_data.map(|data| data.best_move);
         let ordering_preferred = tt_move.or(context.preferred);
+        let can_futility_prune = ply != 0
+            && !is_pv_node
+            && !context.in_null_subtree
+            && !in_check
+            && depth <= FORWARD_FUTILITY_MAX_DEPTH
+            && alpha > -mate_bound
+            && alpha < mate_bound
+            && has_meaningful_non_pawn_material(position)
+            && self.evaluate_position(position, ply) + FORWARD_FUTILITY_MARGIN * depth <= alpha;
         let mut picker =
             ordering::MovePicker::main(moves, ordering_preferred, self.killers[ply], moving_color);
 
@@ -813,7 +824,24 @@ impl<'a> Searcher<'a> {
                 && self.history.score(moving_color, mv) < HistoryTable::MAX_SCORE / 4;
             self.push_move_accumulator(position, mv, ply);
             let undo = position.make_move(mv);
-            let gives_check = can_reduce && position.is_in_check(position.side_to_move());
+            let gives_check =
+                (can_reduce || can_futility_prune) && position.is_in_check(position.side_to_move());
+            if can_futility_prune
+                && move_index != 0
+                && !gives_check
+                && !mv.is_capture()
+                && !mv.is_promotion()
+                && ordering_preferred != Some(mv)
+                && !self.killers[ply].contains(&mv)
+            {
+                position.unmake_move(mv, undo);
+                self.pop_accumulator(ply);
+                #[cfg(feature = "stats")]
+                {
+                    self.statistics.futility_prunes += 1;
+                }
+                continue;
+            }
             if !context.in_null_subtree {
                 self.hashes.push(position.repetition_hash());
             }
@@ -1396,6 +1424,27 @@ mod tests {
 
         assert!(score >= 100);
         assert_eq!(searcher.statistics.futility_prunes, 1);
+        assert_eq!(position, original);
+    }
+
+    #[test]
+    fn forward_futility_prunes_late_quiets_below_alpha() {
+        let mut position = Position::startpos();
+        let original = position.clone();
+        let stop = AtomicBool::new(false);
+        let mut searcher = Searcher::new(&stop);
+        let hashes = [position.repetition_hash()];
+        searcher.reset(
+            &mut position,
+            &SearchLimits::depth(2),
+            &hashes,
+            SearchSetup::normal(),
+        );
+
+        let score = searcher.negamax(&mut position, 2, 1, 500, 501, SearchContext::normal(None));
+
+        assert!(score <= 500);
+        assert!(searcher.statistics.futility_prunes > 0);
         assert_eq!(position, original);
     }
 

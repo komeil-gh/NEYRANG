@@ -25,7 +25,7 @@ Override `PROFILE` or `TARGET_CPU` only in a registered build configuration:
 make EXE=NEYRANG-01234567 PROFILE=release TARGET_CPU=generic
 ```
 
-The retained development source currently reports 45,540 nodes at the default depth-5 bench. Time and NPS remain host-dependent. Any source change that alters the deterministic tree must update the registered bench only after the change is understood and accepted.
+The retained development source currently reports 44,199 nodes at the default depth-5 bench. Time and NPS remain host-dependent. Any source change that alters the deterministic tree must update the registered bench only after the change is understood and accepted.
 
 OpenBench uses the configured `rustc>=1.98` entry to decide whether a worker can build NEYRANG, then invokes `make -j EXE=...` without a C/C++ compiler override for Rust builds. Every registered worker must therefore provide both Rust 1.98 or newer and Cargo; compiler discovery alone does not install the Rust toolchain.
 

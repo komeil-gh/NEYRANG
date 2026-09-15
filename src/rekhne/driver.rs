@@ -190,6 +190,8 @@ pub struct SearchStatistics {
     #[cfg(feature = "stats")]
     pub moves_searched: u64,
     #[cfg(feature = "stats")]
+    pub late_move_check_searches: u64,
+    #[cfg(feature = "stats")]
     pub scored_moves_searched: u64,
     #[cfg(feature = "stats")]
     pub tactical_moves_searched: u64,
@@ -249,6 +251,7 @@ impl SearchStatistics {
             self.moves_scored += other.moves_scored;
             self.full_sorts += other.full_sorts;
             self.moves_searched += other.moves_searched;
+            self.late_move_check_searches += other.late_move_check_searches;
             self.scored_moves_searched += other.scored_moves_searched;
             self.tactical_moves_searched += other.tactical_moves_searched;
             self.see_scored_moves_searched += other.see_scored_moves_searched;
@@ -836,7 +839,7 @@ impl<'a> Searcher<'a> {
         let mut searched_moves = MoveList::new();
         while let Some(mv) = picker.next_move_with_policy(position, &self.history, &self.policy) {
             let move_index = searched_moves.len();
-            if ply != 0
+            let can_late_move_prune = ply != 0
                 && !is_pv_node
                 && !in_check
                 && depth <= LATE_MOVE_PRUNING_MAX_DEPTH
@@ -845,11 +848,7 @@ impl<'a> Searcher<'a> {
                 && !mv.is_capture()
                 && !mv.is_promotion()
                 && ordering_preferred != Some(mv)
-                && !self.killers[ply].contains(&mv)
-            {
-                picker.skip_quiet_moves();
-                continue;
-            }
+                && !self.killers[ply].contains(&mv);
             let can_see_prune = ply != 0
                 && !is_pv_node
                 && !context.in_null_subtree
@@ -892,8 +891,18 @@ impl<'a> Searcher<'a> {
                 && self.history.score(moving_color, mv) < HistoryTable::MAX_SCORE / 4;
             self.push_move_accumulator(position, mv, ply);
             let undo = position.make_move(mv);
-            let gives_check = (can_reduce || can_futility_prune || can_see_prune)
-                && position.is_in_check(position.side_to_move());
+            let gives_check =
+                (can_late_move_prune || can_reduce || can_futility_prune || can_see_prune)
+                    && position.is_in_check(position.side_to_move());
+            if can_late_move_prune && !gives_check {
+                position.unmake_move(mv, undo);
+                self.pop_accumulator(ply);
+                continue;
+            }
+            #[cfg(feature = "stats")]
+            if can_late_move_prune {
+                self.statistics.late_move_check_searches += 1;
+            }
             if can_futility_prune
                 && move_index != 0
                 && !gives_check
@@ -1555,6 +1564,34 @@ mod tests {
 
         assert!(score <= 500);
         assert!(searcher.statistics.futility_prunes > 0);
+        assert_eq!(position, original);
+    }
+
+    #[test]
+    fn late_move_pruning_preserves_late_quiet_checks() {
+        let mut position = Position::from_fen("7k/8/8/8/8/8/8/K2Q4 w - - 0 1")
+            .expect("late quiet-check fixture must be valid");
+        let original = position.clone();
+        let stop = AtomicBool::new(false);
+        let mut searcher = Searcher::new(&stop);
+        let hashes = [position.repetition_hash()];
+        searcher.reset(
+            &mut position,
+            &SearchLimits::depth(1),
+            &hashes,
+            SearchSetup::normal(),
+        );
+
+        let _ = searcher.negamax(
+            &mut position,
+            1,
+            1,
+            1_190,
+            1_191,
+            SearchContext::normal(None),
+        );
+
+        assert!(searcher.statistics.late_move_check_searches > 0);
         assert_eq!(position, original);
     }
 

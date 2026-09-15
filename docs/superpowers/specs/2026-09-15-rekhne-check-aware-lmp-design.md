@@ -31,3 +31,13 @@ history, and every other pruning rule remain frozen.
 
 The experiment is isolated from the rejected H4l qsearch checks and H4n losing
 capture checks. Failure removes the playing code while preserving the result.
+
+## Engineering result
+
+The direct regression passed and observed four late quiet checks reaching the
+normal search path. All 142 Rust tests, 11 tactical cases, start-position perft
+5 (`4,865,609`), formatting, and Clippy passed. Against H4m at hybrid depth 8,
+the candidate searched 523,847 nodes versus 513,582 (`+2.00%`), below the 15%
+ceiling. Four of five best-move/score pairs were unchanged; the rook ending
+changed from `b4f4 / 82` to `b4c4 / 72`. The candidate advances to the parent
+screen; no strength claim is made from these local measurements.

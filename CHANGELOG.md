@@ -153,6 +153,16 @@ All notable changes to NEYRANG are documented here.
   a 58.20% parent score (53/32/43) yet fell to 23.63% (28/163/65,
   `-203.76 +/-42.83 Elo`) in a clean 256-game Blunder 7.6 screen. The playing
   change was rejected and removed.
+- H3r preserved the deterministic search tree but scored 47.66% (31/37/60,
+  `-16.30 +/-45.96 Elo`) in its clean 128-game fixed-node parent screen. The
+  game-persistent butterfly history was rejected before Blunder testing and
+  removed.
+- H3s tested the single registered 15% SANJ/N7 residual mix against the selected
+  10% setting. It scored 48.83% (36/39/53, `-8.14 +/-46.33 Elo`) in 128 clean
+  fixed-node games and was rejected before Blunder testing.
+- H3t's bounded search-local pawn correction expanded the deterministic
+  depth-8 tree from 536,259 to 595,258 nodes (+11.00%), failing its registered
+  2% ceiling. It was rejected before games and removed.
 
 ## [0.2.0] - 2026-08-29
 

@@ -734,6 +734,7 @@ impl<'a> Searcher<'a> {
             };
         }
         let mate_bound = VALUE_MATE - MAX_PLY as i32;
+        let mut static_eval = None;
         let tt_has_quiet_move = tt_data.is_some_and(|data| {
             data.best_move != Move::NONE
                 && !data.best_move.is_capture()
@@ -749,13 +750,14 @@ impl<'a> Searcher<'a> {
             && !tt_has_quiet_move
             && has_meaningful_non_pawn_material(position)
         {
-            let static_eval = self.evaluate_position(position, ply);
-            if static_eval - REVERSE_FUTILITY_MARGIN * depth >= beta {
+            let evaluation =
+                *static_eval.get_or_insert_with(|| self.evaluate_position(position, ply));
+            if evaluation - REVERSE_FUTILITY_MARGIN * depth >= beta {
                 #[cfg(feature = "stats")]
                 {
                     self.statistics.futility_prunes += 1;
                 }
-                return static_eval;
+                return evaluation;
             }
         }
         if ply != 0
@@ -767,7 +769,7 @@ impl<'a> Searcher<'a> {
             && beta > -mate_bound
             && beta < mate_bound
             && has_meaningful_non_pawn_material(position)
-            && self.evaluate_position(position, ply) >= beta
+            && *static_eval.get_or_insert_with(|| self.evaluate_position(position, ply)) >= beta
         {
             #[cfg(feature = "stats")]
             {
@@ -809,7 +811,9 @@ impl<'a> Searcher<'a> {
             && alpha > -mate_bound
             && alpha < mate_bound
             && has_meaningful_non_pawn_material(position)
-            && self.evaluate_position(position, ply) + FORWARD_FUTILITY_MARGIN * depth <= alpha;
+            && *static_eval.get_or_insert_with(|| self.evaluate_position(position, ply))
+                + FORWARD_FUTILITY_MARGIN * depth
+                <= alpha;
         let mut picker = ordering::MovePicker::main_with_context(
             moves,
             ordering_preferred,

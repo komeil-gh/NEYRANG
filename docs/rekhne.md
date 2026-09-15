@@ -41,6 +41,10 @@ The retained development branch also uses conservative depth-scaled null-move pr
 
 Before the null-move probe, a separately tested reverse-futility guard can return the static SANJ score at non-root, non-PV depths one through three when it exceeds beta by at least `150 * depth`. The guard is disabled in check, null subtrees, mate-score windows, low-material endings, and nodes whose TT move is quiet. Legal terminal detection remains authoritative.
 
+Static SANJ is evaluated lazily at most once per main-search node and reused by
+reverse futility, null move, and forward futility when more than one guard needs
+the same score. This cache is stack-local and does not change search decisions.
+
 ## Parallel search
 
 P3 implements root-diversified Lazy SMP behind `Threads>1`; `Threads=1` continues through the old local table and search entry point. The main worker starts with the established root order. Helper `i` starts with legal root move `i mod root_move_count`, then private histories and the shared TT allow searches to diverge naturally. Only the main worker emits iterative information. After all workers finish, root moves receive the registered score vote `score - minimum_score + 14`; vote ties use completed depth, PV length, and main-worker priority. The chosen representative contributes score/PV while nodes, qnodes, seldepth, elapsed time, hashfull, and search statistics are aggregated.

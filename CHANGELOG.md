@@ -92,7 +92,8 @@ All notable changes to NEYRANG are documented here.
 - H3g adds a check-aware shallow parent futility gate with a `100 * depth` SANJ margin and conservative move, material, mate-window, PV/root, and null-subtree guards.
 - H3h reuses the staged MovePicker's exact SEE result to prune sufficiently losing late captures through depth six without a second SEE call, while preserving first/preferred moves, checks, promotions, PV/root nodes, null subtrees, and mate defense.
 - H3l adds a SANJ-specific bounded king-ring term that rewards coordinated pressure rather than lone-piece gestures. It requires multiple non-pawn attackers, or queen backing for one attacker, and caps middlegame danger at 120 centipawns.
-
+- H3o reuses one lazily computed static SANJ score across pruning guards at the
+  same node without changing their conditions or outcomes.
 ### Evidence
 
 - O1 captured 6,326 macOS top-of-stack samples from an unchanged SHA-256-bound
@@ -127,6 +128,23 @@ All notable changes to NEYRANG are documented here.
 - H3g reduced the retained depth-8 tree by 5.85%; its independently audited 1,000-game gates scored `+21.92 +/-17.00 Elo` at 20,000 nodes and `+4.86 +/-16.01 Elo` at `0.5+0.005`, with 2,000 normal terminations and no timing, legality, crash, warning, or protocol anomaly. The equal-time gain is not statistically proven.
 - H3h reduced the retained depth-8 tree by 12.34%; its independently audited 1,000-game gates scored `+13.21 +/-16.17 Elo` at 20,000 nodes and `+6.25 +/-17.43 Elo` at `0.5+0.005`, with 2,000 normal terminations and no timing, legality, crash, warning, or protocol anomaly. Neither gain is statistically proven.
 - H3l reduced the retained depth-8 tree from 567,113 to 536,259 nodes while its five-run local median changed from 275 to 292 ms. Its independently audited 1,000-game gates scored `+2.43 +/-16.98 Elo` at 20,000 nodes and `+2.78 +/-18.26 Elo` at `0.5+0.005`, with positive point estimates and no audit error. Neither gain is statistically proven.
+- H3o preserved the 34,345-node depth-5 and 536,259-node depth-8 trees and both
+  checksums exactly. Its 21-run interleaved native Windows depth-8 median was
+  309 ms versus 321 ms for the frozen parent, a 3.738% improvement. This is
+  retained throughput evidence, not a standalone Elo claim.
+
+### Rejected
+
+- H3m's one-ply check-evasion extension passed its 128-game hybrid-parent screen
+  at 53.12% (`+21.74 +/-46.53 Elo`) but expanded the five-position depth-5 tree
+  from 34,345 to 40,415 nodes (+17.67%) and scored only 23.24%
+  (`-207.54 +/-41.60 Elo`) in its separate 256-game Blunder 7.6 screen. The
+  playing change was removed; both matches completed without a candidate
+  protocol, legality, crash, or timeout anomaly.
+- H3n's dense alpha-outcome butterfly history expanded the depth-5 tree from
+  34,345 to 35,172 nodes (+2.41%) and lost its 128-game hybrid-parent screen at
+  42.97% (`-49.18 +/-46.65 Elo`, `32/50/46`). It was rejected before a Blunder
+  match and its playing code was removed.
 
 ## [0.2.0] - 2026-08-29
 

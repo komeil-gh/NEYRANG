@@ -28,3 +28,11 @@ ordering, and all other pruning remain unchanged.
    estimates and zero anomalies before any Blunder screen.
 
 Failure removes the playing code while retaining the measured outcome.
+
+## Result
+
+The direct depth/margin regression passed. The five-position hybrid depth-8
+signature remained exact, but the tree fell only from 513,582 to 511,358 nodes
+(-0.43%), below the registered 2% floor. H5a therefore failed locally; no remote
+build or match was opened, and the playing code plus temporary boundary cases
+were removed.

@@ -31,3 +31,22 @@ history, and every other pruning rule remain frozen.
 
 The experiment is isolated from the rejected H4l qsearch checks and H4n losing
 capture checks. Failure removes the playing code while preserving the result.
+
+## Outcome
+
+The direct regression observed four late quiet checks reaching the normal
+search path. All 142 Rust tests, 11 tactical cases, start-position perft 5
+(`4,865,609`), formatting, and Clippy passed. At hybrid depth 8 the candidate
+searched 523,847 nodes versus H4m's 513,582 (`+2.00%`), inside the 15% ceiling.
+Four of five best-move/score pairs were unchanged; the rook ending changed
+from `b4f4 / 82` to `b4c4 / 72`.
+
+The clean 256-game parent screen scored 75 wins, 107 draws, and 74 losses
+(50.20%, `+1.36 +/-29.57 Elo`) with 256 normal terminations and no warning or
+protocol anomaly. The separate Blunder 7.6.0 screen scored 36 wins, 58 draws,
+and 162 losses (25.39%, `-187.25 +/-40.33 Elo`). Its independent audit rejected
+one opponent-only PV warning after the fifty-move rule because that warning was
+not in the predeclared compatibility policy; there were no crashes, timeouts,
+illegal moves, or abnormal terminations. Even before considering that invalid
+audit, 25.39% is below the retained 26.56% external baseline. H4o is therefore
+rejected and its playing code is removed.

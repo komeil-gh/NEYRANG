@@ -32,3 +32,13 @@ and UCI Hash behavior unchanged.
    estimates and zero anomalies before any Blunder screen.
 
 Failure removes the playing code while retaining the measured outcome.
+
+## Result
+
+The direct local/shared replacement regression passed. The candidate was
+exactly inert across the five-position hybrid depth-8 workload: 513,582 nodes
+and all five best-move/score signatures matched H4m. Across 21 interleaved runs
+per frozen binary, parent median elapsed time was 0.450471 seconds and candidate
+median was 0.451353 seconds (-0.20% throughput). It failed the registered
+identity-preserving speed gate; no remote build or match was opened, and the
+playing code plus temporary regression were removed.

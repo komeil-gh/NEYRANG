@@ -34,3 +34,13 @@ failed local gate.
    screen; external progress requires exceeding the retained 26.56% score.
 
 Failure removes the playing code while preserving the measured result.
+
+## Engineering result
+
+The sign/depth regression, all 143 Rust tests, the 11-position tactical suite,
+start-position perft 5 (4,865,609 nodes), formatting, and Clippy pass.
+
+At hybrid depth 8, H4w searched 481,103 nodes versus H4m's 513,582
+(-6.32%) while preserving all five move/score signatures. Single-run elapsed
+time fell from the 0.482 s H4m reference to 0.430 s. The declared local gate
+passes; H4w advances to the fresh fixed-node and equal-time parent screens.

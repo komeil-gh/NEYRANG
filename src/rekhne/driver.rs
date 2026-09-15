@@ -40,21 +40,6 @@ const fn null_move_reduction(depth: i32) -> i32 {
     if depth >= 6 { 3 } else { NULL_MOVE_REDUCTION }
 }
 
-const fn unseeded_branch_depth(
-    depth: i32,
-    ply: usize,
-    is_pv_node: bool,
-    in_check: bool,
-    in_null_subtree: bool,
-    has_preferred: bool,
-) -> i32 {
-    if depth >= 5 && ply != 0 && !is_pv_node && !in_check && !in_null_subtree && !has_preferred {
-        depth - 1
-    } else {
-        depth
-    }
-}
-
 #[derive(Clone, Copy)]
 struct SearchContext {
     preferred: Option<Move>,
@@ -818,14 +803,6 @@ impl<'a> Searcher<'a> {
         let moving_color = position.side_to_move();
         let tt_move = tt_data.map(|data| data.best_move);
         let ordering_preferred = tt_move.or(context.preferred);
-        let depth = unseeded_branch_depth(
-            depth,
-            ply,
-            is_pv_node,
-            in_check,
-            context.in_null_subtree,
-            ordering_preferred.is_some(),
-        );
         let can_futility_prune = ply != 0
             && !is_pv_node
             && !context.in_null_subtree
@@ -1458,9 +1435,7 @@ mod timing_tests {
 mod tests {
     use std::sync::atomic::AtomicBool;
 
-    use super::{
-        SearchContext, SearchSetup, SearchStatistics, null_move_reduction, unseeded_branch_depth,
-    };
+    use super::{SearchContext, SearchSetup, SearchStatistics, null_move_reduction};
     use crate::{
         chess::{Move, Position},
         rekhne::{SearchLimits, Searcher, VALUE_INFINITE, VALUE_MATE, tt::Bound},
@@ -1502,17 +1477,6 @@ mod tests {
         assert_eq!(null_move_reduction(4), 2);
         assert_eq!(null_move_reduction(5), 2);
         assert_eq!(null_move_reduction(6), 3);
-    }
-
-    #[test]
-    fn unseeded_branch_reduction_keeps_guarded_nodes_full_depth() {
-        assert_eq!(unseeded_branch_depth(5, 1, false, false, false, false), 4);
-        assert_eq!(unseeded_branch_depth(4, 1, false, false, false, false), 4);
-        assert_eq!(unseeded_branch_depth(5, 0, false, false, false, false), 5);
-        assert_eq!(unseeded_branch_depth(5, 1, true, false, false, false), 5);
-        assert_eq!(unseeded_branch_depth(5, 1, false, true, false, false), 5);
-        assert_eq!(unseeded_branch_depth(5, 1, false, false, true, false), 5);
-        assert_eq!(unseeded_branch_depth(5, 1, false, false, false, true), 5);
     }
 
     #[test]

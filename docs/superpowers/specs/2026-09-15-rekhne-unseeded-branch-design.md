@@ -26,4 +26,7 @@ anomaly; only a pass permits a separate fresh Blunder 7.6.0 screen.
 All 142 Rust tests, the 11-test tactical suite, and Clippy passed. With the
 frozen N7 network, stage-aligned policy, and `EvalMix=10`, H3v reduced the
 five-position depth-8 tree from 513,582 to 488,990 nodes (-4.79%) while
-preserving all five best moves and reported scores. The parent screen is open.
+preserving all five best moves and reported scores. The clean 256-game parent
+screen scored 79 wins, 81 losses, and 96 draws (49.61%, -2.71 +/- 20.62 Elo).
+H3v failed the pre-registered non-negative point-estimate floor, so no Blunder
+screen was opened and the playing code was removed.

@@ -40,3 +40,24 @@ every inspected move.
    External progress requires exceeding the retained 26.56% point estimate.
 
 Failure removes the playing code while preserving the measured result.
+
+## Outcome
+
+Rejected. The direct quiet-mate/state-restoration regression passed, as did
+all 143 Rust tests, the 11-position tactical suite, start-position perft 5
+(4,865,609 nodes), formatting, and Clippy.
+
+At hybrid depth 8, H4r searched 481,916 nodes versus H4m's 513,582
+(-6.17%). Four of five move/score signatures were identical; the initial
+position changed from `d2d4/23` to `b1c3/23`. Elapsed time nevertheless rose
+from 0.482 s to 0.623 s (+29.3%) because every eligible qsearch node scanned
+and made quiet moves to discover the rare forcing checks.
+
+The clean 256-game fixed-node parent screen scored 92/94/70 and 54.30%
+(`+29.93 +/-33.38 Elo`). Because the local timing regression could reverse
+that result under real clocks, a separate fresh 128-pair equal-time screen at
+`0.5+0.005` was run before the external gate. It was also clean but scored
+56/85/115 and 38.48% (`-81.54 +/-34.51 Elo`). No Blunder screen was opened.
+
+The playing code was removed. Any future qsearch-check experiment must obtain
+checking candidates without a full legal quiet-move make/unmake scan.

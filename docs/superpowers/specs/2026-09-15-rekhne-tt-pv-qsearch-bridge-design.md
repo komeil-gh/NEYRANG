@@ -39,3 +39,15 @@ subtrees remain excluded because they do not probe the TT.
    screen; external progress requires exceeding the retained 26.56% score.
 
 Failure removes the playing code while preserving the measured result.
+
+## Outcome
+
+Rejected before remote testing. The direct TT-depth/state-restoration
+regression passed, as did all 143 Rust tests, the 11-position tactical suite,
+start-position perft 5, formatting, and Clippy. The five-position hybrid
+depth-8 workload was nevertheless bit-for-bit inert: both H4s and H4m searched
+513,582 nodes with the same five move/score signatures. The condition appeared
+only in the synthetic fixture and supplied no measured production activation.
+
+The candidate source and temporary regression were removed. H4m remains the
+playing source, and no remote games were spent on an inert branch.

@@ -41,3 +41,16 @@ because they do not probe the TT.
    screen; external progress requires exceeding the retained 26.56% score.
 
 Failure removes the playing code while preserving the measured result.
+
+## Outcome
+
+Rejected before remote testing. The bound-direction and mate-band regression,
+all 143 Rust tests, the 11-position tactical suite, start-position perft 5,
+formatting, and Clippy passed. All five hybrid depth-8 move/score signatures
+also remained unchanged.
+
+The candidate nevertheless grew the hybrid tree from 513,582 to 522,621 nodes
+(+1.76%) and increased the single-run elapsed time from the 0.482 s H4m
+reference to 0.700 s. It failed the predeclared requirement to shrink the tree
+by at least 2% and not grow it. The playing code and temporary regression were
+removed; no remote games ran.

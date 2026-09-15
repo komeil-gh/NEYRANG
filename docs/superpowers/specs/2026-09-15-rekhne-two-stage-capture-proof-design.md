@@ -41,3 +41,18 @@ class, history update rule, extension, or external artifact.
    External progress requires exceeding the retained 26.56% point estimate.
 
 Failure removes the playing code while preserving the measured result.
+
+## Outcome
+
+The direct regression completed both proof stages, returned the original beta
+bound, and restored position state. All 143 Rust tests, 11 tactical cases,
+start-position perft 5 (`4,865,609`), formatting, and Clippy passed. The hybrid
+depth-8 signature stayed exact across all five positions while the combined
+tree fell from 513,582 to 376,308 nodes (`-26.73%`).
+
+The clean 256-game parent screen scored 76 wins, 103 draws, and 77 losses
+(49.80%, `-1.36 +/-33.65 Elo`). All 128 opening pairs and 25,912 plies replayed
+successfully; all games terminated normally with no warning, timing, legality,
+crash, or protocol anomaly. The negative point estimate fails the registered
+parent gate, so no Blunder screen is opened. H4p is rejected and its playing
+code is removed despite the large tree reduction.

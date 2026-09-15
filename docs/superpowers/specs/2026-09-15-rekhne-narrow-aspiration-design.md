@@ -31,3 +31,12 @@ search order, evaluator, pruning, history, artifacts, and UCI defaults.
    non-negative point estimate. Only both passing screens may open Blunder.
 
 Failure removes the playing code while retaining the measured outcome.
+
+## Result
+
+The focused boundary regression passed, and the five-position hybrid depth-8
+signature remained exact. The narrower window nevertheless increased the tree
+from 513,582 to 579,345 nodes (+12.80%) and single-run elapsed time from 0.452
+to 0.490 seconds. It therefore failed the registered local gate; no remote
+build or match was opened, and the playing code plus temporary test were
+removed.

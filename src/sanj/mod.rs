@@ -1,7 +1,7 @@
 //! SANJ: NEYRANG's replaceable position-judgment boundary.
 //!
-//! Classical SANJ is the deterministic default. The non-default `nnue` feature
-//! adds an opt-in evaluator that implements the same search-facing contract.
+//! Classical SANJ remains the deterministic fallback. The default `nnue`
+//! feature adds the retained residual evaluator behind the same search contract.
 
 #[cfg(feature = "nnue")]
 use std::sync::Arc;
@@ -22,9 +22,8 @@ pub use trace::{EvalTrace, TRACE_COLUMNS, TRACE_SCHEMA, trace};
 
 /// Search-owned choice of SANJ implementation.
 ///
-/// Classical evaluation remains the default. An NNUE network can only be
-/// selected in an explicit `nnue` feature build after its artifact has passed
-/// the fail-closed loader.
+/// UCI chooses the embedded retained network in a default build. The enum keeps
+/// classical as its construction default for explicit tools and tests.
 #[derive(Clone, Default)]
 pub enum Evaluator {
     #[default]

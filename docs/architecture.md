@@ -19,10 +19,10 @@ into UCI or REKHNE. Historical byte-identity claims remain attached to their
 recorded pre-rename commits; the identity migration necessarily changes the
 binary bytes.
 
-The experimental N2 path is separately isolated behind the non-default `nnue`
-feature. The UCI engine starts with classical SANJ even in that build and only
-loads a network after an explicit `EvalFile` option passes the fail-closed
-`NEYRANG\0` decoder. Versions 1 and 2 retain one scalar output head; version 3
+The NNUE path is isolated behind the default-enabled `nnue` feature. The UCI
+engine starts with the embedded retained N7 network at the accepted 10% residual
+mix; an external `EvalFile` must still pass the fail-closed `NEYRANG\0` decoder,
+and `<empty>` restores classical SANJ. Versions 1 and 2 retain one scalar output head; version 3
 uses the same three-bank input transformer with four material-routed output
 heads; experimental version 4 adds one post-SCReLU absolute-difference channel
 to a single output head. Each searcher owns its accumulator stack; Lazy-SMP workers
@@ -37,9 +37,9 @@ two accumulators and adds no mutable state. The engine
 implementation is intentionally independent from `tools/nnue-reference`. SIMD
 and default activation remain later evidence gates.
 
-The non-default `policy` feature reuses the registered SHEGERD-P1 additive
-tables as an optional CPU move-ordering signal. `PolicyFile` is fail-closed and
-classical ordering remains the default. REKHNE supplies the previous-move
+The default-enabled `policy` feature embeds the accepted stage-aligned
+SHEGERD-P1 additive tables as a CPU move-ordering signal. External `PolicyFile`
+artifacts are fail-closed and `<empty>` restores classical ordering. REKHNE supplies the previous-move
 destination; SHEGERD reproduces the trainer's side normalization, material
 phase, piece codes and SEE buckets. The policy may only rank moves inside an
 existing MovePicker stage, so TT/PV priority, tactical SEE classification,

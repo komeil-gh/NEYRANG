@@ -1,9 +1,10 @@
 # SANJ
 
-SANJ is the judgment NEYRANG evaluates with. It currently uses a deterministic
-tapered handcrafted evaluation. It calculates separate middlegame and endgame
-scores, derives phase from remaining non-pawn material, interpolates, then
-returns a side-to-move score with a 12-centipawn tempo term.
+SANJ is the judgment NEYRANG evaluates with. The normal development build uses
+the deterministic tapered handcrafted evaluation plus the retained N7 network
+as a 10% residual. The classical path calculates separate middlegame and
+endgame scores, derives phase from remaining non-pawn material, interpolates,
+then returns a side-to-move score with a 6-centipawn tempo term.
 
 Implemented terms:
 
@@ -23,13 +24,12 @@ King danger uses a deliberately bounded coordination gate: a lone minor-piece ge
 
 Known limitations include no pawn hash, no general threats/space/outposts, and no systematic tuning against game data. The evaluator remains an inspectable bootstrap rather than a claim that handcrafted weights are finished.
 
-## Experimental NNUE judgment
+## NNUE judgment
 
-The non-default `nnue` feature adds the first N2 engine path without changing
-classical SANJ as the default:
+The default-enabled `nnue` feature ships the retained N7 residual:
 
 ```bash
-cargo build --release --features nnue
+cargo build --release
 target/release/neyrang bench-nnue /path/to/network.nnue 5
 ```
 
@@ -41,26 +41,27 @@ H5f's independent heads and the trainer-only H5g shared-weight/phase-bias
 follow-up were both rejected at their offline statistical gates. Version 3
 therefore remains a supported experimental artifact contract without a
 retained network.
-Version 4 registers the H5h `Chess768x3hmli` experiment: the same incremental
+Version 4 registers the rejected H5h `Chess768x3hmli` experiment: the same incremental
 transformer feeds one 384-value head comprising both SCReLU perspectives and
 their elementwise absolute difference. It adds no hidden layer or accumulator
-state. H5h remains experimental until its fresh offline and game gates finish.
+state. It improved fresh teacher MSE by 1.51%, but its paired-bootstrap interval
+crossed zero; a later 256-game fixed-node check scored 48.44% against N7, so it
+remains rejected.
 `EvalMix` selects the NNUE percentage from 0 through 100 while retaining
-classical SANJ for the remainder; its default is 100 for compatibility with
-the existing pure-network evidence.
+classical SANJ for the remainder; its default is the accepted 10% residual.
 Decoding is fail-closed. The loaded network is immutable and shared across
 Lazy-SMP workers, while every worker owns a move-delta accumulator stack. The
 engine scalar output is checked bit-for-bit against the independent reference
 crate on frozen FEN suites.
 
-This is an experimental playing path, not a retained network or an Elo claim.
+The embedded N7 residual is retained playing code, not an absolute Elo claim.
 The retained N1e-16M artifact passed bit-exact inference and deterministic
 benchmark gates but scored only 27.20% in its independently audited 1,000-game
 equal-node screen (`177/633/190`). That network is rejected and must not be made
 the default. A replacement still requires a new untouched final holdout,
 fixed-node and equal-time games, a normalized SPRT, longer-time-control
-confirmation, and an independent artifact audit. An empty `EvalFile` value
-selects classical SANJ.
+confirmation, and an independent artifact audit. `EvalFile=<empty>` selects
+classical SANJ, while `<embedded>` restores N7.
 
 The later N2d version-2 candidate passed parity, fresh selection and an
 untouched holdout, but scored `343/356/301` (`49.35%`) in its clean 1,000-game
@@ -97,7 +98,7 @@ record_id<TAB>target<TAB>FEN
 
 The raw coefficients reconstruct every current constant and formula exactly. A deterministic 100,000-position oracle compares the reconstruction with production evaluation. The schema is accounting infrastructure, not permission to change weights or add terms.
 
-The scalar incremental interface now exists behind the non-default `nnue`
+The scalar incremental interface exists behind the default-enabled `nnue`
 feature. Its accumulator also carries the exact remaining-piece count needed by
 version 3's constant-time output-head selection. Version 4 derives its extra
 channel directly from those same two accumulators. NEON/SIMD remains future work

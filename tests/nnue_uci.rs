@@ -27,7 +27,7 @@ fn uci_eval_file_loads_fail_closed_and_activates_nnue_explicitly() {
         .expect("NEYRANG binary must start");
     writeln!(
         child.stdin.as_mut().expect("stdin is piped"),
-        "uci\nsetoption name EvalFile value {}\nposition startpos\neval\nisready\nquit",
+        "uci\nsetoption name EvalMix value 100\nsetoption name EvalFile value {}\nposition startpos\neval\nisready\nquit",
         network_path.display()
     )
     .unwrap();
@@ -36,7 +36,7 @@ fn uci_eval_file_loads_fail_closed_and_activates_nnue_explicitly() {
 
     assert!(output.status.success());
     assert!(
-        stdout.contains("option name EvalFile type string default <empty>"),
+        stdout.contains("option name EvalFile type string default <embedded>"),
         "{stdout}"
     );
     assert!(stdout.contains("info string eval 25 cp"), "{stdout}");

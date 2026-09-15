@@ -37,9 +37,17 @@ its tuned margins or coupled heuristics.
 
 ## Outcome
 
-Rejected before remote testing. All 142 Rust tests, the 11-test tactical suite,
-start-position perft 5, Clippy, and the direct exclusion/restoration regression
-passed. The five-position hybrid depth-8 tree nevertheless grew from 513,582 to
-711,903 nodes (+38.61%), beyond the preregistered 25% ceiling. Three frozen
-scores and one best move also changed. The candidate source and temporary test
-were removed; H4c remains the playing source.
+Rejected. The original local screen passed all correctness checks but grew the
+five-position hybrid depth-8 tree from 513,582 to 711,903 nodes (+38.61%), so it
+was initially removed without games. After the retained N7 and policy artifacts
+became the embedded defaults, the same bounded candidate was rebuilt and given
+the missing game evidence. It scored 80 wins, 98 draws, and 78 losses over 256
+fixed-node parent games (50.39%, `+2.71 +/-30.17 Elo`), then fell to 33 wins, 54
+draws, and 169 losses against Blunder 7.6.0 (23.44%, `-205.64 +/-42.23 Elo`).
+Both completed matches used 20,000 nodes, 128 color-reversed opening pairs, one
+default engine thread, 64 MiB hash, and eight concurrent games. The Blunder
+screen was rerun in strict mode without passing Blunder's unsupported `Threads`
+option; the earlier compatibility-warning run is retained only as invalid
+private evidence. Because the clean opponent score missed both the retained
+26.56% gate and the current embedded-default 28.52% reference, the candidate
+source and focused test were removed again.

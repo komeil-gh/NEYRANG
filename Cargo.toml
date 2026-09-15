@@ -7,7 +7,7 @@ description = "NEYRANG, an independent UCI chess engine written in Rust"
 license = "GPL-3.0-or-later"
 
 [features]
-default = []
+default = ["nnue", "policy"]
 nnue = []
 policy = []
 sanj-tools = []

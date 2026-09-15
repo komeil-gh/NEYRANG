@@ -22,12 +22,11 @@ Main-search move ordering is delivered progressively by a fixed-capacity staged 
 4. quiet history
 5. losing captures
 
-An explicit `policy` build may add a bounded six-table SHEGERD score inside
+The default build adds the accepted bounded six-table SHEGERD score inside
 these stages. It reuses the SEE value already computed for tactical moves and
 the previous move's destination for contextual quiet ordering. It never moves a
 candidate across the TT/PV, good-tactical, killer, quiet, or losing-tactical
-boundaries. With no `PolicyFile`, the registered classical ordering is
-unchanged.
+boundaries. `PolicyFile=<empty>` restores the registered classical ordering.
 
 Each stage is initialized only when search reaches it; a cutoff can therefore avoid scoring every later quiet or tactical move. The picker suppresses preferred/killer duplicates and returns every legal candidate at most once. Tactical classification still uses exact SEE. The oracle-equivalent `see_ge` primitive is retained and tested, but the experimental lazy main-search caller was reverted, so current production ordering does not silently substitute threshold classification for exact exchange scores.
 

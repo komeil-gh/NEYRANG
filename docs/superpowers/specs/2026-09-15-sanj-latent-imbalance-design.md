@@ -39,4 +39,21 @@ reference, and engine runtime must use the same post-SCReLU difference.
 
 ## Result
 
-Pending.
+H5h is rejected. The full Metal fit consumed the frozen
+10,485,760-row N6 schedule in 1 minute 41 seconds and produced a valid
+version-4 artifact. Float/quantized parity passed on 8,192 positions with
+maximum error `7.26074219` and mean error `1.20315856`; engine/reference
+integer inference had zero mismatches.
+
+On 2,048 deterministic fresh positions at 110,000 Stockfish-18 nodes, H5h
+reduced pure-network WDL-space MSE from `0.04601662` to `0.04531954` (1.51%).
+The paired mean delta was `-0.00069708`, but its deterministic 10,000-replicate
+bootstrap 95% interval was `[-0.00404328, +0.00259071]`. The positive upper
+bound failed the registered offline gate. To verify that this gate was not
+hiding practical strength, the completed artifact was later reopened for one
+strict 256-game fixed-node screen against the retained embedded N7 network.
+With identical code, 20,000 nodes, 128 color-reversed opening pairs, one thread,
+64 MiB hash, and eight concurrent games, H5h scored 74 wins, 100 draws, and 82
+losses (48.44%, `-10.86 +/-31.76 Elo`). The negative point estimate confirms
+the original rejection; no Blunder screen is opened and the network is not
+retained.

@@ -8,13 +8,12 @@ All notable changes to NEYRANG are documented here.
 
 - Experimental version-4 `Chess768x3hmli` NNUE artifacts and trainer/reference
   support for a low-cost post-SCReLU absolute dual-perspective imbalance channel.
-- A fail-closed, non-default CPU SHEGERD policy path that loads checksum-bound
+- A fail-closed CPU SHEGERD policy path that loads checksum-bound
   version-2 additive tables and ranks moves only inside existing MovePicker
   stages, plus separately hashed `PolicyFile` match-runner support.
 - Policy fitting and independent audit exclude cross-stage comparisons that the
   runtime MovePicker cannot reorder.
-- An opt-in integer `EvalMix` bounds experimental NNUE output as a residual
-  around classical SANJ while preserving pure NNUE as the compatibility default.
+- An integer `EvalMix` bounds NNUE output as a residual around classical SANJ.
 - Exact-quota teacher corpus selection with registered-order transposition
   deduplication, input/output hash binding, and streamed exposure expansion.
 - Exclusive-create protocol evidence logging with expected-byte SHA-256 checks
@@ -63,6 +62,14 @@ All notable changes to NEYRANG are documented here.
 
 ### Changed
 
+- Default release builds now embed the retained N7 network at `EvalMix=10` and
+  the accepted stage-aligned SHEGERD policy. `<empty>` still selects the
+  classical evaluator or ordering, and `--no-default-features` keeps an
+  explicit research-only classical build available.
+- H5h's latent-imbalance network passed format/runtime parity and improved
+  fresh Stockfish-18 WDL-space MSE by 1.51%, but its paired-bootstrap 95% upper
+  bound remained positive. A later 256-game fixed-node check scored 48.44%
+  against N7, confirming its rejection.
 - Teacher shard export now creates a missing parent directory for its exclusive
   output directory, preventing audited multi-shard runs from failing before the
   first manifest is written.

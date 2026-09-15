@@ -27,6 +27,12 @@ use super::parser::{Command, GoParameters, PositionSpecification, parse};
 const DEFAULT_HASH_MB: usize = 64;
 const DEFAULT_MOVE_OVERHEAD_MS: u64 = 30;
 const MAX_HASH_MB: usize = 65_536;
+#[cfg(feature = "nnue")]
+const DEFAULT_EVAL_MIX: u8 = 10;
+#[cfg(feature = "nnue")]
+const EMBEDDED_EVAL: &[u8] = include_bytes!("../../assets/models/sanj-n7.nnue");
+#[cfg(feature = "policy")]
+const EMBEDDED_POLICY: &[u8] = include_bytes!("../../assets/models/shegerd-p2-stage-aligned.bin");
 
 pub fn run() -> io::Result<()> {
     let stdin = io::stdin();
@@ -75,9 +81,15 @@ impl UciEngine {
             move_overhead_ms: DEFAULT_MOVE_OVERHEAD_MS,
             active: None,
             table: Some(table_for(DEFAULT_HASH_MB, 1)),
+            #[cfg(feature = "nnue")]
+            evaluator: embedded_evaluator(DEFAULT_EVAL_MIX),
+            #[cfg(not(feature = "nnue"))]
             evaluator: sanj::Evaluator::classical(),
             #[cfg(feature = "nnue")]
-            eval_mix: 100,
+            eval_mix: DEFAULT_EVAL_MIX,
+            #[cfg(feature = "policy")]
+            policy: embedded_policy(),
+            #[cfg(not(feature = "policy"))]
             policy: MovePolicy::NONE,
         }
     }
@@ -151,11 +163,13 @@ impl UciEngine {
             "option name Move Overhead type spin default {DEFAULT_MOVE_OVERHEAD_MS} min 0 max 5000"
         ))?;
         #[cfg(feature = "nnue")]
-        send_line("option name EvalFile type string default <empty>")?;
+        send_line("option name EvalFile type string default <embedded>")?;
         #[cfg(feature = "nnue")]
-        send_line("option name EvalMix type spin default 100 min 0 max 100")?;
+        send_line(&format!(
+            "option name EvalMix type spin default {DEFAULT_EVAL_MIX} min 0 max 100"
+        ))?;
         #[cfg(feature = "policy")]
-        send_line("option name PolicyFile type string default <empty>")?;
+        send_line("option name PolicyFile type string default <embedded>")?;
         send_line("uciok")
     }
 
@@ -214,7 +228,9 @@ impl UciEngine {
             }
             #[cfg(feature = "nnue")]
             "evalfile" => {
-                self.evaluator = if value.is_empty() || value == "<empty>" {
+                self.evaluator = if value == "<embedded>" {
+                    embedded_evaluator(self.eval_mix)
+                } else if value.is_empty() || value == "<empty>" {
                     sanj::Evaluator::classical()
                 } else {
                     let bytes = fs::read(value)
@@ -243,7 +259,9 @@ impl UciEngine {
             }
             #[cfg(feature = "policy")]
             "policyfile" => {
-                self.policy = if value.is_empty() || value == "<empty>" {
+                self.policy = if value == "<embedded>" {
+                    embedded_policy()
+                } else if value.is_empty() || value == "<empty>" {
                     MovePolicy::NONE
                 } else {
                     let bytes = fs::read(value)
@@ -360,6 +378,20 @@ impl UciEngine {
             }
         }
     }
+}
+
+#[cfg(feature = "nnue")]
+fn embedded_evaluator(nnue_percent: u8) -> sanj::Evaluator {
+    let network = sanj::nnue::Network::from_bytes(EMBEDDED_EVAL)
+        .expect("embedded SANJ network must match the engine format");
+    sanj::Evaluator::nnue_with_mix(network, nnue_percent)
+}
+
+#[cfg(feature = "policy")]
+fn embedded_policy() -> MovePolicy {
+    let network = crate::shegerd::policy::Network::from_bytes(EMBEDDED_POLICY)
+        .expect("embedded SHEGERD policy must match the engine format");
+    MovePolicy::from_network(network)
 }
 
 fn table_for(megabytes: usize, threads: usize) -> TranspositionTable {
@@ -543,6 +575,25 @@ mod tests {
 
         assert_eq!(engine.move_overhead_ms, DEFAULT_MOVE_OVERHEAD_MS);
         assert_eq!(DEFAULT_MOVE_OVERHEAD_MS, 30);
+    }
+
+    #[cfg(all(feature = "nnue", feature = "policy"))]
+    #[test]
+    fn default_build_loads_the_retained_strength_assets() {
+        let mut engine = UciEngine::new();
+        let mut position = Position::startpos();
+        let mv = position
+            .find_legal_move("e2e4")
+            .expect("legal opening move");
+
+        assert_eq!(engine.eval_mix, super::DEFAULT_EVAL_MIX);
+        assert!(engine.evaluator.network().is_some());
+        assert_ne!(engine.policy.score(&position, mv, None, 0), 0);
+
+        engine.set_option("EvalFile", Some("<empty>")).unwrap();
+        engine.set_option("PolicyFile", Some("<empty>")).unwrap();
+        assert!(engine.evaluator.network().is_none());
+        assert_eq!(engine.policy.score(&position, mv, None, 0), 0);
     }
 
     #[test]

@@ -57,7 +57,9 @@ command-line tools for testing and benchmarking.
 
 Use `main` for the `0.2.0` baseline and `dev/0.3-search` to work with the newer
 engine and research tools. Development results do not constitute a `0.3.0`
-release. Both branches use classical evaluation by default.
+release. The development branch now embeds its retained SANJ N7 residual and
+SHEGERD policy, so a normal release build uses the strongest accepted stack
+without machine-specific file paths.
 
 ## Build and run
 
@@ -102,9 +104,9 @@ versioned local builds on macOS.
 | `Hash` | 64 MB by default | 64 MB by default |
 | `Threads` | Accepted; search uses one thread | Defaults to 1; higher values enable Lazy SMP |
 | `Move Overhead` | 10 ms by default | 30 ms by default |
-| `EvalFile` | Not available | Available with the `nnue` feature; empty selects classical evaluation |
-| `EvalMix` | Not available | NNUE share from 0 to 100; applies only when `EvalFile` is loaded |
-| `PolicyFile` | Not available | Available with the `policy` feature; empty preserves classical ordering |
+| `EvalFile` | Not available | Defaults to the embedded N7 artifact; `<empty>` selects classical evaluation |
+| `EvalMix` | Not available | Defaults to the retained 10% NNUE residual; accepts 0 through 100 |
+| `PolicyFile` | Not available | Defaults to the embedded accepted policy; `<empty>` disables it |
 
 For a protocol check in a POSIX shell:
 
@@ -133,8 +135,8 @@ interrupt a search, or `quit` to close the session.
   make/unmake, Zobrist hashing, and repetition and draw detection.
 - **Search:** iterative deepening, alpha-beta/PVS, quiescence, aspiration
   windows, transposition tables, SEE-based move ordering, and late move reductions.
-- **Evaluation:** a handcrafted tapered evaluator. The development branch also
-  provides opt-in NNUE inference and separate data and training tools.
+- **Evaluation:** a tuned handcrafted tapered evaluator plus the retained 10%
+  N7 residual. The development branch also provides separate data and training tools.
 - **Time and protocol:** asynchronous UCI commands, cooperative search stopping,
   and soft/hard time limits. The development branch adds Lazy SMP parallel search.
 
@@ -191,19 +193,18 @@ baseline, test conditions, and acceptance rule before collecting results;
 retain or reject the change against that rule. Keep machine-specific paths,
 host details, private datasets, and raw experiment artifacts outside Git.
 
-### Experimental NNUE
+### Embedded strength assets
 
-Available on `dev/0.3-search` only:
+The ordinary development build includes the accepted NNUE residual and policy:
 
 ```bash
-cargo build --release --locked --features nnue
+cargo build --release --locked
 ```
 
-This build does not embed a network. Set the UCI `EvalFile` option to a
-compatible, separately validated network; leave it empty for classical
-evaluation. `EvalMix` can bound an experimental network as a residual around
-classical SANJ: 0 is classical and 100 is pure NNUE. No NNUE network is bundled
-or recommended for play. Format and training documentation is linked below.
+`EvalFile=<embedded>`, `EvalMix=10`, and `PolicyFile=<embedded>` are the defaults.
+Set either file option to `<empty>` to disable that asset. External compatible
+artifacts can still be loaded for controlled experiments. A deliberately
+classical-only developer build remains available with `--no-default-features`.
 
 ## Documentation
 
@@ -230,22 +231,20 @@ NEYRANG is free software licensed under the
 [GNU General Public License v3.0 or later](LICENSE) (`GPL-3.0-or-later`).
 See [AUTHORS](AUTHORS) for project authorship.
 
-No NNUE network or training dataset is bundled with the engine. Experimental
-networks and corpora mentioned in the development records are separate local
-artifacts, not release assets; any future distributed artifact must state its
-own license and data provenance.
+The retained N7 network and stage-aligned policy are bundled under
+`assets/models`; training corpora and rejected experimental networks remain
+private evidence rather than release assets.
 
-### Experimental move policy
+### External move-policy experiments
 
-The `policy` feature adds a CPU-only, opt-in SHEGERD policy used strictly to
-rank moves inside the existing MovePicker stages:
+The default build already embeds the retained CPU-only SHEGERD policy. To load
+an external compatible artifact instead:
 
 ```bash
-cargo build --release --locked --features policy
+cargo build --release --locked
 ```
 
 Set `PolicyFile` to a version-2 artifact produced by
 `scripts/fit-shegerd-policy.py`. The loader verifies the format, table sizes,
-weight bounds, payload length, and checksum. Leaving the option empty preserves
-the classical search tree. Policy artifacts remain separate private research
-outputs until a paired-game gate accepts one.
+weight bounds, payload length, and checksum. Setting it to `<empty>` restores
+classical ordering.

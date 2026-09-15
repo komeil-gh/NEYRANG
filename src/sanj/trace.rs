@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::chess::{Color, PieceType, Position, Square, attacks};
 
-pub const TRACE_SCHEMA: &str = "neyrang-sanj-trace-v2";
+pub const TRACE_SCHEMA: &str = "neyrang-sanj-trace-v3";
 
 pub const TRACE_COLUMNS: &str = concat!(
     "stm\tphase\t",
@@ -17,6 +17,7 @@ pub const TRACE_COLUMNS: &str = concat!(
     "mobility_n_delta\tmobility_b_delta\tmobility_r_delta\t",
     "mobility_q_delta\t",
     "rook_open_delta\trook_semi_open_delta\tking_shield_delta\tking_danger_delta\t",
+    "pawn_leverage_cp\t",
     "middlegame_cp\tendgame_cp\twhite_cp\ttempo_cp\tstm_cp"
 );
 
@@ -25,6 +26,7 @@ const EG_VALUE: [i32; 6] = [79, 280, 330, 589, 1_077, 0];
 const PHASE_WEIGHT: [i32; 6] = [0, 1, 1, 2, 4, 0];
 const MAX_PHASE: i32 = 24;
 const TEMPO: i32 = 6;
+const PAWN_LEVERAGE: [i32; 6] = [0, 8, 9, 18, 28, 0];
 
 /// Exact white-minus-black coefficients for the current classical evaluator.
 ///
@@ -54,6 +56,7 @@ pub struct EvalTrace {
     pub rook_semi_open: i32,
     pub king_shield: i32,
     pub king_danger: i32,
+    pub pawn_leverage: i32,
     pub middlegame: i32,
     pub endgame: i32,
     pub white_score: i32,
@@ -99,6 +102,7 @@ pub fn trace(position: &Position) -> EvalTrace {
         rook_semi_open: 0,
         king_shield: 0,
         king_danger: 0,
+        pawn_leverage: 0,
         middlegame: 0,
         endgame: 0,
         white_score: 0,
@@ -140,6 +144,7 @@ pub fn trace(position: &Position) -> EvalTrace {
         result.rook_semi_open += sign * semi_open;
         result.king_shield += sign * king_shield_coefficient(position, color);
         result.king_danger += sign * king_danger_coefficient(position, color);
+        result.pawn_leverage += sign * pawn_leverage_score(position, color);
     }
 
     result.phase = result.phase.clamp(0, MAX_PHASE);
@@ -185,11 +190,13 @@ impl EvalTrace {
             + self.rook_open * 27
             + self.rook_semi_open * 15
             + self.king_shield * 14
-            - self.king_danger;
+            - self.king_danger
+            + self.pawn_leverage;
         let endgame = material_eg + psqt_eg + self.bishop_pair * 41
             - self.doubled_extra * 14
             - self.isolated_pawn * 9
-            + self.passed_rank_sq * 6;
+            + self.passed_rank_sq * 6
+            + self.pawn_leverage;
         let white_score =
             (middlegame * self.phase + endgame * (MAX_PHASE - self.phase)) / MAX_PHASE;
         let final_score = match self.side_to_move {
@@ -220,7 +227,7 @@ impl fmt::Display for EvalTrace {
                 "{}\t{}\t{}\t{}\t",
                 "{}\t{}\t{}\t{}\t",
                 "{}\t{}\t{}\t{}\t",
-                "{}\t{}\t{}\t{}\t{}"
+                "{}\t{}\t{}\t{}\t{}\t{}"
             ),
             stm,
             self.phase,
@@ -252,6 +259,7 @@ impl fmt::Display for EvalTrace {
             self.rook_semi_open,
             self.king_shield,
             self.king_danger,
+            self.pawn_leverage,
             self.middlegame,
             self.endgame,
             self.white_score,
@@ -439,6 +447,69 @@ fn king_danger_coefficient(position: &Position, color: Color) -> i32 {
     (pressure * (attackers + 1)).min(120)
 }
 
+fn pawn_leverage_score(position: &Position, color: Color) -> i32 {
+    let enemy = color.opposite();
+    let enemy_non_pawns = position.occupancy(enemy)
+        & !position.pieces(enemy, PieceType::Pawn)
+        & !position.pieces(enemy, PieceType::King);
+    let mut enemy_pawn_attacks = 0;
+    let mut enemy_pawns = position.pieces(enemy, PieceType::Pawn);
+    while enemy_pawns != 0 {
+        let square = Square::from_index(enemy_pawns.trailing_zeros() as u8)
+            .expect("piece bit is a valid square");
+        enemy_pawns &= enemy_pawns - 1;
+        enemy_pawn_attacks |= attacks::pawn_attacks(enemy, square);
+    }
+
+    let mut score = 0;
+    let mut pawns = position.pieces(color, PieceType::Pawn);
+    while pawns != 0 {
+        let square =
+            Square::from_index(pawns.trailing_zeros() as u8).expect("piece bit is valid square");
+        pawns &= pawns - 1;
+        score += trace_pawn_leverage_value(
+            position,
+            enemy,
+            attacks::pawn_attacks(color, square) & enemy_non_pawns,
+        );
+
+        let next_rank = match color {
+            Color::White => square.rank().checked_add(1),
+            Color::Black => square.rank().checked_sub(1),
+        };
+        let Some(destination) = next_rank.and_then(|rank| Square::from_coords(square.file(), rank))
+        else {
+            continue;
+        };
+        let promotes = match color {
+            Color::White => destination.rank() == 7,
+            Color::Black => destination.rank() == 0,
+        };
+        if promotes
+            || position.all_occupancy() & destination.bit() != 0
+            || enemy_pawn_attacks & destination.bit() != 0
+        {
+            continue;
+        }
+        score += trace_pawn_leverage_value(
+            position,
+            enemy,
+            attacks::pawn_attacks(color, destination) & enemy_non_pawns,
+        ) / 2;
+    }
+    score.min(80)
+}
+
+fn trace_pawn_leverage_value(position: &Position, enemy: Color, targets: u64) -> i32 {
+    PieceType::ALL
+        .iter()
+        .map(|&kind| {
+            (targets & position.pieces(enemy, kind)).count_ones() as i32
+                * PAWN_LEVERAGE[kind.index()]
+        })
+        .sum()
+}
+
 const fn color_sign(color: Color) -> i32 {
     match color {
         Color::White => 1,
@@ -518,14 +589,15 @@ mod tests {
         rook_file: bool,
         king_shield: bool,
         king_danger: bool,
+        pawn_leverage: bool,
     }
 
     #[test]
     fn trace_header_and_row_have_stable_width() {
         let row = trace(&Position::startpos()).to_string();
-        assert_eq!(TRACE_SCHEMA, "neyrang-sanj-trace-v2");
+        assert_eq!(TRACE_SCHEMA, "neyrang-sanj-trace-v3");
         assert_eq!(TRACE_COLUMNS.split('\t').count(), row.split('\t').count());
-        assert_eq!(row.split('\t').count(), 35);
+        assert_eq!(row.split('\t').count(), 36);
     }
 
     #[test]
@@ -581,6 +653,7 @@ mod tests {
         assert!(coverage.rook_file);
         assert!(coverage.king_shield);
         assert!(coverage.king_danger);
+        assert!(coverage.pawn_leverage);
     }
 
     impl Coverage {
@@ -595,6 +668,7 @@ mod tests {
             self.rook_file |= trace.rook_open != 0 || trace.rook_semi_open != 0;
             self.king_shield |= trace.king_shield != 0;
             self.king_danger |= trace.king_danger != 0;
+            self.pawn_leverage |= trace.pawn_leverage != 0;
         }
     }
 

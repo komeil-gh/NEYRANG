@@ -8,6 +8,7 @@ const MG_VALUE: [i32; 6] = [69, 300, 312, 405, 1_094, 0];
 const EG_VALUE: [i32; 6] = [79, 280, 330, 589, 1_077, 0];
 const PHASE_WEIGHT: [i32; 6] = [0, 1, 1, 2, 4, 0];
 const MAX_PHASE: i32 = 24;
+const PAWN_LEVERAGE: [i32; 6] = [0, 8, 9, 18, 28, 0];
 
 /// Return centipawns from the side-to-move perspective.
 pub fn evaluate(position: &Position) -> i32 {
@@ -40,6 +41,9 @@ pub fn evaluate(position: &Position) -> i32 {
         middlegame += sign * mobility(position, color);
         middlegame += sign * rook_files(position, color);
         middlegame += sign * king_safety(position, color);
+        let leverage = latent_pawn_leverage(position, color);
+        middlegame += sign * leverage;
+        endgame += sign * leverage;
     }
 
     phase = phase.clamp(0, MAX_PHASE);
@@ -48,6 +52,69 @@ pub fn evaluate(position: &Position) -> i32 {
         Color::White => white_score + TEMPO,
         Color::Black => -white_score + TEMPO,
     }
+}
+
+fn latent_pawn_leverage(position: &Position, color: Color) -> i32 {
+    let enemy = color.opposite();
+    let enemy_non_pawns = position.occupancy(enemy)
+        & !position.pieces(enemy, PieceType::Pawn)
+        & !position.pieces(enemy, PieceType::King);
+    let mut enemy_pawn_attacks = 0;
+    let mut enemy_pawns = position.pieces(enemy, PieceType::Pawn);
+    while enemy_pawns != 0 {
+        let square = Square::from_index(enemy_pawns.trailing_zeros() as u8)
+            .expect("piece bit is a valid square");
+        enemy_pawns &= enemy_pawns - 1;
+        enemy_pawn_attacks |= attacks::pawn_attacks(enemy, square);
+    }
+
+    let mut score = 0;
+    let mut pawns = position.pieces(color, PieceType::Pawn);
+    while pawns != 0 {
+        let square =
+            Square::from_index(pawns.trailing_zeros() as u8).expect("piece bit is valid square");
+        pawns &= pawns - 1;
+        score += pawn_leverage_value(
+            position,
+            enemy,
+            attacks::pawn_attacks(color, square) & enemy_non_pawns,
+        );
+
+        let next_rank = match color {
+            Color::White => square.rank().checked_add(1),
+            Color::Black => square.rank().checked_sub(1),
+        };
+        let Some(destination) = next_rank.and_then(|rank| Square::from_coords(square.file(), rank))
+        else {
+            continue;
+        };
+        let promotes = match color {
+            Color::White => destination.rank() == 7,
+            Color::Black => destination.rank() == 0,
+        };
+        if promotes
+            || position.all_occupancy() & destination.bit() != 0
+            || enemy_pawn_attacks & destination.bit() != 0
+        {
+            continue;
+        }
+        score += pawn_leverage_value(
+            position,
+            enemy,
+            attacks::pawn_attacks(color, destination) & enemy_non_pawns,
+        ) / 2;
+    }
+    score.min(80)
+}
+
+fn pawn_leverage_value(position: &Position, enemy: Color, targets: u64) -> i32 {
+    PieceType::ALL
+        .iter()
+        .map(|&kind| {
+            (targets & position.pieces(enemy, kind)).count_ones() as i32
+                * PAWN_LEVERAGE[kind.index()]
+        })
+        .sum()
 }
 
 fn mobility(position: &Position, color: Color) -> i32 {
@@ -180,5 +247,16 @@ mod tests {
 
         assert_eq!(king_pressure(&lone, Color::White, king), 0);
         assert!(king_pressure(&coordinated, Color::White, king) > 0);
+    }
+
+    #[test]
+    fn pawn_leverage_values_direct_and_safe_latent_threats() {
+        let direct = Position::from_fen("6k1/8/3r1q2/4P3/8/8/8/6K1 w - - 0 1").unwrap();
+        let latent = Position::from_fen("6k1/3r1q2/8/4P3/8/8/8/6K1 w - - 0 1").unwrap();
+        let unsafe_push = Position::from_fen("6k1/3p1q2/8/4P3/8/8/8/6K1 w - - 0 1").unwrap();
+
+        assert_eq!(latent_pawn_leverage(&direct, Color::White), 46);
+        assert_eq!(latent_pawn_leverage(&latent, Color::White), 23);
+        assert_eq!(latent_pawn_leverage(&unsafe_push, Color::White), 0);
     }
 }

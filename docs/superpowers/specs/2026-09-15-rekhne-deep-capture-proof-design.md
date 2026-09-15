@@ -27,3 +27,14 @@ returned beta bound, and all unrelated search behavior stay frozen.
    External progress requires exceeding the retained 26.56% point estimate.
 
 Failure removes the playing code while preserving the measured result.
+
+## Outcome
+
+The direct proof regression, all 143 Rust tests, 11 tactical cases,
+start-position perft 5 (`4,865,609`), formatting, and Clippy passed. Searching
+the second proof stage one ply deeper reduced the hybrid depth-8 tree from
+513,582 to 414,426 nodes (`-19.31%`). Four best-move/score pairs stayed exact,
+but the rook ending changed from `b4f4 / 82` to `b4c4 / 72`.
+
+That signature change fails the registered local gate, so no remote match was
+opened. H4q is rejected and its playing code is removed.

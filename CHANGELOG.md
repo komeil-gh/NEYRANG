@@ -145,6 +145,14 @@ All notable changes to NEYRANG are documented here.
   34,345 to 35,172 nodes (+2.41%) and lost its 128-game hybrid-parent screen at
   42.97% (`-49.18 +/-46.65 Elo`, `32/50/46`). It was rejected before a Blunder
   match and its playing code was removed.
+- H3p's qsearch-verified razoring grew the deterministic depth-8 tree from
+  536,259 to 544,767 nodes (+1.59%), failing its pre-registered requirement for
+  at least a 2% reduction. It was rejected before games and removed.
+- H3q's two-ply deep LMR candidate initially won its 128-game parent screen,
+  but failed the mate-in-three regression. The amended low-material guard kept
+  a 58.20% parent score (53/32/43) yet fell to 23.63% (28/163/65,
+  `-203.76 +/-42.83 Elo`) in a clean 256-game Blunder 7.6 screen. The playing
+  change was rejected and removed.
 
 ## [0.2.0] - 2026-08-29
 

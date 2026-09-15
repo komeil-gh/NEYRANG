@@ -34,3 +34,14 @@ artifact version is introduced.
    non-negative with zero anomalies.
 5. Only both parent passes open a fresh Blunder screen; H4m remains untouched
    until all gates pass.
+
+## Result
+
+H5g is rejected before games. The full fit consumed the frozen 10,485,760-row
+schedule and exported a valid version-3 artifact. On 2,048 new deterministic
+positions, Stockfish-18 WDL-space MSE increased from `0.09202358` to
+`0.09310036` (`-1.17%` relative improvement). The paired mean delta was
+`+0.00107678` with a deterministic 10,000-replicate bootstrap 95% interval of
+`[-0.00094977, +0.00315776]`. The positions were unique and had zero overlap
+with H5f, the approved N6 corpus, or the complete N6-N9 selected-root chain.
+No H5g engine game was opened and its network is not retained.

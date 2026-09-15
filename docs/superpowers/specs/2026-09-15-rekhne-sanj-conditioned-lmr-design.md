@@ -32,3 +32,12 @@ NNUE blend, policy, pruning margins, artifacts, and UCI defaults remain frozen.
    20,000 nodes against H4c. Reject on an anomaly or negative point estimate.
 4. Only a passing parent screen opens a separate 256-game Blunder 7.6.0 screen;
    it must exceed the retained 26.56% point estimate to claim progress.
+
+## Outcome
+
+Rejected before the remote gate. The implementation explicitly cleared each
+per-ply score slot on node entry, preventing a sibling or earlier iteration from
+being mistaken for the active same-side ancestor. With that correctness guard,
+none of the frozen depth-8 reductions had two valid cached SANJ scores: the tree
+remained exactly 513,582 nodes with all five best moves and scores unchanged.
+The candidate missed the registered 5% floor, so its playing code was removed.

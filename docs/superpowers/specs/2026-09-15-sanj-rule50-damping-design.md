@@ -30,13 +30,3 @@ draw rules unchanged.
    estimates and zero anomalies before a fresh Blunder screen.
 
 Failure removes the playing code while retaining the measured outcome.
-
-## Engineering result
-
-The focused damping regression, all 143 Rust tests, the 11-position tactical
-suite, start-position perft 5 (4,865,609 nodes), formatting, Clippy, and the
-100,000-position independent SANJ-trace reconstruction passed. The hybrid
-depth-8 tree fell from 513,582 to 496,186 nodes (-3.39%) while all five best
-moves stayed unchanged. Scores changed from `-6/82/579` to `-7/76/570` in the
-three nonzero-clock search lines; start position and the attack position stayed
-at 23 and 104. The local gate passes.

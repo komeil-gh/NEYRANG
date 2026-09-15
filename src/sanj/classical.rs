@@ -43,19 +43,11 @@ pub fn evaluate(position: &Position) -> i32 {
     }
 
     phase = phase.clamp(0, MAX_PHASE);
-    let white_score = rule50_damp(
-        (middlegame * phase + endgame * (MAX_PHASE - phase)) / MAX_PHASE,
-        position.halfmove_clock(),
-    );
+    let white_score = (middlegame * phase + endgame * (MAX_PHASE - phase)) / MAX_PHASE;
     match position.side_to_move() {
         Color::White => white_score + TEMPO,
         Color::Black => -white_score + TEMPO,
     }
-}
-
-fn rule50_damp(score: i32, halfmove_clock: u16) -> i32 {
-    let remaining = 199 - i64::from(halfmove_clock.min(100));
-    (i64::from(score) * remaining / 199) as i32
 }
 
 fn mobility(position: &Position, color: Color) -> i32 {
@@ -188,13 +180,5 @@ mod tests {
 
         assert_eq!(king_pressure(&lone, Color::White, king), 0);
         assert!(king_pressure(&coordinated, Color::White, king) > 0);
-    }
-
-    #[test]
-    fn rule50_damping_is_monotonic_and_capped() {
-        assert_eq!(rule50_damp(1_000, 0), 1_000);
-        assert!(rule50_damp(1_000, 50) > rule50_damp(1_000, 99));
-        assert_eq!(rule50_damp(1_000, 100), rule50_damp(1_000, u16::MAX));
-        assert_eq!(rule50_damp(-1_000, 99), -rule50_damp(1_000, 99));
     }
 }

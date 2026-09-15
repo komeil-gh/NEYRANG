@@ -882,6 +882,12 @@ impl<'a> Searcher<'a> {
                 && tt_move != Some(mv)
                 && !self.killers[ply].contains(&mv)
                 && self.history.score(moving_color, mv) < HistoryTable::MAX_SCORE / 4;
+            let reduction =
+                if depth >= 6 && move_index >= 8 && has_meaningful_non_pawn_material(position) {
+                    2
+                } else {
+                    1
+                };
             self.push_move_accumulator(position, mv, ply);
             let undo = position.make_move(mv);
             let gives_check = (can_reduce || can_futility_prune || can_see_prune)
@@ -936,7 +942,7 @@ impl<'a> Searcher<'a> {
                     }
                     score = -self.negamax(
                         position,
-                        depth - 2,
+                        depth - 1 - reduction,
                         ply + 1,
                         -alpha - 1,
                         -alpha,

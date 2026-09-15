@@ -21,3 +21,10 @@ reduction in the frozen hybrid depth-8 tree. A passing tree opens 128 fresh
 paired openings at 20,000 nodes against H4c. Reject on a negative point
 estimate or anomaly. Only a pass opens a separate 256-game Blunder 7.6.0
 screen, which must exceed the retained 26.56% point estimate.
+
+## Tree gate
+
+All 141 Rust tests, the 11-test tactical suite, start-position perft 5, and
+Clippy passed. H4e reduced the frozen five-position hybrid depth-8 tree from
+513,582 to 408,834 nodes (-20.40%) while preserving all five final best moves
+and scores. The candidate qualifies for its registered parent screen.

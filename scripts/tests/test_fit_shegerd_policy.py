@@ -47,6 +47,22 @@ def trace(records: tuple[tuple[str, str, int], ...]) -> str:
 
 
 class FitShegerdPolicyTests(unittest.TestCase):
+    def test_compares_only_moves_from_the_selected_runtime_stage(self) -> None:
+        features = (0, 0, 0, 0, 0, 2)
+        decision = policy.Decision(
+            "r1",
+            "g1",
+            (
+                policy.Candidate("a2a3", True, "quiet", features),
+                policy.Candidate("b2b3", False, "quiet", features),
+                policy.Candidate("a2a8q", False, "good_tactical", features),
+            ),
+        )
+
+        comparable = policy.stage_comparable((decision,))
+
+        self.assertEqual([move.move for move in comparable[0].candidates], ["a2a3", "b2b3"])
+
     def test_repeat_fit_is_byte_identical_and_group_aware(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

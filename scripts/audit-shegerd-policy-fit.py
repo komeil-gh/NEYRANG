@@ -16,8 +16,8 @@ from pathlib import Path
 
 
 TRACE_SCHEMA = "neyrang-shegerd-policy-trace-v1"
-REPORT_SCHEMA = "neyrang-shegerd-policy-fit-result-v1"
-AUDIT_SCHEMA = "neyrang-shegerd-policy-fit-audit-v1"
+REPORT_SCHEMA = "neyrang-shegerd-policy-fit-result-v2"
+AUDIT_SCHEMA = "neyrang-shegerd-policy-fit-audit-v2"
 HEADER = (
     "schema", "record_id", "group_id", "candidate_move", "selected", "stage",
     "from_normalized", "to_normalized", "mover", "victim", "promotion", "phase",
@@ -37,6 +37,7 @@ class AuditError(RuntimeError):
 class Candidate:
     move: str
     selected: bool
+    move_class: str
     features: tuple[int, int, int, int, int, int]
 
 
@@ -113,9 +114,16 @@ def parse_validation(path: Path) -> tuple[Decision, ...]:
         tactical = victim != 0 or promotion != 0
         if (row["stage"] == "tactical") != tactical or row["stage"] not in {"quiet", "tactical"}:
             raise AuditError(f"line {line_number}: stage differs from move features")
+        see = bounded_int(row["see_bucket"], -2, 2, line_number, "see")
+        move_class = (
+            "quiet" if row["stage"] == "quiet"
+            else "good_tactical" if promotion != 0 or see >= 0
+            else "bad_tactical"
+        )
         candidate = Candidate(
             row["candidate_move"],
             bounded_int(row["selected"], 0, 1, line_number, "selected") == 1,
+            move_class,
             (
                 bounded_int(row["from_normalized"], 0, 63, line_number, "from") * 64
                 + bounded_int(row["to_normalized"], 0, 63, line_number, "to"),
@@ -125,7 +133,7 @@ def parse_validation(path: Path) -> tuple[Decision, ...]:
                 bounded_int(row["phase"], 0, 2, line_number, "phase"),
                 (bounded_int(row["previous_to_normalized"], -1, 63, line_number, "previous") + 1) * 64
                 + bounded_int(row["to_normalized"], 0, 63, line_number, "to"),
-                bounded_int(row["see_bucket"], -2, 2, line_number, "see") + 2,
+                see + 2,
             ),
         )
         bucket = records.setdefault(record_id, [])
@@ -165,6 +173,19 @@ def candidate_score(candidate: Candidate, weights: tuple[int, ...]) -> int:
 
 
 def metrics(decisions: tuple[Decision, ...], weights: tuple[int, ...]) -> dict[str, float | int]:
+    input_decisions = len(decisions)
+    comparable = []
+    for decision in decisions:
+        selected = next(candidate for candidate in decision.candidates if candidate.selected)
+        candidates = tuple(
+            candidate for candidate in decision.candidates
+            if candidate.move_class == selected.move_class
+        )
+        if len(candidates) >= 2:
+            comparable.append(Decision(decision.record_id, decision.group_id, candidates))
+    decisions = tuple(comparable)
+    if not decisions:
+        raise AuditError("validation has no MovePicker-stage-comparable decisions")
     group_counts = Counter(decision.group_id for decision in decisions)
     pairwise = top1 = first_legal = 0.0
     for decision in decisions:
@@ -186,6 +207,7 @@ def metrics(decisions: tuple[Decision, ...], weights: tuple[int, ...]) -> dict[s
         top1 += record_weight * float(winner.selected)
         first_legal += record_weight * float(decision.candidates[0].selected)
     return {
+        "input_decisions": input_decisions,
         "decisions": len(decisions),
         "groups": len(group_counts),
         "pairwise_accuracy": pairwise,
@@ -213,6 +235,8 @@ def audit(
     report = json.loads(report_path.read_text(encoding="utf-8"))
     if report.get("schema") != REPORT_SCHEMA:
         raise AuditError("fit report schema differs")
+    if report.get("parameters", {}).get("comparison_pool") != "selected move's MovePicker runtime class":
+        raise AuditError("fit report comparison pool differs")
     for path, name in ((float_path, "float"), (quantized, "quantized")):
         digest, size = sha256_file(path)
         if report.get("artifacts", {}).get(name) != {"bytes": size, "sha256": digest}:

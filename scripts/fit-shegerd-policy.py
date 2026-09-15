@@ -20,7 +20,7 @@ from typing import Iterable
 
 TRACE_SCHEMA = "neyrang-shegerd-policy-trace-v1"
 ARTIFACT_SCHEMA = "neyrang-shegerd-policy-v1"
-REPORT_SCHEMA = "neyrang-shegerd-policy-fit-result-v1"
+REPORT_SCHEMA = "neyrang-shegerd-policy-fit-result-v2"
 HEADER = (
     "schema", "record_id", "group_id", "candidate_move", "selected", "stage",
     "from_normalized", "to_normalized", "mover", "victim", "promotion", "phase",
@@ -52,6 +52,7 @@ class FitError(RuntimeError):
 class Candidate:
     move: str
     selected: bool
+    move_class: str
     features: tuple[int, int, int, int, int, int]
 
 
@@ -147,9 +148,15 @@ def parse_trace(path: Path) -> tuple[Decision, ...]:
         tactical = victim != 0 or promotion != 0
         if (stage == "tactical") != tactical:
             raise FitError(f"line {line_number}: stage does not match victim/promotion")
+        move_class = (
+            "quiet" if stage == "quiet"
+            else "good_tactical" if promotion != 0 or see >= 0
+            else "bad_tactical"
+        )
         candidate = Candidate(
             move=row["candidate_move"],
             selected=selected,
+            move_class=move_class,
             features=(
                 from_square * 64 + to_square,
                 (mover - 1) * 64 + to_square,
@@ -175,6 +182,19 @@ def parse_trace(path: Path) -> tuple[Decision, ...]:
             raise FitError(f"record {record_id!r} must have exactly one selected move")
         decisions.append(Decision(record_id, groups[record_id], candidates))
     return tuple(decisions)
+
+
+def stage_comparable(decisions: tuple[Decision, ...]) -> tuple[Decision, ...]:
+    comparable = []
+    for decision in decisions:
+        selected = next(candidate for candidate in decision.candidates if candidate.selected)
+        candidates = tuple(
+            candidate for candidate in decision.candidates
+            if candidate.move_class == selected.move_class
+        )
+        if len(candidates) >= 2:
+            comparable.append(Decision(decision.record_id, decision.group_id, candidates))
+    return tuple(comparable)
 
 
 def indices(candidate: Candidate) -> tuple[int, ...]:
@@ -310,15 +330,19 @@ def run_fit(train: Path, validation: Path, float_output: Path, quantized_output:
         raise FitError("refusing to overwrite an existing output")
     written: list[Path] = []
     try:
-        train_decisions = parse_trace(train)
-        validation_decisions = parse_trace(validation)
-        overlap = {decision.record_id for decision in train_decisions} & {decision.record_id for decision in validation_decisions}
+        train_input = parse_trace(train)
+        validation_input = parse_trace(validation)
+        overlap = {decision.record_id for decision in train_input} & {decision.record_id for decision in validation_input}
         if overlap:
             raise FitError("train and validation record ids overlap")
-        train_groups = {decision.group_id for decision in train_decisions}
-        validation_groups = {decision.group_id for decision in validation_decisions}
+        train_groups = {decision.group_id for decision in train_input}
+        validation_groups = {decision.group_id for decision in validation_input}
         if train_groups & validation_groups:
             raise FitError("train and validation opening groups overlap")
+        train_decisions = stage_comparable(train_input)
+        validation_decisions = stage_comparable(validation_input)
+        if not train_decisions or not validation_decisions:
+            raise FitError("no MovePicker-stage-comparable decisions")
         weights, training = fit(train_decisions)
         quantized = [quantize(weight) for weight in weights]
         float_bytes = float_payload(weights)
@@ -346,13 +370,16 @@ def run_fit(train: Path, validation: Path, float_output: Path, quantized_output:
             "weight_clamp": [-WEIGHT_CLAMP, WEIGHT_CLAMP],
             "quantization": QUANTIZATION,
             "group_weighting": "each opening-pair group has equal total weight",
+            "comparison_pool": "selected move's MovePicker runtime class",
         },
         "training": {
+            "input_decisions": len(train_input),
             "decisions": len(train_decisions),
             "groups": len(train_groups),
             **training,
         },
         "validation": {
+            "input_decisions": len(validation_input),
             "decisions": len(validation_decisions),
             "groups": len(validation_groups),
             **validation_metrics,

@@ -107,6 +107,11 @@ python3 -m unittest scripts.tests.test_fit_shegerd_policy
 scripts/test-match-config.sh
 ```
 
+Policy fitting compares the teacher-selected move only with candidates from
+the same runtime MovePicker class (`quiet`, `good tactical`, or `bad tactical`).
+Cross-stage accuracy is not evidence because the runtime never lets the policy
+move a candidate across those boundaries.
+
 `ENGINE_A_POLICY_FILE` and `ENGINE_B_POLICY_FILE` pass separately hashed
 `PolicyFile` artifacts through the paired-match runner. Fast screens use at
 most one concurrent game per physical core, one engine thread, paired colors,

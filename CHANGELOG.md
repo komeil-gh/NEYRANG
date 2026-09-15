@@ -9,6 +9,8 @@ All notable changes to NEYRANG are documented here.
 - A fail-closed, non-default CPU SHEGERD policy path that loads checksum-bound
   version-2 additive tables and ranks moves only inside existing MovePicker
   stages, plus separately hashed `PolicyFile` match-runner support.
+- Policy fitting and independent audit exclude cross-stage comparisons that the
+  runtime MovePicker cannot reorder.
 - Exact-quota teacher corpus selection with registered-order transposition
   deduplication, input/output hash binding, and streamed exposure expansion.
 - Exclusive-create protocol evidence logging with expected-byte SHA-256 checks

@@ -81,7 +81,34 @@ pub fn merge_factorised_raw_tensors_with_output_heads(
     base_features: usize,
     output_heads: usize,
 ) -> Result<Vec<f32>, FactorisedRawError> {
-    if buckets == 0 || hidden_size == 0 || base_features == 0 || output_heads == 0 {
+    let output_inputs = hidden_size
+        .checked_mul(2)
+        .ok_or(FactorisedRawError::InvalidGeometry)?;
+    merge_factorised_raw_tensors_with_output_shape(
+        tensors,
+        buckets,
+        hidden_size,
+        base_features,
+        output_inputs,
+        output_heads,
+    )
+}
+
+/// Merge input factorisation with an explicitly shaped output matrix.
+pub fn merge_factorised_raw_tensors_with_output_shape(
+    tensors: &[(String, Vec<f32>)],
+    buckets: usize,
+    hidden_size: usize,
+    base_features: usize,
+    output_inputs: usize,
+    output_heads: usize,
+) -> Result<Vec<f32>, FactorisedRawError> {
+    if buckets == 0
+        || hidden_size == 0
+        || base_features == 0
+        || output_inputs == 0
+        || output_heads == 0
+    {
         return Err(FactorisedRawError::InvalidGeometry);
     }
 
@@ -119,7 +146,6 @@ pub fn merge_factorised_raw_tensors_with_output_heads(
     let l0w = get("l0w", bucket_values)?;
     let l0f = get("l0f", bank_values)?;
     let l0b = get("l0b", hidden_size)?;
-    let output_inputs = 2 * hidden_size;
     let l1w = get("l1w", output_inputs * output_heads)?;
     let l1b = get("l1b", output_heads)?;
 
@@ -364,6 +390,7 @@ mod tests {
         ACTIVATION_QUANT, EpochPlan, FilterFacts, OUTPUT_BIAS_QUANT, OUTPUT_QUANT, PlanError,
         PositionFilter, deterministic_shuffle, merge_factorised_raw_tensors,
         merge_factorised_raw_tensors_with_output_heads,
+        merge_factorised_raw_tensors_with_output_shape,
     };
 
     #[test]
@@ -487,6 +514,22 @@ mod tests {
         assert_eq!(
             merge_factorised_raw_tensors_with_output_heads(&tensors, 1, 1, 2, 2).unwrap(),
             vec![11.0, 22.0, 30.0, 40.0, 50.0, 41.0, 51.0, 60.0, 61.0]
+        );
+    }
+
+    #[test]
+    fn factorised_raw_export_accepts_a_wider_output_input() {
+        let tensors = vec![
+            ("l0w".to_string(), vec![1.0, 2.0]),
+            ("l0f".to_string(), vec![10.0, 20.0]),
+            ("l0b".to_string(), vec![30.0]),
+            ("l1w".to_string(), vec![40.0, 50.0, 60.0]),
+            ("l1b".to_string(), vec![70.0]),
+        ];
+
+        assert_eq!(
+            merge_factorised_raw_tensors_with_output_shape(&tensors, 1, 1, 2, 3, 1).unwrap(),
+            vec![11.0, 22.0, 30.0, 40.0, 50.0, 60.0, 70.0]
         );
     }
 }

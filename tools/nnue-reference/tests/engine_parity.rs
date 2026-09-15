@@ -72,6 +72,43 @@ fn king_bucket_engine_inference_is_bit_exact_with_the_reference_oracle() {
     }
 }
 
+#[test]
+fn latent_imbalance_engine_inference_is_bit_exact_with_the_reference_oracle() {
+    let reference = ReferenceNetwork::new_with_feature_set(
+        FeatureSet::Chess768KingBucketsMirrored3LatentImbalance,
+        NetworkParameters {
+            activation_quant: 511,
+            output_quant: 768,
+            centipawn_scale: 400,
+        },
+        (0..INPUT_FEATURES_KING_BUCKETS_MIRRORED_3 * HIDDEN_SIZE)
+            .map(|index| (index as i16 % 31) - 15)
+            .collect(),
+        (0..HIDDEN_SIZE)
+            .map(|index| (index as i16 % 13) - 6)
+            .collect(),
+        (0..3 * HIDDEN_SIZE)
+            .map(|index| (index as i16 % 17) - 8)
+            .collect(),
+        19,
+    )
+    .unwrap();
+    let engine = EngineNetwork::from_bytes(&reference.to_bytes()).unwrap();
+    let positions = [
+        Position::startpos(),
+        Position::from_fen("r3k2r/8/8/8/8/8/8/R4RK1 w kq - 0 1").unwrap(),
+        Position::from_fen("4k3/8/8/8/3Q4/8/8/4K3 b - - 0 1").unwrap(),
+    ];
+
+    for position in positions {
+        let expected = reference.evaluate(
+            &AccumulatorPair::refresh(&position, &reference),
+            position.side_to_move(),
+        );
+        assert_eq!(engine.evaluate(&position), expected);
+    }
+}
+
 fn deterministic_network() -> ReferenceNetwork {
     ReferenceNetwork::new(
         NetworkParameters {

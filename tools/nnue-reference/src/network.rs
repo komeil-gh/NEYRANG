@@ -12,12 +12,16 @@ pub const FORMAT_VERSION: u16 = 1;
 pub const FORMAT_VERSION_KING_BUCKETS: u16 = 2;
 /// Version carrying four material-routed output heads.
 pub const FORMAT_VERSION_PHASE_HEADS: u16 = 3;
+/// Version carrying the latent dual-perspective imbalance channel.
+pub const FORMAT_VERSION_LATENT_IMBALANCE: u16 = 4;
 /// Identifier for the dual-perspective Chess768 feature mapping.
 pub const FEATURE_SET_CHESS768: u16 = 1;
 /// Identifier for the three-bank horizontally mirrored Chess768 mapping.
 pub const FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3: u16 = 2;
 /// Identifier for Chess768x3hm with four material-routed output heads.
 pub const FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3_PHASE_HEADS_4: u16 = 3;
+/// Identifier for Chess768x3hm with an absolute latent-imbalance channel.
+pub const FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3_LATENT_IMBALANCE: u16 = 4;
 /// Byte length of the fixed network header.
 pub const HEADER_SIZE: usize = 32;
 
@@ -376,15 +380,18 @@ impl Network {
         let activation_quant = i128::from(self.parameters.activation_quant);
         let mut output = 0_i128;
         let head = material_output_head(accumulators.piece_count, self.feature_set.output_heads());
-        let weight_offset = head * 2 * HIDDEN_SIZE;
+        let weight_offset = head * self.feature_set.output_inputs();
 
-        for (index, &value) in us.iter().enumerate() {
-            output += square_clipped(value, activation_quant)
-                * i128::from(self.output_weights[weight_offset + index]);
-        }
-        for (index, &value) in them.iter().enumerate() {
-            output += square_clipped(value, activation_quant)
-                * i128::from(self.output_weights[weight_offset + HIDDEN_SIZE + index]);
+        for index in 0..HIDDEN_SIZE {
+            let us_value = square_clipped(us[index], activation_quant);
+            let them_value = square_clipped(them[index], activation_quant);
+            output += us_value * i128::from(self.output_weights[weight_offset + index]);
+            output +=
+                them_value * i128::from(self.output_weights[weight_offset + HIDDEN_SIZE + index]);
+            if self.feature_set == FeatureSet::Chess768KingBucketsMirrored3LatentImbalance {
+                output += (us_value - them_value).abs()
+                    * i128::from(self.output_weights[weight_offset + 2 * HIDDEN_SIZE + index]);
+            }
         }
 
         output /= activation_quant;
@@ -400,7 +407,7 @@ const fn feature_weight_count(feature_set: FeatureSet) -> usize {
 }
 
 const fn output_weight_count(feature_set: FeatureSet) -> usize {
-    2 * HIDDEN_SIZE * feature_set.output_heads()
+    feature_set.output_inputs() * feature_set.output_heads()
 }
 
 const fn payload_size(feature_set: FeatureSet) -> usize {
@@ -413,6 +420,7 @@ const fn format_version(feature_set: FeatureSet) -> u16 {
         FeatureSet::Chess768 => FORMAT_VERSION,
         FeatureSet::Chess768KingBucketsMirrored3 => FORMAT_VERSION_KING_BUCKETS,
         FeatureSet::Chess768KingBucketsMirrored3PhaseHeads4 => FORMAT_VERSION_PHASE_HEADS,
+        FeatureSet::Chess768KingBucketsMirrored3LatentImbalance => FORMAT_VERSION_LATENT_IMBALANCE,
     }
 }
 
@@ -422,6 +430,9 @@ const fn feature_set_id(feature_set: FeatureSet) -> u16 {
         FeatureSet::Chess768KingBucketsMirrored3 => FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3,
         FeatureSet::Chess768KingBucketsMirrored3PhaseHeads4 => {
             FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3_PHASE_HEADS_4
+        }
+        FeatureSet::Chess768KingBucketsMirrored3LatentImbalance => {
+            FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3_LATENT_IMBALANCE
         }
     }
 }
@@ -437,7 +448,14 @@ fn decode_feature_set(version: u16, feature_set: u16) -> Result<FeatureSet, Netw
             FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3_PHASE_HEADS_4,
         ) => Ok(FeatureSet::Chess768KingBucketsMirrored3PhaseHeads4),
         (
-            FORMAT_VERSION | FORMAT_VERSION_KING_BUCKETS | FORMAT_VERSION_PHASE_HEADS,
+            FORMAT_VERSION_LATENT_IMBALANCE,
+            FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3_LATENT_IMBALANCE,
+        ) => Ok(FeatureSet::Chess768KingBucketsMirrored3LatentImbalance),
+        (
+            FORMAT_VERSION
+            | FORMAT_VERSION_KING_BUCKETS
+            | FORMAT_VERSION_PHASE_HEADS
+            | FORMAT_VERSION_LATENT_IMBALANCE,
             feature_set,
         ) => Err(NetworkError::UnsupportedFeatureSet(feature_set)),
         (version, _) => Err(NetworkError::UnsupportedVersion(version)),

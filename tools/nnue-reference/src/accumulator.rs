@@ -35,6 +35,7 @@ impl AccumulatorPair {
             network.feature_set,
             FeatureSet::Chess768KingBucketsMirrored3
                 | FeatureSet::Chess768KingBucketsMirrored3PhaseHeads4
+                | FeatureSet::Chess768KingBucketsMirrored3LatentImbalance
         ) && [Color::White, Color::Black].into_iter().any(|color| {
             before.pieces(color, PieceType::King) != after.pieces(color, PieceType::King)
         }) {

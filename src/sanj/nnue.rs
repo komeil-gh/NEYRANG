@@ -20,12 +20,16 @@ pub const FORMAT_VERSION: u16 = 1;
 pub const FORMAT_VERSION_KING_BUCKETS: u16 = 2;
 /// Artifact version adding four material-routed output heads.
 pub const FORMAT_VERSION_PHASE_HEADS: u16 = 3;
+/// Artifact version adding a latent dual-perspective imbalance channel.
+pub const FORMAT_VERSION_LATENT_IMBALANCE: u16 = 4;
 /// Identifier for the dual-perspective Chess768 feature mapping.
 pub const FEATURE_SET_CHESS768: u16 = 1;
 /// Identifier for Chess768x3hm.
 pub const FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3: u16 = 2;
 /// Identifier for Chess768x3hm with four material-routed output heads.
 pub const FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3_PHASE_HEADS_4: u16 = 3;
+/// Identifier for Chess768x3hm with an absolute latent-imbalance channel.
+pub const FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3_LATENT_IMBALANCE: u16 = 4;
 /// Byte length of the fixed artifact header.
 pub const HEADER_SIZE: usize = 32;
 
@@ -44,13 +48,16 @@ enum FeatureSet {
     Chess768,
     Chess768KingBucketsMirrored3,
     Chess768KingBucketsMirrored3PhaseHeads4,
+    Chess768KingBucketsMirrored3LatentImbalance,
 }
 
 impl FeatureSet {
     const fn input_features(self) -> usize {
         match self {
             Self::Chess768 => INPUT_FEATURES,
-            Self::Chess768KingBucketsMirrored3 | Self::Chess768KingBucketsMirrored3PhaseHeads4 => {
+            Self::Chess768KingBucketsMirrored3
+            | Self::Chess768KingBucketsMirrored3PhaseHeads4
+            | Self::Chess768KingBucketsMirrored3LatentImbalance => {
                 INPUT_FEATURES_KING_BUCKETS_MIRRORED_3
             }
         }
@@ -58,8 +65,17 @@ impl FeatureSet {
 
     const fn output_heads(self) -> usize {
         match self {
-            Self::Chess768 | Self::Chess768KingBucketsMirrored3 => 1,
+            Self::Chess768
+            | Self::Chess768KingBucketsMirrored3
+            | Self::Chess768KingBucketsMirrored3LatentImbalance => 1,
             Self::Chess768KingBucketsMirrored3PhaseHeads4 => PHASE_HEAD_COUNT,
+        }
+    }
+
+    const fn output_inputs(self) -> usize {
+        match self {
+            Self::Chess768KingBucketsMirrored3LatentImbalance => 3 * HIDDEN_SIZE,
+            _ => 2 * HIDDEN_SIZE,
         }
     }
 }
@@ -132,6 +148,7 @@ impl AccumulatorPair {
             network.feature_set,
             FeatureSet::Chess768KingBucketsMirrored3
                 | FeatureSet::Chess768KingBucketsMirrored3PhaseHeads4
+                | FeatureSet::Chess768KingBucketsMirrored3LatentImbalance
         ) && moving_type == PieceType::King
         {
             let mut child = position.clone();
@@ -334,7 +351,14 @@ impl Network {
                 FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3_PHASE_HEADS_4,
             ) => FeatureSet::Chess768KingBucketsMirrored3PhaseHeads4,
             (
-                FORMAT_VERSION | FORMAT_VERSION_KING_BUCKETS | FORMAT_VERSION_PHASE_HEADS,
+                FORMAT_VERSION_LATENT_IMBALANCE,
+                FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3_LATENT_IMBALANCE,
+            ) => FeatureSet::Chess768KingBucketsMirrored3LatentImbalance,
+            (
+                FORMAT_VERSION
+                | FORMAT_VERSION_KING_BUCKETS
+                | FORMAT_VERSION_PHASE_HEADS
+                | FORMAT_VERSION_LATENT_IMBALANCE,
                 feature_set,
             ) => {
                 return Err(NetworkError::UnsupportedFeatureSet(feature_set));
@@ -368,7 +392,7 @@ impl Network {
         let payload_length = read_u32(bytes, 24) as usize;
         let feature_weight_count = feature_set.input_features() * HIDDEN_SIZE;
         let output_head_count = feature_set.output_heads();
-        let output_weight_count = 2 * HIDDEN_SIZE * output_head_count;
+        let output_weight_count = feature_set.output_inputs() * output_head_count;
         let payload_size = (feature_weight_count + FEATURE_BIAS_COUNT + output_weight_count) * 2
             + output_head_count * 4;
         if payload_length != payload_size {
@@ -455,15 +479,18 @@ impl Network {
         let activation_quant = i64::from(self.parameters.activation_quant);
         let mut output = 0_i64;
         let head = material_output_head(piece_count, self.feature_set.output_heads());
-        let weight_offset = head * 2 * HIDDEN_SIZE;
+        let weight_offset = head * self.feature_set.output_inputs();
 
-        for (index, &value) in us.iter().enumerate() {
-            output += square_clipped(value, activation_quant)
-                * i64::from(self.output_weights[weight_offset + index]);
-        }
-        for (index, &value) in them.iter().enumerate() {
-            output += square_clipped(value, activation_quant)
-                * i64::from(self.output_weights[weight_offset + HIDDEN_SIZE + index]);
+        for index in 0..HIDDEN_SIZE {
+            let us_value = square_clipped(us[index], activation_quant);
+            let them_value = square_clipped(them[index], activation_quant);
+            output += us_value * i64::from(self.output_weights[weight_offset + index]);
+            output +=
+                them_value * i64::from(self.output_weights[weight_offset + HIDDEN_SIZE + index]);
+            if self.feature_set == FeatureSet::Chess768KingBucketsMirrored3LatentImbalance {
+                output += (us_value - them_value).abs()
+                    * i64::from(self.output_weights[weight_offset + 2 * HIDDEN_SIZE + index]);
+            }
         }
 
         output /= activation_quant;
@@ -517,7 +544,8 @@ fn feature_index_for(
     match feature_set {
         FeatureSet::Chess768 => base,
         FeatureSet::Chess768KingBucketsMirrored3
-        | FeatureSet::Chess768KingBucketsMirrored3PhaseHeads4 => {
+        | FeatureSet::Chess768KingBucketsMirrored3PhaseHeads4
+        | FeatureSet::Chess768KingBucketsMirrored3LatentImbalance => {
             let king_square = position
                 .pieces(perspective, PieceType::King)
                 .trailing_zeros() as usize;

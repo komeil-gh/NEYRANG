@@ -2,7 +2,8 @@ use neyrang::chess::{Color, PieceType, Position, Square};
 use neyrang_nnue_reference::{
     AccumulatorPair, FeatureSet, FenSuiteError, FloatNetwork, FloatNetworkError,
     FloatQuantizationError, HIDDEN_SIZE, INPUT_FEATURES, INPUT_FEATURES_KING_BUCKETS_MIRRORED_3,
-    Network, NetworkParameters, ParityError, active_features, evaluate_parity, parse_fen_suite,
+    Network, NetworkParameters, ParityError, active_features, active_features_for, evaluate_parity,
+    parse_fen_suite,
 };
 
 const FLOAT_COUNT: usize = INPUT_FEATURES * HIDDEN_SIZE + HIDDEN_SIZE + 2 * HIDDEN_SIZE + 1;
@@ -226,6 +227,42 @@ fn phase_head_raw_tensor_routes_by_material_and_survives_quantization() {
             expected
         );
     }
+}
+
+#[test]
+fn latent_imbalance_channel_survives_quantization() {
+    let feature_set = FeatureSet::Chess768KingBucketsMirrored3LatentImbalance;
+    let feature_weight_count = INPUT_FEATURES_KING_BUCKETS_MIRRORED_3 * HIDDEN_SIZE;
+    let output_weight_offset = feature_weight_count + HIDDEN_SIZE;
+    let float_count = output_weight_offset + 3 * HIDDEN_SIZE + 1;
+    let position = Position::from_fen("4k3/8/8/8/3Q4/8/8/4K3 w - - 0 1").unwrap();
+    let white = active_features_for(&position, Color::White, feature_set);
+    let black = active_features_for(&position, Color::Black, feature_set);
+    let asymmetric_feature = *white
+        .iter()
+        .find(|feature| !black.contains(feature))
+        .unwrap();
+    let mut values = vec![0.0; float_count];
+    values[asymmetric_feature * HIDDEN_SIZE] = 1.0;
+    values[output_weight_offset + 2 * HIDDEN_SIZE] = 1.0;
+
+    let float =
+        FloatNetwork::from_bullet_raw_with_feature_set(&encode_f32(&values), 400.0, feature_set)
+            .unwrap();
+    let quantized = float
+        .quantize(NetworkParameters {
+            activation_quant: 511,
+            output_quant: 768,
+            centipawn_scale: 400,
+        })
+        .unwrap();
+    let accumulators = AccumulatorPair::refresh(&position, &quantized);
+
+    assert_eq!(float.evaluate(&position), 400.0);
+    assert_eq!(
+        quantized.evaluate(&accumulators, position.side_to_move()),
+        400
+    );
 }
 
 #[test]

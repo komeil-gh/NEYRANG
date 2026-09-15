@@ -1,8 +1,10 @@
 use neyrang_nnue_reference::{
     FEATURE_SET_CHESS768, FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3,
+    FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3_LATENT_IMBALANCE,
     FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3_PHASE_HEADS_4, FORMAT_VERSION_KING_BUCKETS,
-    FORMAT_VERSION_PHASE_HEADS, FeatureSet, HEADER_SIZE, HIDDEN_SIZE, INPUT_FEATURES,
-    INPUT_FEATURES_KING_BUCKETS_MIRRORED_3, Network, NetworkError, NetworkParameters,
+    FORMAT_VERSION_LATENT_IMBALANCE, FORMAT_VERSION_PHASE_HEADS, FeatureSet, HEADER_SIZE,
+    HIDDEN_SIZE, INPUT_FEATURES, INPUT_FEATURES_KING_BUCKETS_MIRRORED_3, Network, NetworkError,
+    NetworkParameters,
 };
 
 fn fixture_network() -> Network {
@@ -221,6 +223,34 @@ fn phase_head_network_round_trips_through_version_three() {
     assert_eq!(
         u16::from_le_bytes([bytes[10], bytes[11]]),
         FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3_PHASE_HEADS_4
+    );
+    assert_eq!(Network::from_bytes(&bytes), Ok(network));
+}
+
+#[test]
+fn latent_imbalance_network_round_trips_through_version_four() {
+    let network = Network::new_with_feature_set(
+        FeatureSet::Chess768KingBucketsMirrored3LatentImbalance,
+        NetworkParameters {
+            activation_quant: 511,
+            output_quant: 768,
+            centipawn_scale: 400,
+        },
+        vec![0; INPUT_FEATURES_KING_BUCKETS_MIRRORED_3 * HIDDEN_SIZE],
+        vec![0; HIDDEN_SIZE],
+        vec![0; 3 * HIDDEN_SIZE],
+        17,
+    )
+    .unwrap();
+
+    let bytes = network.to_bytes();
+    assert_eq!(
+        u16::from_le_bytes([bytes[8], bytes[9]]),
+        FORMAT_VERSION_LATENT_IMBALANCE
+    );
+    assert_eq!(
+        u16::from_le_bytes([bytes[10], bytes[11]]),
+        FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3_LATENT_IMBALANCE
     );
     assert_eq!(Network::from_bytes(&bytes), Ok(network));
 }

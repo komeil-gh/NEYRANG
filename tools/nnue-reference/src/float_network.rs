@@ -107,7 +107,7 @@ impl FloatNetwork {
         feature_set: FeatureSet,
     ) -> Result<Self, FloatNetworkError> {
         let feature_weight_count = feature_set.input_features() * HIDDEN_SIZE;
-        let output_weight_count = 2 * HIDDEN_SIZE * feature_set.output_heads();
+        let output_weight_count = feature_set.output_inputs() * feature_set.output_heads();
         let output_bias_count = feature_set.output_heads();
         let float_count =
             feature_weight_count + FEATURE_BIAS_COUNT + output_weight_count + output_bias_count;
@@ -161,13 +161,17 @@ impl FloatNetwork {
             position.all_occupancy().count_ones() as u8,
             self.feature_set.output_heads(),
         );
-        let weight_offset = head * 2 * HIDDEN_SIZE;
+        let weight_offset = head * self.feature_set.output_inputs();
         let mut output = self.output_bias[head];
-        for (index, value) in us.into_iter().enumerate() {
-            output += screlu(value) * self.output_weights[weight_offset + index];
-        }
-        for (index, value) in them.into_iter().enumerate() {
-            output += screlu(value) * self.output_weights[weight_offset + HIDDEN_SIZE + index];
+        for index in 0..HIDDEN_SIZE {
+            let us_value = screlu(us[index]);
+            let them_value = screlu(them[index]);
+            output += us_value * self.output_weights[weight_offset + index];
+            output += them_value * self.output_weights[weight_offset + HIDDEN_SIZE + index];
+            if self.feature_set == FeatureSet::Chess768KingBucketsMirrored3LatentImbalance {
+                output += (us_value - them_value).abs()
+                    * self.output_weights[weight_offset + 2 * HIDDEN_SIZE + index];
+            }
         }
         output * self.centipawn_scale
     }

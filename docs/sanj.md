@@ -41,6 +41,10 @@ H5f's independent heads and the trainer-only H5g shared-weight/phase-bias
 follow-up were both rejected at their offline statistical gates. Version 3
 therefore remains a supported experimental artifact contract without a
 retained network.
+Version 4 registers the H5h `Chess768x3hmli` experiment: the same incremental
+transformer feeds one 384-value head comprising both SCReLU perspectives and
+their elementwise absolute difference. It adds no hidden layer or accumulator
+state. H5h remains experimental until its fresh offline and game gates finish.
 `EvalMix` selects the NNUE percentage from 0 through 100 while retaining
 classical SANJ for the remainder; its default is 100 for compatibility with
 the existing pure-network evidence.
@@ -95,6 +99,7 @@ The raw coefficients reconstruct every current constant and formula exactly. A d
 
 The scalar incremental interface now exists behind the non-default `nnue`
 feature. Its accumulator also carries the exact remaining-piece count needed by
-version 3's constant-time output-head selection. NEON/SIMD remains future work
+version 3's constant-time output-head selection. Version 4 derives its extra
+channel directly from those same two accumulators. NEON/SIMD remains future work
 and must stay bit-exact with the scalar oracle. Training tooling remains
 separate from the engine build.

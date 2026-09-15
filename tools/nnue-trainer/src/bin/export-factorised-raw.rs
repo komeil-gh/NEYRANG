@@ -7,7 +7,7 @@ use std::{
 };
 
 use bullet_trainer::optimiser::utils::load_weights_from_file;
-use neyrang_nnue_trainer::merge_factorised_raw_tensors_with_output_heads;
+use neyrang_nnue_trainer::merge_factorised_raw_tensors_with_output_shape;
 
 const BUCKETS: usize = 3;
 const HIDDEN_SIZE: usize = 128;
@@ -41,6 +41,20 @@ fn run() -> Result<(), String> {
     if output_heads == 0 {
         return Err("output head count must be positive".to_string());
     }
+    let output_inputs = args
+        .next()
+        .map(|value| {
+            value
+                .into_string()
+                .map_err(|_| "output input count is not UTF-8".to_string())?
+                .parse::<usize>()
+                .map_err(|_| "output input count must be a positive integer".to_string())
+        })
+        .transpose()?
+        .unwrap_or(2 * HIDDEN_SIZE);
+    if output_inputs == 0 {
+        return Err("output input count must be positive".to_string());
+    }
     if args.next().is_some() {
         return Err("too many arguments".to_string());
     }
@@ -59,11 +73,12 @@ fn run() -> Result<(), String> {
             .to_str()
             .ok_or("checkpoint weights path is not UTF-8")?,
     );
-    let merged = merge_factorised_raw_tensors_with_output_heads(
+    let merged = merge_factorised_raw_tensors_with_output_shape(
         &tensors,
         BUCKETS,
         HIDDEN_SIZE,
         BASE_FEATURES,
+        output_inputs,
         output_heads,
     )
     .map_err(|error| error.to_string())?;

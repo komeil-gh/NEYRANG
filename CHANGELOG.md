@@ -6,6 +6,8 @@ All notable changes to NEYRANG are documented here.
 
 ### Added
 
+- Experimental version-4 `Chess768x3hmli` NNUE artifacts and trainer/reference
+  support for a low-cost post-SCReLU absolute dual-perspective imbalance channel.
 - A fail-closed, non-default CPU SHEGERD policy path that loads checksum-bound
   version-2 additive tables and ranks moves only inside existing MovePicker
   stages, plus separately hashed `PolicyFile` match-runner support.

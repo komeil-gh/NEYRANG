@@ -24,14 +24,16 @@ feature. The UCI engine starts with classical SANJ even in that build and only
 loads a network after an explicit `EvalFile` option passes the fail-closed
 `NEYRANG\0` decoder. Versions 1 and 2 retain one scalar output head; version 3
 uses the same three-bank input transformer with four material-routed output
-heads. Each searcher owns its accumulator stack; Lazy-SMP workers
+heads; experimental version 4 adds one post-SCReLU absolute-difference channel
+to a single output head. Each searcher owns its accumulator stack; Lazy-SMP workers
 share only an immutable `Arc` network and never share mutable accumulator state.
 The optional `EvalMix` combines the incremental NNUE score with classical SANJ
 using a bounded integer percentage; it changes neither accumulator ownership
 nor the artifact format.
 Ordinary moves, captures, en-passant, castling, promotions, re-searches, and
 null moves all preserve the scalar full-refresh oracle, including the remaining
-piece count used by version 3. The engine
+piece count used by version 3. The version-4 imbalance channel uses the existing
+two accumulators and adds no mutable state. The engine
 implementation is intentionally independent from `tools/nnue-reference`. SIMD
 and default activation remain later evidence gates.
 

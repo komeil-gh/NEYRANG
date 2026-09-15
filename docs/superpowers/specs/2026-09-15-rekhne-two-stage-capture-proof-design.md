@@ -41,3 +41,13 @@ class, history update rule, extension, or external artifact.
    External progress requires exceeding the retained 26.56% point estimate.
 
 Failure removes the playing code while preserving the measured result.
+
+## Engineering result
+
+The direct regression completed both proof stages, returned the original beta
+bound, and restored position state. All 143 Rust tests, 11 tactical cases,
+start-position perft 5 (`4,865,609`), formatting, and Clippy passed. The hybrid
+depth-8 signature stayed exact across all five positions while the combined
+tree fell from 513,582 to 376,308 nodes (`-26.73%`), comfortably beyond the 3%
+floor. H4p advances to the parent screen; these local results do not establish
+playing strength.

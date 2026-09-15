@@ -31,6 +31,7 @@ const FORWARD_FUTILITY_MAX_DEPTH: i32 = 4;
 const FORWARD_FUTILITY_MARGIN: i32 = 100;
 const STATIC_EXCHANGE_PRUNING_MAX_DEPTH: i32 = 6;
 const STATIC_EXCHANGE_PRUNING_MARGIN: i32 = 100;
+const QSEARCH_DELTA_MARGIN: i32 = 300;
 
 const fn late_move_pruning_threshold(depth: i32) -> usize {
     (3 + depth * depth) as usize
@@ -1065,16 +1066,18 @@ impl<'a> Searcher<'a> {
         }
 
         let in_check = position.is_in_check(position.side_to_move());
+        let mut stand_pat = None;
         if !in_check {
-            let stand_pat = self.evaluate_position(position, ply);
-            if stand_pat >= beta {
+            let evaluation = self.evaluate_position(position, ply);
+            stand_pat = Some(evaluation);
+            if evaluation >= beta {
                 return if position.has_legal_move() {
-                    stand_pat
+                    evaluation
                 } else {
                     VALUE_DRAW
                 };
             }
-            alpha = alpha.max(stand_pat);
+            alpha = alpha.max(evaluation);
         }
 
         let moves = position.legal_moves();
@@ -1114,8 +1117,26 @@ impl<'a> Searcher<'a> {
                     }
                 }
             }
+            let captured_value = ordering::captured_piece_value(position, mv);
             self.push_move_accumulator(position, mv, ply);
             let undo = position.make_move(mv);
+            let gives_check = stand_pat.is_some() && position.is_in_check(position.side_to_move());
+            if let Some(evaluation) = stand_pat
+                && !gives_check
+                && !mv.is_promotion()
+                && context.previous_to != Some(mv.to())
+                && alpha > -VALUE_MATE + MAX_PLY as i32
+                && alpha < VALUE_MATE - MAX_PLY as i32
+                && evaluation + captured_value + QSEARCH_DELTA_MARGIN <= alpha
+            {
+                position.unmake_move(mv, undo);
+                self.pop_accumulator(ply);
+                #[cfg(feature = "stats")]
+                {
+                    self.statistics.futility_prunes += 1;
+                }
+                continue;
+            }
             if !context.in_null_subtree {
                 self.hashes.push(position.repetition_hash());
             }
@@ -1471,6 +1492,40 @@ mod tests {
 
         assert!(searcher.statistics.bad_captures > 0);
         assert_eq!(searcher.statistics.see_prunes, 0);
+    }
+
+    #[test]
+    fn qsearch_delta_prunes_only_when_capture_cannot_reach_alpha() {
+        let mut position = Position::from_fen("4k3/8/8/8/8/8/p7/R3K3 w - - 0 1")
+            .expect("delta-pruning fixture must be valid");
+        let original = position.clone();
+        let stop = AtomicBool::new(false);
+        let mut searcher = Searcher::new(&stop);
+        let hashes = [position.repetition_hash()];
+        searcher.reset(
+            &mut position,
+            &SearchLimits::depth(1),
+            &hashes,
+            SearchSetup::normal(),
+        );
+
+        let _ = searcher.qsearch(&mut position, 0, 1_000, 1_001, SearchContext::normal(None));
+
+        assert_eq!(searcher.statistics.futility_prunes, 1);
+        assert_eq!(position, original);
+
+        searcher.statistics = SearchStatistics::default();
+        let capture = position.find_legal_move("a1a2").unwrap();
+        let _ = searcher.qsearch(
+            &mut position,
+            0,
+            1_000,
+            1_001,
+            SearchContext::normal(None).after_move(capture),
+        );
+
+        assert_eq!(searcher.statistics.futility_prunes, 0);
+        assert_eq!(position, original);
     }
 
     #[test]

@@ -6,6 +6,17 @@ const PIECE_VALUE: [i32; 6] = [100, 320, 330, 500, 900, 20_000];
 const GOOD_TACTICAL_SCORE: i32 = 200_000;
 const BAD_CAPTURE_SCORE: i32 = -100_000;
 
+pub(crate) fn captured_piece_value(position: &Position, mv: Move) -> i32 {
+    let victim = if mv.is_en_passant() {
+        PieceType::Pawn
+    } else {
+        position
+            .piece_at(mv.to())
+            .map_or(PieceType::Pawn, |(_, kind)| kind)
+    };
+    PIECE_VALUE[victim.index()]
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum MoveClass {
     Unclassified,
@@ -407,18 +418,11 @@ fn tactical_score_with_policy(
     let promotion_bonus = mv
         .promotion()
         .map_or(0, |promotion| PIECE_VALUE[promotion.index()] * 16);
-    let victim = if mv.is_en_passant() {
-        PieceType::Pawn
-    } else {
-        position
-            .piece_at(mv.to())
-            .map_or(PieceType::Pawn, |(_, kind)| kind)
-    };
     let attacker = position
         .piece_at(mv.from())
         .map_or(PieceType::Pawn, |(_, kind)| kind);
     let mvv_lva = if mv.is_capture() {
-        PIECE_VALUE[victim.index()] * 16 - PIECE_VALUE[attacker.index()]
+        captured_piece_value(position, mv) * 16 - PIECE_VALUE[attacker.index()]
     } else {
         0
     };

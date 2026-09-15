@@ -28,3 +28,10 @@ All 141 Rust tests, the 11-test tactical suite, start-position perft 5, and
 Clippy passed. H4e reduced the frozen five-position hybrid depth-8 tree from
 513,582 to 408,834 nodes (-20.40%) while preserving all five final best moves
 and scores. The candidate qualifies for its registered parent screen.
+
+## Match outcome
+
+The fresh 256-game parent screen completed with empty stderr and zero exit
+status, but H4e scored 72 wins, 106 draws, and 78 losses (48.83%,
+`-8.14 +/-20.24 Elo`). It failed the registered non-negative point-estimate
+floor, so the Blunder screen was not opened and the playing code was removed.

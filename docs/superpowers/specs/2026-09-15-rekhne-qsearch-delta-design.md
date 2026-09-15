@@ -35,3 +35,20 @@ remain unchanged.
 
 The experiment is isolated. A failed gate removes the playing code and records
 the rejection; it is never combined with another search change.
+
+## Engineering result
+
+All 142 Rust tests, the 11-test tactical suite, start-position perft 5, and
+Clippy passed. H4f preserved all five hybrid depth-8 best moves and scores while
+reducing their combined tree from 513,582 to 474,385 nodes (-7.63%). Across 21
+interleaved runs per binary, median time improved from 0.445794 to 0.429091
+seconds (+3.89% throughput). A 20-position replay of the historical
+Blunder-error set produced the same move and completed-depth sequence as H4c.
+
+## Match outcome
+
+The fresh 256-game parent screen completed with zero exit status, empty stderr,
+128 color-reversed pairs, and all 256 terminations marked normal. H4f scored 68
+wins, 107 draws, and 81 losses: 47.46% (`-17.66 +/-27.47 Elo`). Its negative
+point estimate failed the registered floor, so the separate Blunder screen was
+not opened and the playing code was removed.

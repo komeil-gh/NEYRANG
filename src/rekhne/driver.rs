@@ -31,9 +31,6 @@ const FORWARD_FUTILITY_MAX_DEPTH: i32 = 4;
 const FORWARD_FUTILITY_MARGIN: i32 = 100;
 const STATIC_EXCHANGE_PRUNING_MAX_DEPTH: i32 = 6;
 const STATIC_EXCHANGE_PRUNING_MARGIN: i32 = 100;
-const CAPTURE_PROOF_MIN_DEPTH: i32 = 5;
-const CAPTURE_PROOF_MARGIN: i32 = 200;
-const CAPTURE_PROOF_REDUCTION: i32 = 4;
 
 const fn late_move_pruning_threshold(depth: i32) -> usize {
     (3 + depth * depth) as usize
@@ -178,9 +175,6 @@ pub struct SearchStatistics {
     pub null_move_fail_highs: u64,
     pub null_move_cutoffs: u64,
     pub null_move_verifications: u64,
-    pub capture_proof_attempts: u64,
-    pub capture_proof_qsearch_passes: u64,
-    pub capture_proof_cutoffs: u64,
     pub lmr_reductions: u64,
     pub lmr_researches: u64,
     #[cfg(feature = "stats")]
@@ -245,9 +239,6 @@ impl SearchStatistics {
         self.null_move_fail_highs += other.null_move_fail_highs;
         self.null_move_cutoffs += other.null_move_cutoffs;
         self.null_move_verifications += other.null_move_verifications;
-        self.capture_proof_attempts += other.capture_proof_attempts;
-        self.capture_proof_qsearch_passes += other.capture_proof_qsearch_passes;
-        self.capture_proof_cutoffs += other.capture_proof_cutoffs;
         self.lmr_reductions += other.lmr_reductions;
         self.lmr_researches += other.lmr_researches;
         #[cfg(feature = "stats")]
@@ -819,75 +810,6 @@ impl<'a> Searcher<'a> {
             };
         }
         let moving_color = position.side_to_move();
-        if ply != 0
-            && !is_pv_node
-            && !context.in_null_subtree
-            && !in_check
-            && depth >= CAPTURE_PROOF_MIN_DEPTH
-            && beta > -mate_bound
-            && beta < mate_bound - CAPTURE_PROOF_MARGIN
-        {
-            let proof_beta = beta + CAPTURE_PROOF_MARGIN;
-            let mut proof_picker = ordering::MovePicker::quiescence_with_context(
-                moves.clone(),
-                false,
-                self.killers[ply],
-                moving_color,
-                context.previous_to,
-            );
-            while let Some(mv) =
-                proof_picker.next_move_with_policy(position, &self.history, &self.policy)
-            {
-                #[cfg(feature = "stats")]
-                {
-                    self.statistics.capture_proof_attempts += 1;
-                }
-                self.push_move_accumulator(position, mv, ply);
-                let undo = position.make_move(mv);
-                self.hashes.push(position.repetition_hash());
-                let child_context = context.after_move(mv);
-                let mut score = -self.qsearch(
-                    position,
-                    ply + 1,
-                    -proof_beta,
-                    -proof_beta + 1,
-                    child_context,
-                );
-                if !self.stopped && score >= proof_beta {
-                    #[cfg(feature = "stats")]
-                    {
-                        self.statistics.capture_proof_qsearch_passes += 1;
-                    }
-                    score = -self.negamax(
-                        position,
-                        depth - CAPTURE_PROOF_REDUCTION,
-                        ply + 1,
-                        -proof_beta,
-                        -proof_beta + 1,
-                        child_context,
-                    );
-                }
-                self.hashes.pop();
-                position.unmake_move(mv, undo);
-                self.pop_accumulator(ply);
-
-                if self.stopped {
-                    #[cfg(feature = "stats")]
-                    self.record_ordering_statistics(proof_picker.statistics());
-                    return VALUE_DRAW;
-                }
-                if score >= proof_beta {
-                    #[cfg(feature = "stats")]
-                    {
-                        self.statistics.capture_proof_cutoffs += 1;
-                        self.record_ordering_statistics(proof_picker.statistics());
-                    }
-                    return beta;
-                }
-            }
-            #[cfg(feature = "stats")]
-            self.record_ordering_statistics(proof_picker.statistics());
-        }
         let tt_move = tt_data.map(|data| data.best_move);
         let ordering_preferred = tt_move.or(context.preferred);
         let can_futility_prune = ply != 0
@@ -1633,30 +1555,6 @@ mod tests {
 
         assert!(score <= 500);
         assert!(searcher.statistics.futility_prunes > 0);
-        assert_eq!(position, original);
-    }
-
-    #[test]
-    fn capture_proof_requires_both_stages_and_restores_state() {
-        let mut position = Position::from_fen("6k1/8/8/8/3q4/8/3Q4/7K w - - 0 1")
-            .expect("winning-capture fixture must be valid");
-        let original = position.clone();
-        let stop = AtomicBool::new(false);
-        let mut searcher = Searcher::new(&stop);
-        let hashes = [position.repetition_hash()];
-        searcher.reset(
-            &mut position,
-            &SearchLimits::depth(5),
-            &hashes,
-            SearchSetup::normal(),
-        );
-
-        let score = searcher.negamax(&mut position, 5, 1, 199, 200, SearchContext::normal(None));
-
-        assert_eq!(score, 200);
-        assert!(searcher.statistics.capture_proof_attempts > 0);
-        assert!(searcher.statistics.capture_proof_qsearch_passes > 0);
-        assert!(searcher.statistics.capture_proof_cutoffs > 0);
         assert_eq!(position, original);
     }
 

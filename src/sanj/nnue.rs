@@ -423,22 +423,23 @@ impl Network {
     }
 
     fn activate(&self, us: &[i32; HIDDEN_SIZE], them: &[i32; HIDDEN_SIZE]) -> i32 {
-        let activation_quant = i128::from(self.parameters.activation_quant);
-        let mut output = 0_i128;
+        let activation_quant = i64::from(self.parameters.activation_quant);
+        let mut output = 0_i64;
 
         for (index, &value) in us.iter().enumerate() {
             output +=
-                square_clipped(value, activation_quant) * i128::from(self.output_weights[index]);
+                square_clipped(value, activation_quant) * i64::from(self.output_weights[index]);
         }
         for (index, &value) in them.iter().enumerate() {
             output += square_clipped(value, activation_quant)
-                * i128::from(self.output_weights[HIDDEN_SIZE + index]);
+                * i64::from(self.output_weights[HIDDEN_SIZE + index]);
         }
 
         output /= activation_quant;
+        let mut output = i128::from(output);
         output += i128::from(self.output_bias);
         output *= i128::from(self.parameters.centipawn_scale);
-        output /= activation_quant * i128::from(self.parameters.output_quant);
+        output /= i128::from(activation_quant) * i128::from(self.parameters.output_quant);
         output.clamp(i128::from(i32::MIN), i128::from(i32::MAX)) as i32
     }
 }
@@ -503,8 +504,8 @@ fn feature_index_for(
 }
 
 #[inline]
-fn square_clipped(value: i32, activation_quant: i128) -> i128 {
-    let clipped = i128::from(value).clamp(0, activation_quant);
+fn square_clipped(value: i32, activation_quant: i64) -> i64 {
+    let clipped = i64::from(value).clamp(0, activation_quant);
     clipped * clipped
 }
 

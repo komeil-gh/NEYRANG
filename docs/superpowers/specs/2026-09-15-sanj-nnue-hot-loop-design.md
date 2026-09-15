@@ -20,3 +20,12 @@ Require all Rust tests, the tactical suite, Clippy, and identical depth-5 and
 depth-8 hybrid nodes, scores, best moves, and checksums. Measure at least 21
 interleaved depth-8 runs per binary on the native host. Retain only if median
 wall time improves by at least 1% without an outlier or protocol anomaly.
+
+## Outcome
+
+All 141 Rust tests, the 11-test tactical suite, and Clippy passed. H4a exactly
+preserved the five-position hybrid tree at depth 5 (37,039 nodes) and depth 8
+(513,582 nodes), including every final score and best move. Across 21
+interleaved native runs per binary, median depth-8 wall time fell from
+0.492566 seconds to 0.455146 seconds, an 8.222% throughput improvement. The
+candidate passed the registered gate and is retained.

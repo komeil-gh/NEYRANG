@@ -27,3 +27,12 @@ frozen N7 network, stage-aligned policy, and `EvalMix=10`, the five-position
 depth-8 tree changed from 513,582 to 519,454 nodes (+1.14%). Four best moves
 were unchanged; the equal-scored start-position choice changed from `d2d4` to
 `g1f3`. The parent screen is open.
+
+## Outcome
+
+The clean 256-game parent screen scored 80 wins, 73 losses, and 103 draws
+(51.37%, `+9.50 +/-29.79 Elo`). The separately selected Blunder screen then
+scored 35/167/54 (24.22%, `-198.16 +/-42.62 Elo`), below the retained H3o
+hybrid's earlier 26.56% point estimate. All 256 games and 128 pairs completed
+with empty stderr and zero exit status. H3w is rejected and its playing code
+and trace extension were removed.

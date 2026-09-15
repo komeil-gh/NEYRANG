@@ -76,7 +76,7 @@ Use `-` instead of a path to read stdin. Each non-comment input row is exactly:
 record_id<TAB>target<TAB>FEN
 ```
 
-`target` is White-relative WDL space: `0` is a Black win, `0.5` is a draw, and `1` is a White win. Soft labels within `[0,1]` are accepted, but their provenance must be recorded. Output schema `neyrang-sanj-trace-v3` canonicalizes the FEN and writes fixed-order White-minus-Black coefficients for:
+`target` is White-relative WDL space: `0` is a Black win, `0.5` is a draw, and `1` is a White win. Soft labels within `[0,1]` are accepted, but their provenance must be recorded. Output schema `neyrang-sanj-trace-v2` canonicalizes the FEN and writes fixed-order White-minus-Black coefficients for:
 
 - piece counts and all ten raw PSQT rank/edge/center bases
 - bishop pair
@@ -84,7 +84,6 @@ record_id<TAB>target<TAB>FEN
 - knight, bishop, rook, and queen mobility
 - open and semi-open rook files
 - king-shield pawns and bounded coordinated king danger
-- bounded direct and safe latent pawn leverage
 - phase plus exact middlegame, endgame, White-relative, tempo, and side-to-move scores
 
 The raw coefficients reconstruct every current constant and formula exactly. A deterministic 100,000-position oracle compares the reconstruction with production evaluation. The schema is accounting infrastructure, not permission to change weights or add terms.

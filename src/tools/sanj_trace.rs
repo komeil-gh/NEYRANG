@@ -94,9 +94,9 @@ mod tests {
         assert_eq!(lines.len(), 3);
         assert_eq!(lines[0], format!("{EXPORT_HEADER}\t{TRACE_COLUMNS}"));
         let width = lines[0].split('\t').count();
-        assert_eq!(width, 40);
-        assert!(lines[1].starts_with("neyrang-sanj-trace-v3\tstart\t0.5\t"));
-        assert!(lines[2].starts_with("neyrang-sanj-trace-v3\tqueen\t1\t"));
+        assert_eq!(width, 39);
+        assert!(lines[1].starts_with("neyrang-sanj-trace-v2\tstart\t0.5\t"));
+        assert!(lines[2].starts_with("neyrang-sanj-trace-v2\tqueen\t1\t"));
         assert!(lines.iter().all(|line| line.split('\t').count() == width));
     }
 

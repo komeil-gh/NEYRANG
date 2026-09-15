@@ -350,7 +350,9 @@ fn train(args: Args, plan: EpochPlan, loader: impl DataReader<ChessBoard>) -> Re
                     );
                     let stm_hidden = l0.forward(stm_inputs).screlu();
                     let ntm_hidden = l0.forward(ntm_inputs).screlu();
-                    (l1.forward(stm_hidden.concat(ntm_hidden)) + phase_biases)
+                    (l1.forward(stm_hidden.concat(ntm_hidden))
+                        .broadcast_across_rows(PHASE_HEAD_COUNT)
+                        + phase_biases)
                         .select(output_buckets)
                 });
             let factorised_clip = AdamWParams {

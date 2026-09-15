@@ -34,3 +34,25 @@ failed local gate.
    screen; external progress requires exceeding the retained 26.56% score.
 
 Failure removes the playing code while preserving the measured result.
+
+## Result
+
+The sign/depth regression, all 143 Rust tests, the 11-position tactical suite,
+start-position perft 5 (4,865,609 nodes), formatting, and Clippy passed. At
+hybrid depth 8, H4w searched 481,103 nodes versus H4m's 513,582 (-6.32%) with
+all five move/score signatures unchanged; the single-run elapsed time was
+0.430 s versus the 0.482 s H4m reference.
+
+The clean, independently audited 20,000-node parent screen then scored
+77/94/85 over 256 games: 124/256 (48.44%), -10.86 +/-20.56 Elo, with no
+crash, timeout, protocol, forfeit, or warning anomaly. The fixed-node point
+estimate is negative, so gate 3 fails. Per the registered ladder, the
+equal-time and Blunder screens were not opened and the playing change was
+removed.
+
+Private evidence is retained under
+`testing/private/h4w-negative-sign-lmr-20260915/`. The candidate executable
+SHA-256 is
+`c76066bf007ef77d5179d0e420fa9411baaceb3319d1759a9196f96148210bc9` and
+the parent-opening SHA-256 is
+`47401115a796d45f2f5cc59cd1013cee46684020561867e97a392447e017d669`.

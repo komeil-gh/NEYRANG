@@ -32,3 +32,15 @@ engine constant or tuned margin is copied.
 4. A retained local optimization may open a fresh paired parent screen; only a
    non-negative point estimate can open a separate Blunder 7.6.0 screen.
 
+## Outcome
+
+Retained as an exact local optimization. All 142 Rust tests, including the
+direct pre-move-generation cutoff regression, passed; the 11-test tactical
+suite, start-position perft 5, formatting, and Clippy also passed. The
+five-position hybrid depth-8 workload preserved every best move and score and
+remained exactly 513,582 nodes.
+
+Across three forced-mate positions, the candidate preserved mate distances and
+best moves while reducing the combined tree from 9,561 to 7,100 nodes
+(-25.74%). No remote games were opened because the general hybrid tree was
+unchanged; this result is exact pruning/throughput evidence, not an Elo claim.

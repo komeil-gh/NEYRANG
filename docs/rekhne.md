@@ -10,6 +10,10 @@ NEYRANG uses iterative deepening over negamax alpha-beta. Non-first moves use a 
 
 At depth zero, quiescence searches promotions and captures whose legal static exchange evaluation is non-negative. Positions in check do not use stand pat or SEE pruning and search every legal evasion. Mate scores encode root ply and are normalized when crossing the transposition-table boundary, so retrieval at a different ply preserves mate distance.
 
+At non-root main-search nodes, exact mate-distance bounds close windows that
+cannot improve a shorter mate already proved by an ancestor. The bounds follow
+NEYRANG's existing root-ply mate encoding and do not use a tuned margin.
+
 Main-search move ordering is delivered progressively by a fixed-capacity staged MovePicker:
 
 1. TT/PV move

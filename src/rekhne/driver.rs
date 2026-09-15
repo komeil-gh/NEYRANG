@@ -658,7 +658,7 @@ impl<'a> Searcher<'a> {
         depth: i32,
         ply: usize,
         mut alpha: i32,
-        beta: i32,
+        mut beta: i32,
         context: SearchContext,
     ) -> i32 {
         if ply >= MAX_PLY - 1 {
@@ -675,6 +675,14 @@ impl<'a> Searcher<'a> {
         }
         if depth <= 0 {
             return self.qsearch(position, ply, alpha, beta, context);
+        }
+
+        if ply != 0 {
+            alpha = alpha.max(-VALUE_MATE + ply as i32);
+            beta = beta.min(VALUE_MATE - ply as i32 - 1);
+            if alpha >= beta {
+                return alpha;
+            }
         }
 
         let key = position.hash();
@@ -1441,6 +1449,33 @@ mod tests {
         chess::{Move, Position},
         rekhne::{SearchLimits, Searcher, VALUE_INFINITE, VALUE_MATE, tt::Bound},
     };
+
+    #[test]
+    fn mate_distance_bounds_cut_off_before_move_generation() {
+        let position = Position::startpos();
+        for (alpha, beta, expected) in [
+            (VALUE_MATE - 4, VALUE_INFINITE, VALUE_MATE - 4),
+            (-VALUE_INFINITE, -VALUE_MATE + 3, -VALUE_MATE + 3),
+        ] {
+            let mut current = position.clone();
+            let stop = AtomicBool::new(false);
+            let mut searcher = Searcher::new(&stop);
+            let hashes = [current.repetition_hash()];
+            searcher.reset(
+                &mut current,
+                &SearchLimits::depth(2),
+                &hashes,
+                SearchSetup::normal(),
+            );
+
+            let score =
+                searcher.negamax(&mut current, 2, 3, alpha, beta, SearchContext::normal(None));
+
+            assert_eq!(score, expected);
+            assert_eq!(searcher.statistics.move_generation_calls, 0);
+            assert_eq!(current, position);
+        }
+    }
 
     #[test]
     fn qsearch_never_prunes_losing_capture_evasions() {

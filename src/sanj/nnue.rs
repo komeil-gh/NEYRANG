@@ -18,16 +18,20 @@ pub const HIDDEN_SIZE: usize = 128;
 pub const FORMAT_VERSION: u16 = 1;
 /// Artifact version for the registered three-bank king-relative mapping.
 pub const FORMAT_VERSION_KING_BUCKETS: u16 = 2;
+/// Artifact version adding four material-routed output heads.
+pub const FORMAT_VERSION_PHASE_HEADS: u16 = 3;
 /// Identifier for the dual-perspective Chess768 feature mapping.
 pub const FEATURE_SET_CHESS768: u16 = 1;
 /// Identifier for Chess768x3hm.
 pub const FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3: u16 = 2;
+/// Identifier for Chess768x3hm with four material-routed output heads.
+pub const FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3_PHASE_HEADS_4: u16 = 3;
 /// Byte length of the fixed artifact header.
 pub const HEADER_SIZE: usize = 32;
 
 const MAGIC: &[u8; 8] = b"NEYRANG\0";
 const FEATURE_BIAS_COUNT: usize = HIDDEN_SIZE;
-const OUTPUT_WEIGHT_COUNT: usize = 2 * HIDDEN_SIZE;
+const PHASE_HEAD_COUNT: usize = 4;
 const KING_BUCKET_LAYOUT_MIRRORED_3: [u8; 32] = [
     1, 1, 1, 0, // home rank
     1, 1, 1, 1, // second rank
@@ -39,13 +43,23 @@ const KING_BUCKET_LAYOUT_MIRRORED_3: [u8; 32] = [
 enum FeatureSet {
     Chess768,
     Chess768KingBucketsMirrored3,
+    Chess768KingBucketsMirrored3PhaseHeads4,
 }
 
 impl FeatureSet {
     const fn input_features(self) -> usize {
         match self {
             Self::Chess768 => INPUT_FEATURES,
-            Self::Chess768KingBucketsMirrored3 => INPUT_FEATURES_KING_BUCKETS_MIRRORED_3,
+            Self::Chess768KingBucketsMirrored3 | Self::Chess768KingBucketsMirrored3PhaseHeads4 => {
+                INPUT_FEATURES_KING_BUCKETS_MIRRORED_3
+            }
+        }
+    }
+
+    const fn output_heads(self) -> usize {
+        match self {
+            Self::Chess768 | Self::Chess768KingBucketsMirrored3 => 1,
+            Self::Chess768KingBucketsMirrored3PhaseHeads4 => PHASE_HEAD_COUNT,
         }
     }
 }
@@ -66,7 +80,7 @@ pub struct Network {
     feature_weights: Box<[i16]>,
     feature_bias: Box<[i16]>,
     output_weights: Box<[i16]>,
-    output_bias: i32,
+    output_bias: Box<[i32]>,
 }
 
 /// Both board-oriented hidden accumulators for one search position.
@@ -74,6 +88,7 @@ pub struct Network {
 pub struct AccumulatorPair {
     white: [i32; HIDDEN_SIZE],
     black: [i32; HIDDEN_SIZE],
+    piece_count: u8,
 }
 
 impl AccumulatorPair {
@@ -83,6 +98,7 @@ impl AccumulatorPair {
         let mut pair = Self {
             white: [0; HIDDEN_SIZE],
             black: [0; HIDDEN_SIZE],
+            piece_count: position.all_occupancy().count_ones() as u8,
         };
         for ((white_value, black_value), &bias) in pair
             .white
@@ -112,8 +128,11 @@ impl AccumulatorPair {
         let (moving_color, moving_type) = position
             .piece_at(from)
             .expect("a legal move source must contain a piece");
-        if network.feature_set == FeatureSet::Chess768KingBucketsMirrored3
-            && moving_type == PieceType::King
+        if matches!(
+            network.feature_set,
+            FeatureSet::Chess768KingBucketsMirrored3
+                | FeatureSet::Chess768KingBucketsMirrored3PhaseHeads4
+        ) && moving_type == PieceType::King
         {
             let mut child = position.clone();
             child.make_move(mv);
@@ -123,6 +142,7 @@ impl AccumulatorPair {
         next.remove_piece(position, moving_color, moving_type, from, network);
 
         if mv.is_capture() {
+            next.piece_count -= 1;
             let capture_square = if mv.is_en_passant() {
                 Square::from_coords(to.file(), from.rank())
                     .expect("en-passant capture square is on the board")
@@ -309,7 +329,14 @@ impl Network {
             (FORMAT_VERSION_KING_BUCKETS, FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3) => {
                 FeatureSet::Chess768KingBucketsMirrored3
             }
-            (FORMAT_VERSION | FORMAT_VERSION_KING_BUCKETS, feature_set) => {
+            (
+                FORMAT_VERSION_PHASE_HEADS,
+                FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3_PHASE_HEADS_4,
+            ) => FeatureSet::Chess768KingBucketsMirrored3PhaseHeads4,
+            (
+                FORMAT_VERSION | FORMAT_VERSION_KING_BUCKETS | FORMAT_VERSION_PHASE_HEADS,
+                feature_set,
+            ) => {
                 return Err(NetworkError::UnsupportedFeatureSet(feature_set));
             }
             (version, _) => return Err(NetworkError::UnsupportedVersion(version)),
@@ -340,8 +367,10 @@ impl Network {
 
         let payload_length = read_u32(bytes, 24) as usize;
         let feature_weight_count = feature_set.input_features() * HIDDEN_SIZE;
-        let payload_size =
-            (feature_weight_count + FEATURE_BIAS_COUNT + OUTPUT_WEIGHT_COUNT) * 2 + 4;
+        let output_head_count = feature_set.output_heads();
+        let output_weight_count = 2 * HIDDEN_SIZE * output_head_count;
+        let payload_size = (feature_weight_count + FEATURE_BIAS_COUNT + output_weight_count) * 2
+            + output_head_count * 4;
         if payload_length != payload_size {
             return Err(NetworkError::LengthMismatch {
                 expected: payload_size,
@@ -369,8 +398,8 @@ impl Network {
         let mut cursor = 0;
         let feature_weights = read_i16_values(payload, &mut cursor, feature_weight_count);
         let feature_bias = read_i16_values(payload, &mut cursor, FEATURE_BIAS_COUNT);
-        let output_weights = read_i16_values(payload, &mut cursor, OUTPUT_WEIGHT_COUNT);
-        let output_bias = read_i32(payload, cursor);
+        let output_weights = read_i16_values(payload, &mut cursor, output_weight_count);
+        let output_bias = read_i32_values(payload, &mut cursor, output_head_count);
 
         Ok(Self {
             feature_set,
@@ -378,7 +407,7 @@ impl Network {
             feature_weights: feature_weights.into_boxed_slice(),
             feature_bias: feature_bias.into_boxed_slice(),
             output_weights: output_weights.into_boxed_slice(),
-            output_bias,
+            output_bias: output_bias.into_boxed_slice(),
         })
     }
 
@@ -399,7 +428,7 @@ impl Network {
     #[must_use]
     pub fn evaluate_accumulator(&self, accumulators: &AccumulatorPair, side_to_move: Color) -> i32 {
         let (us, them) = accumulators.oriented(side_to_move);
-        self.activate(us, them)
+        self.activate(us, them, accumulators.piece_count)
     }
 
     fn add_feature(&self, accumulator: &mut [i32; HIDDEN_SIZE], feature: usize) {
@@ -422,22 +451,24 @@ impl Network {
         }
     }
 
-    fn activate(&self, us: &[i32; HIDDEN_SIZE], them: &[i32; HIDDEN_SIZE]) -> i32 {
+    fn activate(&self, us: &[i32; HIDDEN_SIZE], them: &[i32; HIDDEN_SIZE], piece_count: u8) -> i32 {
         let activation_quant = i64::from(self.parameters.activation_quant);
         let mut output = 0_i64;
+        let head = material_output_head(piece_count, self.feature_set.output_heads());
+        let weight_offset = head * 2 * HIDDEN_SIZE;
 
         for (index, &value) in us.iter().enumerate() {
-            output +=
-                square_clipped(value, activation_quant) * i64::from(self.output_weights[index]);
+            output += square_clipped(value, activation_quant)
+                * i64::from(self.output_weights[weight_offset + index]);
         }
         for (index, &value) in them.iter().enumerate() {
             output += square_clipped(value, activation_quant)
-                * i64::from(self.output_weights[HIDDEN_SIZE + index]);
+                * i64::from(self.output_weights[weight_offset + HIDDEN_SIZE + index]);
         }
 
         output /= activation_quant;
         let mut output = i128::from(output);
-        output += i128::from(self.output_bias);
+        output += i128::from(self.output_bias[head]);
         output *= i128::from(self.parameters.centipawn_scale);
         output /= i128::from(activation_quant) * i128::from(self.parameters.output_quant);
         output.clamp(i128::from(i32::MIN), i128::from(i32::MAX)) as i32
@@ -485,7 +516,8 @@ fn feature_index_for(
     let base = feature_index(piece_color, piece_type, square, perspective);
     match feature_set {
         FeatureSet::Chess768 => base,
-        FeatureSet::Chess768KingBucketsMirrored3 => {
+        FeatureSet::Chess768KingBucketsMirrored3
+        | FeatureSet::Chess768KingBucketsMirrored3PhaseHeads4 => {
             let king_square = position
                 .pieces(perspective, PieceType::King)
                 .trailing_zeros() as usize;
@@ -509,11 +541,26 @@ fn square_clipped(value: i32, activation_quant: i64) -> i64 {
     clipped * clipped
 }
 
+#[inline]
+fn material_output_head(piece_count: u8, head_count: usize) -> usize {
+    let divisor = 32_usize.div_ceil(head_count);
+    (usize::from(piece_count) - 2) / divisor
+}
+
 fn read_i16_values(payload: &[u8], cursor: &mut usize, count: usize) -> Vec<i16> {
     let mut values = Vec::with_capacity(count);
     for _ in 0..count {
         values.push(i16::from_le_bytes([payload[*cursor], payload[*cursor + 1]]));
         *cursor += 2;
+    }
+    values
+}
+
+fn read_i32_values(payload: &[u8], cursor: &mut usize, count: usize) -> Vec<i32> {
+    let mut values = Vec::with_capacity(count);
+    for _ in 0..count {
+        values.push(read_i32(payload, *cursor));
+        *cursor += 4;
     }
     values
 }

@@ -10,6 +10,7 @@ pub const INPUT_FEATURES_KING_BUCKETS_MIRRORED_3: usize = 3 * INPUT_FEATURES;
 pub enum FeatureSet {
     Chess768,
     Chess768KingBucketsMirrored3,
+    Chess768KingBucketsMirrored3PhaseHeads4,
 }
 
 impl FeatureSet {
@@ -17,7 +18,17 @@ impl FeatureSet {
     pub const fn input_features(self) -> usize {
         match self {
             Self::Chess768 => INPUT_FEATURES,
-            Self::Chess768KingBucketsMirrored3 => INPUT_FEATURES_KING_BUCKETS_MIRRORED_3,
+            Self::Chess768KingBucketsMirrored3 | Self::Chess768KingBucketsMirrored3PhaseHeads4 => {
+                INPUT_FEATURES_KING_BUCKETS_MIRRORED_3
+            }
+        }
+    }
+
+    #[must_use]
+    pub const fn output_heads(self) -> usize {
+        match self {
+            Self::Chess768 | Self::Chess768KingBucketsMirrored3 => 1,
+            Self::Chess768KingBucketsMirrored3PhaseHeads4 => 4,
         }
     }
 }
@@ -60,7 +71,8 @@ pub fn feature_index_for(
     let base = feature_index(piece_color, piece_type, square, perspective);
     match feature_set {
         FeatureSet::Chess768 => base,
-        FeatureSet::Chess768KingBucketsMirrored3 => {
+        FeatureSet::Chess768KingBucketsMirrored3
+        | FeatureSet::Chess768KingBucketsMirrored3PhaseHeads4 => {
             let king_square = position
                 .pieces(perspective, PieceType::King)
                 .trailing_zeros() as usize;

@@ -7,7 +7,7 @@ use std::{
 };
 
 use bullet_trainer::optimiser::utils::load_weights_from_file;
-use neyrang_nnue_trainer::merge_factorised_raw_tensors;
+use neyrang_nnue_trainer::merge_factorised_raw_tensors_with_output_heads;
 
 const BUCKETS: usize = 3;
 const HIDDEN_SIZE: usize = 128;
@@ -27,6 +27,20 @@ fn run() -> Result<(), String> {
     let mut args = env::args_os().skip(1);
     let input = PathBuf::from(args.next().ok_or("missing checkpoint weights path")?);
     let output = PathBuf::from(args.next().ok_or("missing merged raw output path")?);
+    let output_heads = args
+        .next()
+        .map(|value| {
+            value
+                .into_string()
+                .map_err(|_| "output head count is not UTF-8".to_string())?
+                .parse::<usize>()
+                .map_err(|_| "output head count must be a positive integer".to_string())
+        })
+        .transpose()?
+        .unwrap_or(1);
+    if output_heads == 0 {
+        return Err("output head count must be positive".to_string());
+    }
     if args.next().is_some() {
         return Err("too many arguments".to_string());
     }
@@ -45,8 +59,14 @@ fn run() -> Result<(), String> {
             .to_str()
             .ok_or("checkpoint weights path is not UTF-8")?,
     );
-    let merged = merge_factorised_raw_tensors(&tensors, BUCKETS, HIDDEN_SIZE, BASE_FEATURES)
-        .map_err(|error| error.to_string())?;
+    let merged = merge_factorised_raw_tensors_with_output_heads(
+        &tensors,
+        BUCKETS,
+        HIDDEN_SIZE,
+        BASE_FEATURES,
+        output_heads,
+    )
+    .map_err(|error| error.to_string())?;
     let bytes: Vec<u8> = merged
         .iter()
         .flat_map(|value| value.to_le_bytes())

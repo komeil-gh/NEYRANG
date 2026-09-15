@@ -36,6 +36,8 @@ target/release/neyrang bench-nnue /path/to/network.nnue 5
 The feature exposes the UCI string option `EvalFile`. A non-empty path must be a
 complete supported `NEYRANG\0` artifact: version 1 uses Chess768 and version 2
 uses the registered three-bank horizontally mirrored Chess768x3hm mapping.
+Version 3 keeps that input mapping and adds four material-routed output heads;
+it remains experimental until the registered H5f offline and playing gates pass.
 `EvalMix` selects the NNUE percentage from 0 through 100 while retaining
 classical SANJ for the remainder; its default is 100 for compatibility with
 the existing pure-network evidence.
@@ -89,5 +91,7 @@ record_id<TAB>target<TAB>FEN
 The raw coefficients reconstruct every current constant and formula exactly. A deterministic 100,000-position oracle compares the reconstruction with production evaluation. The schema is accounting infrastructure, not permission to change weights or add terms.
 
 The scalar incremental interface now exists behind the non-default `nnue`
-feature. NEON/SIMD remains future work and must stay bit-exact with the scalar
-oracle. Training tooling remains separate from the engine build.
+feature. Its accumulator also carries the exact remaining-piece count needed by
+version 3's constant-time output-head selection. NEON/SIMD remains future work
+and must stay bit-exact with the scalar oracle. Training tooling remains
+separate from the engine build.

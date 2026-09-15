@@ -25,8 +25,9 @@ pub use fen_suite::{FenSuiteError, FrozenPosition, parse_fen_suite};
 pub use float_network::{FloatNetwork, FloatNetworkError, FloatQuantizationError};
 pub use king_buckets::{KingBucketError, KingBucketReport, analyze_king_buckets};
 pub use network::{
-    FEATURE_SET_CHESS768, FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3, FORMAT_VERSION,
-    FORMAT_VERSION_KING_BUCKETS, HEADER_SIZE, HIDDEN_SIZE, Network, NetworkError,
-    NetworkParameters,
+    FEATURE_SET_CHESS768, FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3,
+    FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3_PHASE_HEADS_4, FORMAT_VERSION,
+    FORMAT_VERSION_KING_BUCKETS, FORMAT_VERSION_PHASE_HEADS, HEADER_SIZE, HIDDEN_SIZE, Network,
+    NetworkError, NetworkParameters,
 };
 pub use parity::{ParityError, ParityReport, ParitySample, evaluate_parity};

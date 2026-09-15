@@ -4,6 +4,7 @@ use bullet::{
     game::{
         formats::bulletformat::ChessBoard,
         inputs::{Chess768, ChessBucketsMirrored, get_num_buckets},
+        outputs::MaterialCount,
     },
     nn::{
         InitSettings, Shape,
@@ -38,11 +39,13 @@ const KING_BUCKET_LAYOUT_MIRRORED_3: [usize; 32] = [
     2, 2, 2, 2,
 ];
 const KING_BUCKET_COUNT: usize = get_num_buckets(&KING_BUCKET_LAYOUT_MIRRORED_3);
+const PHASE_HEAD_COUNT: usize = 4;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum TrainerFeatureSet {
     Chess768,
     Chess768KingBucketsMirrored3,
+    Chess768KingBucketsMirrored3PhaseHeads4,
 }
 
 impl TrainerFeatureSet {
@@ -50,6 +53,7 @@ impl TrainerFeatureSet {
         match self {
             Self::Chess768 => "chess768",
             Self::Chess768KingBucketsMirrored3 => "chess768x3hm",
+            Self::Chess768KingBucketsMirrored3PhaseHeads4 => "chess768x3hm4ph",
         }
     }
 }
@@ -230,6 +234,65 @@ fn train(args: Args, plan: EpochPlan, loader: impl DataReader<ChessBoard>) -> Re
                 .set_params_for_weight("l0f", factorised_clip);
             trainer.run(&schedule, &settings, &loader);
         }
+        TrainerFeatureSet::Chess768KingBucketsMirrored3PhaseHeads4 => {
+            let mut trainer = ValueTrainerBuilder::default()
+                .seed(NETWORK_SEED)
+                .dual_perspective()
+                .optimiser(AdamW)
+                .inputs(ChessBucketsMirrored::new(KING_BUCKET_LAYOUT_MIRRORED_3))
+                .output_buckets(MaterialCount::<PHASE_HEAD_COUNT>)
+                .save_format(&[
+                    SavedFormat::id("l0w")
+                        .transform(|store, weights| {
+                            let factoriser =
+                                store.get("l0f").values.f32().repeat(KING_BUCKET_COUNT);
+                            weights
+                                .into_iter()
+                                .zip(factoriser)
+                                .map(|(bucket, shared)| bucket + shared)
+                                .collect()
+                        })
+                        .round()
+                        .quantise::<i16>(ACTIVATION_QUANT),
+                    SavedFormat::id("l0b")
+                        .round()
+                        .quantise::<i16>(ACTIVATION_QUANT),
+                    SavedFormat::id("l1w")
+                        .transpose()
+                        .round()
+                        .quantise::<i16>(OUTPUT_QUANT),
+                    SavedFormat::id("l1b")
+                        .round()
+                        .quantise::<i32>(OUTPUT_BIAS_QUANT),
+                ])
+                .loss_fn(|output, target| output.sigmoid().squared_error(target))
+                .build(|builder, stm_inputs, ntm_inputs, output_buckets| {
+                    let factoriser = builder.new_weights(
+                        "l0f",
+                        Shape::new(HIDDEN_SIZE, 768),
+                        InitSettings::Zeroed,
+                    );
+                    let mut l0 = builder.new_affine("l0", 768 * KING_BUCKET_COUNT, HIDDEN_SIZE);
+                    l0.weights = l0.weights + factoriser.repeat(KING_BUCKET_COUNT);
+                    let l1 = builder.new_affine("l1", 2 * HIDDEN_SIZE, PHASE_HEAD_COUNT);
+                    let stm_hidden = l0.forward(stm_inputs).screlu();
+                    let ntm_hidden = l0.forward(ntm_inputs).screlu();
+                    l1.forward(stm_hidden.concat(ntm_hidden))
+                        .select(output_buckets)
+                });
+            let factorised_clip = AdamWParams {
+                max_weight: 0.99,
+                min_weight: -0.99,
+                ..Default::default()
+            };
+            trainer
+                .optimiser
+                .set_params_for_weight("l0w", factorised_clip);
+            trainer
+                .optimiser
+                .set_params_for_weight("l0f", factorised_clip);
+            trainer.run(&schedule, &settings, &loader);
+        }
     }
     println!(
         "NEYRANG epoch complete: positions={} checkpoint={}/{}-1",
@@ -300,6 +363,7 @@ fn parse_feature_set(value: &str) -> Result<TrainerFeatureSet, String> {
     match value {
         "chess768" => Ok(TrainerFeatureSet::Chess768),
         "chess768x3hm" => Ok(TrainerFeatureSet::Chess768KingBucketsMirrored3),
+        "chess768x3hm4ph" => Ok(TrainerFeatureSet::Chess768KingBucketsMirrored3PhaseHeads4),
         value => Err(format!("unknown feature set: {value}")),
     }
 }

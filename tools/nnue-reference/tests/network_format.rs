@@ -1,6 +1,7 @@
 use neyrang_nnue_reference::{
     FEATURE_SET_CHESS768, FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3,
-    FORMAT_VERSION_KING_BUCKETS, FeatureSet, HEADER_SIZE, HIDDEN_SIZE, INPUT_FEATURES,
+    FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3_PHASE_HEADS_4, FORMAT_VERSION_KING_BUCKETS,
+    FORMAT_VERSION_PHASE_HEADS, FeatureSet, HEADER_SIZE, HIDDEN_SIZE, INPUT_FEATURES,
     INPUT_FEATURES_KING_BUCKETS_MIRRORED_3, Network, NetworkError, NetworkParameters,
 };
 
@@ -58,7 +59,7 @@ fn loader_rejects_incompatible_headers_before_inference() {
     bad_version[8..10].copy_from_slice(&3_u16.to_le_bytes());
     assert_eq!(
         Network::from_bytes(&bad_version),
-        Err(NetworkError::UnsupportedVersion(3))
+        Err(NetworkError::UnsupportedFeatureSet(FEATURE_SET_CHESS768))
     );
 
     let mut zero_quant = bytes;
@@ -192,6 +193,34 @@ fn king_bucket_network_round_trips_through_version_two() {
     assert_eq!(
         network.feature_set(),
         FeatureSet::Chess768KingBucketsMirrored3
+    );
+    assert_eq!(Network::from_bytes(&bytes), Ok(network));
+}
+
+#[test]
+fn phase_head_network_round_trips_through_version_three() {
+    let network = Network::new_with_feature_set_and_output_biases(
+        FeatureSet::Chess768KingBucketsMirrored3PhaseHeads4,
+        NetworkParameters {
+            activation_quant: 511,
+            output_quant: 768,
+            centipawn_scale: 400,
+        },
+        vec![0; INPUT_FEATURES_KING_BUCKETS_MIRRORED_3 * HIDDEN_SIZE],
+        vec![0; HIDDEN_SIZE],
+        vec![0; 4 * 2 * HIDDEN_SIZE],
+        vec![11, 22, 33, 44],
+    )
+    .unwrap();
+
+    let bytes = network.to_bytes();
+    assert_eq!(
+        u16::from_le_bytes([bytes[8], bytes[9]]),
+        FORMAT_VERSION_PHASE_HEADS
+    );
+    assert_eq!(
+        u16::from_le_bytes([bytes[10], bytes[11]]),
+        FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3_PHASE_HEADS_4
     );
     assert_eq!(Network::from_bytes(&bytes), Ok(network));
 }

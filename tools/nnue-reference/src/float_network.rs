@@ -5,7 +5,6 @@ use neyrang::chess::{Color, Position};
 use crate::{FeatureSet, HIDDEN_SIZE, Network, NetworkParameters, active_features_for};
 
 const FEATURE_BIAS_COUNT: usize = HIDDEN_SIZE;
-const OUTPUT_WEIGHT_COUNT: usize = 2 * HIDDEN_SIZE;
 
 /// The unquantized `(Chess768 -> 128) x 2 -> 1` tensors saved by Bullet.
 #[derive(Clone, Debug, PartialEq)]
@@ -14,7 +13,7 @@ pub struct FloatNetwork {
     feature_weights: Vec<f32>,
     feature_bias: Vec<f32>,
     output_weights: Vec<f32>,
-    output_bias: f32,
+    output_bias: Vec<f32>,
     centipawn_scale: f32,
 }
 
@@ -108,7 +107,10 @@ impl FloatNetwork {
         feature_set: FeatureSet,
     ) -> Result<Self, FloatNetworkError> {
         let feature_weight_count = feature_set.input_features() * HIDDEN_SIZE;
-        let float_count = feature_weight_count + FEATURE_BIAS_COUNT + OUTPUT_WEIGHT_COUNT + 1;
+        let output_weight_count = 2 * HIDDEN_SIZE * feature_set.output_heads();
+        let output_bias_count = feature_set.output_heads();
+        let float_count =
+            feature_weight_count + FEATURE_BIAS_COUNT + output_weight_count + output_bias_count;
         let raw_byte_count = float_count * size_of::<f32>();
         if bytes.len() != raw_byte_count {
             return Err(FloatNetworkError::LengthMismatch {
@@ -133,13 +135,13 @@ impl FloatNetwork {
 
         let feature_bias_start = feature_weight_count;
         let output_weight_start = feature_bias_start + FEATURE_BIAS_COUNT;
-        let output_bias_index = output_weight_start + OUTPUT_WEIGHT_COUNT;
+        let output_bias_start = output_weight_start + output_weight_count;
         Ok(Self {
             feature_set,
             feature_weights: values[..feature_bias_start].to_vec(),
             feature_bias: values[feature_bias_start..output_weight_start].to_vec(),
-            output_weights: values[output_weight_start..output_bias_index].to_vec(),
-            output_bias: values[output_bias_index],
+            output_weights: values[output_weight_start..output_bias_start].to_vec(),
+            output_bias: values[output_bias_start..].to_vec(),
             centipawn_scale,
         })
     }
@@ -155,12 +157,17 @@ impl FloatNetwork {
         let us = self.hidden(position, side_to_move);
         let them = self.hidden(position, other);
 
-        let mut output = self.output_bias;
+        let head = material_output_head(
+            position.all_occupancy().count_ones() as u8,
+            self.feature_set.output_heads(),
+        );
+        let weight_offset = head * 2 * HIDDEN_SIZE;
+        let mut output = self.output_bias[head];
         for (index, value) in us.into_iter().enumerate() {
-            output += screlu(value) * self.output_weights[index];
+            output += screlu(value) * self.output_weights[weight_offset + index];
         }
         for (index, value) in them.into_iter().enumerate() {
-            output += screlu(value) * self.output_weights[HIDDEN_SIZE + index];
+            output += screlu(value) * self.output_weights[weight_offset + HIDDEN_SIZE + index];
         }
         output * self.centipawn_scale
     }
@@ -193,9 +200,9 @@ impl FloatNetwork {
             quantize_i16("feature_weights", &self.feature_weights, activation_quant)?;
         let feature_bias = quantize_i16("feature_bias", &self.feature_bias, activation_quant)?;
         let output_weights = quantize_i16("output_weights", &self.output_weights, output_quant)?;
-        let output_bias = quantize_i32("output_bias", &[self.output_bias], bias_quant)?[0];
+        let output_bias = quantize_i32("output_bias", &self.output_bias, bias_quant)?;
 
-        Ok(Network::new_with_feature_set(
+        Ok(Network::new_with_feature_set_and_output_biases(
             self.feature_set,
             parameters,
             feature_weights,
@@ -224,6 +231,11 @@ impl FloatNetwork {
 
 fn screlu(value: f32) -> f32 {
     value.clamp(0.0, 1.0).powi(2)
+}
+
+fn material_output_head(piece_count: u8, head_count: usize) -> usize {
+    let divisor = 32_usize.div_ceil(head_count);
+    (usize::from(piece_count) - 2) / divisor
 }
 
 fn quantize_i16(

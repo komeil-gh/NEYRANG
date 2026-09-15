@@ -54,6 +54,16 @@ fn version_two_king_bucket_artifact_uses_the_registered_mapping() {
 }
 
 #[test]
+fn version_three_routes_material_to_the_registered_output_head() {
+    let network = Network::from_bytes(&phase_head_artifact())
+        .expect("version-three phase-head artifact must decode");
+    let bare_kings = Position::from_fen("4k3/8/8/8/8/8/8/4K3 w - - 0 1").unwrap();
+
+    assert_eq!(network.evaluate(&bare_kings), 400);
+    assert_eq!(network.evaluate(&Position::startpos()), 1600);
+}
+
+#[test]
 fn version_two_accumulator_refreshes_after_king_moves() {
     let network = Network::from_bytes(&deterministic_king_bucket_artifact())
         .expect("version-two king-bucket artifact must decode");
@@ -207,6 +217,32 @@ fn constant_network_artifact(output_bias: i32) -> Vec<u8> {
     bytes.extend_from_slice(b"NEYRANG\0");
     bytes.extend_from_slice(&1_u16.to_le_bytes());
     bytes.extend_from_slice(&1_u16.to_le_bytes());
+    bytes.extend_from_slice(&(HIDDEN_SIZE as u16).to_le_bytes());
+    bytes.extend_from_slice(&32_u16.to_le_bytes());
+    bytes.extend_from_slice(&16_u16.to_le_bytes());
+    bytes.extend_from_slice(&0_u16.to_le_bytes());
+    bytes.extend_from_slice(&400_i32.to_le_bytes());
+    bytes.extend_from_slice(&(payload_size as u32).to_le_bytes());
+    bytes.extend_from_slice(&crc32(&payload).to_le_bytes());
+    bytes.extend_from_slice(&payload);
+    bytes
+}
+
+fn phase_head_artifact() -> Vec<u8> {
+    let output_heads = 4;
+    let payload_size =
+        (KING_BUCKET_INPUT_FEATURES * HIDDEN_SIZE + HIDDEN_SIZE + output_heads * 2 * HIDDEN_SIZE)
+            * 2
+            + output_heads * 4;
+    let mut payload = vec![0; payload_size - output_heads * 4];
+    for bias in [512_i32, 1024, 1536, 2048] {
+        payload.extend_from_slice(&bias.to_le_bytes());
+    }
+
+    let mut bytes = Vec::with_capacity(32 + payload_size);
+    bytes.extend_from_slice(b"NEYRANG\0");
+    bytes.extend_from_slice(&3_u16.to_le_bytes());
+    bytes.extend_from_slice(&3_u16.to_le_bytes());
     bytes.extend_from_slice(&(HIDDEN_SIZE as u16).to_le_bytes());
     bytes.extend_from_slice(&32_u16.to_le_bytes());
     bytes.extend_from_slice(&16_u16.to_le_bytes());

@@ -7,6 +7,7 @@ use crate::{FeatureSet, HIDDEN_SIZE, Network, feature_index_for};
 pub struct AccumulatorPair {
     white: [i32; HIDDEN_SIZE],
     black: [i32; HIDDEN_SIZE],
+    pub(crate) piece_count: u8,
 }
 
 impl AccumulatorPair {
@@ -16,6 +17,7 @@ impl AccumulatorPair {
         let mut pair = Self {
             white: bias_as_i32(&network.feature_bias),
             black: bias_as_i32(&network.feature_bias),
+            piece_count: position.all_occupancy().count_ones() as u8,
         };
 
         for index in 0_u8..64 {
@@ -29,14 +31,17 @@ impl AccumulatorPair {
 
     /// Apply the exact piece-square difference between two legal board states.
     pub fn update(&mut self, before: &Position, after: &Position, network: &Network) {
-        if network.feature_set == FeatureSet::Chess768KingBucketsMirrored3
-            && [Color::White, Color::Black].into_iter().any(|color| {
-                before.pieces(color, PieceType::King) != after.pieces(color, PieceType::King)
-            })
-        {
+        if matches!(
+            network.feature_set,
+            FeatureSet::Chess768KingBucketsMirrored3
+                | FeatureSet::Chess768KingBucketsMirrored3PhaseHeads4
+        ) && [Color::White, Color::Black].into_iter().any(|color| {
+            before.pieces(color, PieceType::King) != after.pieces(color, PieceType::King)
+        }) {
             *self = Self::refresh(after, network);
             return;
         }
+        self.piece_count = after.all_occupancy().count_ones() as u8;
         for index in 0_u8..64 {
             let square = Square::from_index(index).expect("board index is in range");
             let old_piece = before.piece_at(square);

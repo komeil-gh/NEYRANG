@@ -1,8 +1,8 @@
 use neyrang::chess::{Color, PieceType, Position, Square};
 use neyrang_nnue_reference::{
-    FeatureSet, FenSuiteError, FloatNetwork, FloatNetworkError, FloatQuantizationError,
-    HIDDEN_SIZE, INPUT_FEATURES, INPUT_FEATURES_KING_BUCKETS_MIRRORED_3, Network,
-    NetworkParameters, ParityError, active_features, evaluate_parity, parse_fen_suite,
+    AccumulatorPair, FeatureSet, FenSuiteError, FloatNetwork, FloatNetworkError,
+    FloatQuantizationError, HIDDEN_SIZE, INPUT_FEATURES, INPUT_FEATURES_KING_BUCKETS_MIRRORED_3,
+    Network, NetworkParameters, ParityError, active_features, evaluate_parity, parse_fen_suite,
 };
 
 const FLOAT_COUNT: usize = INPUT_FEATURES * HIDDEN_SIZE + HIDDEN_SIZE + 2 * HIDDEN_SIZE + 1;
@@ -191,6 +191,41 @@ fn king_bucket_raw_tensor_quantizes_with_the_same_feature_contract() {
         FeatureSet::Chess768KingBucketsMirrored3
     );
     assert_eq!(float.evaluate(&Position::startpos()), 0.0);
+}
+
+#[test]
+fn phase_head_raw_tensor_routes_by_material_and_survives_quantization() {
+    let float_count = INPUT_FEATURES_KING_BUCKETS_MIRRORED_3 * HIDDEN_SIZE
+        + HIDDEN_SIZE
+        + 4 * 2 * HIDDEN_SIZE
+        + 4;
+    let mut values = vec![0.0; float_count];
+    values[float_count - 4..].copy_from_slice(&[1.0, 2.0, 3.0, 4.0]);
+    let float = FloatNetwork::from_bullet_raw_with_feature_set(
+        &encode_f32(&values),
+        400.0,
+        FeatureSet::Chess768KingBucketsMirrored3PhaseHeads4,
+    )
+    .unwrap();
+    let quantized = float
+        .quantize(NetworkParameters {
+            activation_quant: 511,
+            output_quant: 768,
+            centipawn_scale: 400,
+        })
+        .unwrap();
+    let bare_kings = Position::from_fen("4k3/8/8/8/8/8/8/4K3 w - - 0 1").unwrap();
+    let start = Position::startpos();
+
+    assert_eq!(float.evaluate(&bare_kings), 400.0);
+    assert_eq!(float.evaluate(&start), 1600.0);
+    for (position, expected) in [(&bare_kings, 400), (&start, 1600)] {
+        let accumulators = AccumulatorPair::refresh(position, &quantized);
+        assert_eq!(
+            quantized.evaluate(&accumulators, position.side_to_move()),
+            expected
+        );
+    }
 }
 
 #[test]

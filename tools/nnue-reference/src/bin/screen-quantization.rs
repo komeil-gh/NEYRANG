@@ -124,6 +124,7 @@ fn parse_feature_set(value: std::ffi::OsString) -> Result<FeatureSet, String> {
     match value.to_str() {
         Some("chess768") => Ok(FeatureSet::Chess768),
         Some("chess768x3hm") => Ok(FeatureSet::Chess768KingBucketsMirrored3),
+        Some("chess768x3hm4ph") => Ok(FeatureSet::Chess768KingBucketsMirrored3PhaseHeads4),
         Some(value) => Err(format!("unknown feature set: {value}")),
         None => Err("feature set is not UTF-8".to_string()),
     }

@@ -10,17 +10,20 @@ pub const HIDDEN_SIZE: usize = 128;
 pub const FORMAT_VERSION: u16 = 1;
 /// Version carrying the three-bank king-relative feature contract.
 pub const FORMAT_VERSION_KING_BUCKETS: u16 = 2;
+/// Version carrying four material-routed output heads.
+pub const FORMAT_VERSION_PHASE_HEADS: u16 = 3;
 /// Identifier for the dual-perspective Chess768 feature mapping.
 pub const FEATURE_SET_CHESS768: u16 = 1;
 /// Identifier for the three-bank horizontally mirrored Chess768 mapping.
 pub const FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3: u16 = 2;
+/// Identifier for Chess768x3hm with four material-routed output heads.
+pub const FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3_PHASE_HEADS_4: u16 = 3;
 /// Byte length of the fixed network header.
 pub const HEADER_SIZE: usize = 32;
 
 /// Eight-byte artifact marker: the engine name followed by a NUL terminator.
 const MAGIC: &[u8; 8] = b"NEYRANG\0";
 const FEATURE_BIAS_COUNT: usize = HIDDEN_SIZE;
-const OUTPUT_WEIGHT_COUNT: usize = 2 * HIDDEN_SIZE;
 
 /// Quantization values carried by every network instead of hidden constants.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -38,7 +41,7 @@ pub struct Network {
     pub(crate) feature_weights: Vec<i16>,
     pub(crate) feature_bias: Vec<i16>,
     pub(crate) output_weights: Vec<i16>,
-    pub(crate) output_bias: i32,
+    pub(crate) output_bias: Vec<i32>,
 }
 
 /// Fail-closed network construction and decoding errors.
@@ -160,6 +163,25 @@ impl Network {
         output_weights: Vec<i16>,
         output_bias: i32,
     ) -> Result<Self, NetworkError> {
+        Self::new_with_feature_set_and_output_biases(
+            feature_set,
+            parameters,
+            feature_weights,
+            feature_bias,
+            output_weights,
+            vec![output_bias],
+        )
+    }
+
+    /// Construct a network whose output tensors match its registered head count.
+    pub fn new_with_feature_set_and_output_biases(
+        feature_set: FeatureSet,
+        parameters: NetworkParameters,
+        feature_weights: Vec<i16>,
+        feature_bias: Vec<i16>,
+        output_weights: Vec<i16>,
+        output_bias: Vec<i32>,
+    ) -> Result<Self, NetworkError> {
         validate_parameters(parameters)?;
         validate_shape(
             "feature_weights",
@@ -167,7 +189,12 @@ impl Network {
             feature_weights.len(),
         )?;
         validate_shape("feature_bias", FEATURE_BIAS_COUNT, feature_bias.len())?;
-        validate_shape("output_weights", OUTPUT_WEIGHT_COUNT, output_weights.len())?;
+        validate_shape(
+            "output_weights",
+            output_weight_count(feature_set),
+            output_weights.len(),
+        )?;
+        validate_shape("output_bias", feature_set.output_heads(), output_bias.len())?;
 
         Ok(Self {
             feature_set,
@@ -241,10 +268,11 @@ impl Network {
         let feature_weights =
             read_i16_values(payload, &mut cursor, feature_weight_count(feature_set));
         let feature_bias = read_i16_values(payload, &mut cursor, FEATURE_BIAS_COUNT);
-        let output_weights = read_i16_values(payload, &mut cursor, OUTPUT_WEIGHT_COUNT);
-        let output_bias = read_i32(payload, cursor);
+        let output_weights =
+            read_i16_values(payload, &mut cursor, output_weight_count(feature_set));
+        let output_bias = read_i32_values(payload, &mut cursor, feature_set.output_heads());
 
-        Self::new_with_feature_set(
+        Self::new_with_feature_set_and_output_biases(
             feature_set,
             parameters,
             feature_weights,
@@ -295,9 +323,10 @@ impl Network {
         let feature_weights =
             read_i16_values(payload, &mut cursor, feature_weight_count(feature_set));
         let feature_bias = read_i16_values(payload, &mut cursor, FEATURE_BIAS_COUNT);
-        let output_weights = read_i16_values(payload, &mut cursor, OUTPUT_WEIGHT_COUNT);
-        let output_bias = read_i32(payload, cursor);
-        Self::new_with_feature_set(
+        let output_weights =
+            read_i16_values(payload, &mut cursor, output_weight_count(feature_set));
+        let output_bias = read_i32_values(payload, &mut cursor, feature_set.output_heads());
+        Self::new_with_feature_set_and_output_biases(
             feature_set,
             parameters,
             feature_weights,
@@ -315,7 +344,7 @@ impl Network {
         append_i16_values(&mut payload, &self.feature_weights);
         append_i16_values(&mut payload, &self.feature_bias);
         append_i16_values(&mut payload, &self.output_weights);
-        payload.extend_from_slice(&self.output_bias.to_le_bytes());
+        append_i32_values(&mut payload, &self.output_bias);
         debug_assert_eq!(payload.len(), payload_size);
 
         let mut bytes = Vec::with_capacity(HEADER_SIZE + payload_size);
@@ -346,18 +375,20 @@ impl Network {
         let (us, them) = accumulators.oriented(side_to_move);
         let activation_quant = i128::from(self.parameters.activation_quant);
         let mut output = 0_i128;
+        let head = material_output_head(accumulators.piece_count, self.feature_set.output_heads());
+        let weight_offset = head * 2 * HIDDEN_SIZE;
 
         for (index, &value) in us.iter().enumerate() {
-            output +=
-                square_clipped(value, activation_quant) * i128::from(self.output_weights[index]);
+            output += square_clipped(value, activation_quant)
+                * i128::from(self.output_weights[weight_offset + index]);
         }
         for (index, &value) in them.iter().enumerate() {
             output += square_clipped(value, activation_quant)
-                * i128::from(self.output_weights[HIDDEN_SIZE + index]);
+                * i128::from(self.output_weights[weight_offset + HIDDEN_SIZE + index]);
         }
 
         output /= activation_quant;
-        output += i128::from(self.output_bias);
+        output += i128::from(self.output_bias[head]);
         output *= i128::from(self.parameters.centipawn_scale);
         output /= activation_quant * i128::from(self.parameters.output_quant);
         output.clamp(i128::from(i32::MIN), i128::from(i32::MAX)) as i32
@@ -368,14 +399,20 @@ const fn feature_weight_count(feature_set: FeatureSet) -> usize {
     feature_set.input_features() * HIDDEN_SIZE
 }
 
+const fn output_weight_count(feature_set: FeatureSet) -> usize {
+    2 * HIDDEN_SIZE * feature_set.output_heads()
+}
+
 const fn payload_size(feature_set: FeatureSet) -> usize {
-    (feature_weight_count(feature_set) + FEATURE_BIAS_COUNT + OUTPUT_WEIGHT_COUNT) * 2 + 4
+    (feature_weight_count(feature_set) + FEATURE_BIAS_COUNT + output_weight_count(feature_set)) * 2
+        + feature_set.output_heads() * 4
 }
 
 const fn format_version(feature_set: FeatureSet) -> u16 {
     match feature_set {
         FeatureSet::Chess768 => FORMAT_VERSION,
         FeatureSet::Chess768KingBucketsMirrored3 => FORMAT_VERSION_KING_BUCKETS,
+        FeatureSet::Chess768KingBucketsMirrored3PhaseHeads4 => FORMAT_VERSION_PHASE_HEADS,
     }
 }
 
@@ -383,6 +420,9 @@ const fn feature_set_id(feature_set: FeatureSet) -> u16 {
     match feature_set {
         FeatureSet::Chess768 => FEATURE_SET_CHESS768,
         FeatureSet::Chess768KingBucketsMirrored3 => FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3,
+        FeatureSet::Chess768KingBucketsMirrored3PhaseHeads4 => {
+            FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3_PHASE_HEADS_4
+        }
     }
 }
 
@@ -392,9 +432,14 @@ fn decode_feature_set(version: u16, feature_set: u16) -> Result<FeatureSet, Netw
         (FORMAT_VERSION_KING_BUCKETS, FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3) => {
             Ok(FeatureSet::Chess768KingBucketsMirrored3)
         }
-        (FORMAT_VERSION | FORMAT_VERSION_KING_BUCKETS, feature_set) => {
-            Err(NetworkError::UnsupportedFeatureSet(feature_set))
-        }
+        (
+            FORMAT_VERSION_PHASE_HEADS,
+            FEATURE_SET_CHESS768_KING_BUCKETS_MIRRORED_3_PHASE_HEADS_4,
+        ) => Ok(FeatureSet::Chess768KingBucketsMirrored3PhaseHeads4),
+        (
+            FORMAT_VERSION | FORMAT_VERSION_KING_BUCKETS | FORMAT_VERSION_PHASE_HEADS,
+            feature_set,
+        ) => Err(NetworkError::UnsupportedFeatureSet(feature_set)),
         (version, _) => Err(NetworkError::UnsupportedVersion(version)),
     }
 }
@@ -402,6 +447,11 @@ fn decode_feature_set(version: u16, feature_set: u16) -> Result<FeatureSet, Netw
 fn square_clipped(value: i32, activation_quant: i128) -> i128 {
     let clipped = i128::from(value).clamp(0, activation_quant);
     clipped * clipped
+}
+
+fn material_output_head(piece_count: u8, head_count: usize) -> usize {
+    let divisor = 32_usize.div_ceil(head_count);
+    (usize::from(piece_count) - 2) / divisor
 }
 
 fn validate_parameters(parameters: NetworkParameters) -> Result<(), NetworkError> {
@@ -433,11 +483,26 @@ fn append_i16_values(bytes: &mut Vec<u8>, values: &[i16]) {
     }
 }
 
+fn append_i32_values(bytes: &mut Vec<u8>, values: &[i32]) {
+    for value in values {
+        bytes.extend_from_slice(&value.to_le_bytes());
+    }
+}
+
 fn read_i16_values(payload: &[u8], cursor: &mut usize, count: usize) -> Vec<i16> {
     let mut values = Vec::with_capacity(count);
     for _ in 0..count {
         values.push(i16::from_le_bytes([payload[*cursor], payload[*cursor + 1]]));
         *cursor += 2;
+    }
+    values
+}
+
+fn read_i32_values(payload: &[u8], cursor: &mut usize, count: usize) -> Vec<i32> {
+    let mut values = Vec::with_capacity(count);
+    for _ in 0..count {
+        values.push(read_i32(payload, *cursor));
+        *cursor += 4;
     }
     values
 }

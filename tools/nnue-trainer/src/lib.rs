@@ -69,7 +69,19 @@ pub fn merge_factorised_raw_tensors(
     hidden_size: usize,
     base_features: usize,
 ) -> Result<Vec<f32>, FactorisedRawError> {
-    if buckets == 0 || hidden_size == 0 || base_features == 0 {
+    merge_factorised_raw_tensors_with_output_heads(tensors, buckets, hidden_size, base_features, 1)
+}
+
+/// Merge input factorisation and transpose Bullet's output matrix into
+/// contiguous material-head rows for scalar inference.
+pub fn merge_factorised_raw_tensors_with_output_heads(
+    tensors: &[(String, Vec<f32>)],
+    buckets: usize,
+    hidden_size: usize,
+    base_features: usize,
+    output_heads: usize,
+) -> Result<Vec<f32>, FactorisedRawError> {
+    if buckets == 0 || hidden_size == 0 || base_features == 0 || output_heads == 0 {
         return Err(FactorisedRawError::InvalidGeometry);
     }
 
@@ -107,10 +119,13 @@ pub fn merge_factorised_raw_tensors(
     let l0w = get("l0w", bucket_values)?;
     let l0f = get("l0f", bank_values)?;
     let l0b = get("l0b", hidden_size)?;
-    let l1w = get("l1w", 2 * hidden_size)?;
-    let l1b = get("l1b", 1)?;
+    let output_inputs = 2 * hidden_size;
+    let l1w = get("l1w", output_inputs * output_heads)?;
+    let l1b = get("l1b", output_heads)?;
 
-    let mut merged = Vec::with_capacity(bucket_values + hidden_size + 2 * hidden_size + 1);
+    let mut merged = Vec::with_capacity(
+        bucket_values + hidden_size + output_inputs * output_heads + output_heads,
+    );
     for bank in l0w.chunks_exact(bank_values) {
         merged.extend(
             bank.iter()
@@ -119,7 +134,11 @@ pub fn merge_factorised_raw_tensors(
         );
     }
     merged.extend_from_slice(l0b);
-    merged.extend_from_slice(l1w);
+    for head in 0..output_heads {
+        for input in 0..output_inputs {
+            merged.push(l1w[input * output_heads + head]);
+        }
+    }
     merged.extend_from_slice(l1b);
     Ok(merged)
 }
@@ -344,6 +363,7 @@ mod tests {
     use super::{
         ACTIVATION_QUANT, EpochPlan, FilterFacts, OUTPUT_BIAS_QUANT, OUTPUT_QUANT, PlanError,
         PositionFilter, deterministic_shuffle, merge_factorised_raw_tensors,
+        merge_factorised_raw_tensors_with_output_heads,
     };
 
     #[test]
@@ -452,5 +472,21 @@ mod tests {
             vec![11.0, 22.0, 13.0, 24.0, 30.0, 40.0, 50.0, 60.0]
         );
         assert!(merge_factorised_raw_tensors(&tensors[..4], 2, 1, 2).is_err());
+    }
+
+    #[test]
+    fn factorised_raw_export_transposes_multiple_output_heads() {
+        let tensors = vec![
+            ("l0w".to_string(), vec![1.0, 2.0]),
+            ("l0f".to_string(), vec![10.0, 20.0]),
+            ("l0b".to_string(), vec![30.0]),
+            ("l1w".to_string(), vec![40.0, 41.0, 50.0, 51.0]),
+            ("l1b".to_string(), vec![60.0, 61.0]),
+        ];
+
+        assert_eq!(
+            merge_factorised_raw_tensors_with_output_heads(&tensors, 1, 1, 2, 2).unwrap(),
+            vec![11.0, 22.0, 30.0, 40.0, 50.0, 41.0, 51.0, 60.0, 61.0]
+        );
     }
 }

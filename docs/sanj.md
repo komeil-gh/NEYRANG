@@ -37,7 +37,9 @@ The feature exposes the UCI string option `EvalFile`. A non-empty path must be a
 complete supported `NEYRANG\0` artifact: version 1 uses Chess768 and version 2
 uses the registered three-bank horizontally mirrored Chess768x3hm mapping.
 Version 3 keeps that input mapping and adds four material-routed output heads;
-it remains experimental until the registered H5f offline and playing gates pass.
+H5f's independent heads were rejected at their offline statistical gate. The
+trainer-only H5g follow-up shares all output weights and learns only four phase
+biases while exporting the same version-3 contract; it remains experimental.
 `EvalMix` selects the NNUE percentage from 0 through 100 while retaining
 classical SANJ for the remainder; its default is 100 for compatibility with
 the existing pure-network evidence.

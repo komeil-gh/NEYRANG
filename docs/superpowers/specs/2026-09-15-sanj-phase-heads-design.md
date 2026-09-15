@@ -45,3 +45,13 @@ UCI option is introduced.
    requires exceeding H4m's 26.56% point estimate. H4m remains untouched until
    every gate passes.
 
+## Result
+
+H5f is rejected before games. The quantised candidate passed runtime parity,
+then reduced Stockfish-18 WDL-space MSE from `0.09469070` to `0.09276766` on
+2,048 deterministic fresh positions at 110,000 teacher nodes. The paired mean
+delta was `-0.00192304`, but its deterministic 10,000-replicate bootstrap 95%
+interval was `[-0.00625627, +0.00237432]`; it therefore did not establish an
+improvement. The validation positions were unique and had zero overlap with the
+approved N6 corpus or the complete N6-N9 selected-root chain. No H5f engine game
+was opened and its network is not retained.

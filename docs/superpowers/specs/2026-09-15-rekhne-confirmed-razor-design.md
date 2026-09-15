@@ -31,3 +31,10 @@ changes. The experiment is isolated from the rejected H4f delta-pruning code.
    20,000 nodes against H4c. Reject on an anomaly or negative point estimate.
 4. Only a passing parent screen opens a separate 256-game Blunder 7.6.0 screen;
    it must exceed the retained 26.56% point estimate to claim progress.
+
+## Outcome
+
+Rejected before the remote gate. The direct fail-low/restoration test passed and
+H4g preserved all five hybrid depth-8 best moves and scores, but reduced the
+tree only from 513,582 to 503,805 nodes (-1.90%). That missed the registered 5%
+engineering floor, so no match was opened and the playing code was removed.

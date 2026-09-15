@@ -16,9 +16,9 @@ threshold is `tt_score - 2 * depth` and the exclusion depth is
 `(depth - 1) / 2`. If every alternative stays below that threshold, only the TT
 move receives one extra ply.
 
-The exclusion search cannot recurse into another singular probe, use a TT
-cutoff, write a TT entry, or train persistent killer/history state. It returns
-the probe alpha when no alternative exists. No double/triple or negative
+The excluded node cannot recurse into another singular probe, use a TT cutoff,
+write a TT entry, or train killer/history state. It returns the probe alpha when
+no alternative exists. Descendants retain normal search semantics. No double/triple or negative
 extension, multi-cut, evaluator change, ordering change, artifact change, or
 UCI default is bundled. This is a deliberately smaller adaptation of the
 singular-move test documented in the current Stockfish search, not a copy of
@@ -34,3 +34,12 @@ its tuned margins or coupled heuristics.
    20,000 nodes against H4c. Reject on an anomaly or negative point estimate.
 4. Only a passing parent screen opens a separate 256-game Blunder 7.6.0 screen;
    it must exceed the retained 26.56% point estimate to claim progress.
+
+## Outcome
+
+Rejected before remote testing. All 142 Rust tests, the 11-test tactical suite,
+start-position perft 5, Clippy, and the direct exclusion/restoration regression
+passed. The five-position hybrid depth-8 tree nevertheless grew from 513,582 to
+711,903 nodes (+38.61%), beyond the preregistered 25% ceiling. Three frozen
+scores and one best move also changed. The candidate source and temporary test
+were removed; H4c remains the playing source.

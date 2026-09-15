@@ -1108,7 +1108,33 @@ impl<'a> Searcher<'a> {
         );
         #[cfg(feature = "stats")]
         let mut exhausted = true;
-        while let Some(mv) = picker.next_move_with_policy(position, &self.history, &self.policy) {
+        #[cfg(feature = "stats")]
+        let mut skipped_bad_tacticals = 0_u64;
+        let mut probing_bad_checks = false;
+        loop {
+            let mv = if probing_bad_checks {
+                picker.next_bad_tactical()
+            } else {
+                picker.next_move_with_policy(position, &self.history, &self.policy)
+            };
+            let Some(mv) = mv else {
+                if !in_check && !probing_bad_checks {
+                    probing_bad_checks = true;
+                    continue;
+                }
+                break;
+            };
+            self.push_move_accumulator(position, mv, ply);
+            let undo = position.make_move(mv);
+            if probing_bad_checks && !position.is_in_check(position.side_to_move()) {
+                position.unmake_move(mv, undo);
+                self.pop_accumulator(ply);
+                #[cfg(feature = "stats")]
+                {
+                    skipped_bad_tacticals += 1;
+                }
+                continue;
+            }
             #[cfg(feature = "stats")]
             {
                 self.statistics.moves_searched += 1;
@@ -1122,8 +1148,6 @@ impl<'a> Searcher<'a> {
                     }
                 }
             }
-            self.push_move_accumulator(position, mv, ply);
-            let undo = position.make_move(mv);
             if !context.in_null_subtree {
                 self.hashes.push(position.repetition_hash());
             }
@@ -1154,7 +1178,7 @@ impl<'a> Searcher<'a> {
         #[cfg(feature = "stats")]
         {
             if !in_check && exhausted {
-                self.statistics.see_prunes += picker.bad_tactical_count() as u64;
+                self.statistics.see_prunes += skipped_bad_tacticals;
             }
             self.record_ordering_statistics(picker.statistics());
         }

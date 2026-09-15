@@ -254,7 +254,7 @@ impl MovePicker {
     }
 
     #[inline]
-    #[cfg(any(feature = "stats", test))]
+    #[cfg(test)]
     pub(crate) const fn bad_tactical_count(&self) -> usize {
         self.statistics.bad_capture_count
     }
@@ -262,6 +262,15 @@ impl MovePicker {
     #[inline]
     pub(crate) const fn last_tactical_see(&self) -> Option<i32> {
         self.last_tactical_see
+    }
+
+    pub(crate) fn next_bad_tactical(&mut self) -> Option<Move> {
+        debug_assert!(self.tactical_only);
+        self.last_move_was_scored = false;
+        self.last_tactical_see = None;
+        let mv = self.pick_best(MoveClass::BadTactical)?;
+        self.last_move_was_scored = true;
+        Some(mv)
     }
 
     #[inline]
@@ -641,6 +650,39 @@ mod tests {
         assert!(picked.iter().all(|&mv| {
             (mv.is_capture() || mv.is_promotion()) && (mv.is_promotion() || see(&position, mv) >= 0)
         }));
+    }
+
+    #[test]
+    fn qsearch_exposes_bad_tacticals_only_through_the_explicit_probe() {
+        let mut position = Position::from_fen("4k3/8/5p2/3qp3/2P1Q3/8/8/6K1 w - - 0 1")
+            .expect("forcing-capture fixture must be valid");
+        let bad_check = position
+            .find_legal_move("e4e5")
+            .expect("losing checking capture must be legal");
+        assert!(see(&position, bad_check) < 0);
+        let history = HistoryTable::default();
+        let mut picker = MovePicker::quiescence(
+            position.legal_moves(),
+            false,
+            [Move::NONE; 2],
+            position.side_to_move(),
+        );
+
+        let ordinary = collect(&mut picker, &position, &history);
+        assert!(!ordinary.contains(&bad_check));
+        let probed = std::iter::from_fn(|| picker.next_bad_tactical()).collect::<Vec<_>>();
+        assert!(probed.contains(&bad_check));
+
+        let undo = position.make_move(bad_check);
+        assert!(position.is_in_check(position.side_to_move()));
+        position.unmake_move(bad_check, undo);
+
+        let mut nonchecking = Position::from_fen("6k1/8/5p2/3qp3/2P1Q3/8/8/6K1 w - - 0 1").unwrap();
+        let bad_capture = nonchecking.find_legal_move("e4e5").unwrap();
+        assert!(see(&nonchecking, bad_capture) < 0);
+        let undo = nonchecking.make_move(bad_capture);
+        assert!(!nonchecking.is_in_check(nonchecking.side_to_move()));
+        nonchecking.unmake_move(bad_capture, undo);
     }
 
     #[test]

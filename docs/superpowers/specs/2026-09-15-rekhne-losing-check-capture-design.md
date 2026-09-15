@@ -33,3 +33,10 @@ defaults remain frozen. There is no external threshold or copied tuning value.
 4. Only a passing parent screen opens a separate 256-game Blunder 7.6.0 screen;
    it must exceed the retained 26.56% point estimate to claim external progress.
 
+## Engineering result
+
+All 143 Rust tests, the 11-test tactical suite, start-position perft 5,
+formatting, and Clippy passed. H4n preserved all five hybrid depth-8 best moves
+and scores while increasing the combined tree from 513,582 to 576,220 nodes
+(+12.20%), inside the registered 15% ceiling. The fresh paired parent gate is
+therefore open; no external-strength conclusion exists yet.

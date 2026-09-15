@@ -30,3 +30,11 @@ policy, pruning margins, artifacts, and UCI defaults remain unchanged.
    20,000 nodes against H4c. Reject on an anomaly or negative point estimate.
 4. Only a passing parent screen opens a separate 256-game Blunder 7.6.0 screen;
    it must exceed the retained 26.56% point estimate to claim progress.
+
+## Outcome
+
+Rejected before remote testing. The focused tests passed, but the five-position
+hybrid depth-8 check changed one frozen result from `b4f4 / 82` to `b4c4 / 59`.
+The aggregate tree also fell only from 513,582 to 510,834 nodes (-0.54%), below
+the preregistered 1% floor. The candidate source and its temporary tests were
+removed; H4c remains the playing source.

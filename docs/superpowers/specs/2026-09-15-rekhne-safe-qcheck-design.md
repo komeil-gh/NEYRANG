@@ -31,3 +31,13 @@ check scoring table, repeated checking extension, or copied engine margin.
    20,000 nodes against H4c. Reject on an anomaly or negative point estimate.
 4. Only a passing parent screen opens a separate 256-game Blunder 7.6.0 screen;
    it must exceed the retained 26.56% point estimate to claim progress.
+
+## Outcome
+
+Rejected before remote testing. All 142 Rust tests, the 11-test tactical suite,
+start-position perft 5, Clippy, and the direct budget/restoration regression
+passed. The candidate did not complete even the five-position hybrid depth-5
+check inside 30 seconds, while H4c completes the deeper depth-8 workload in
+about 0.45 seconds on the same host. It therefore exceeded the registered tree
+ceiling by a decisive margin. The candidate source and temporary test were
+removed; H4c remains the playing source.

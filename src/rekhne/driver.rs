@@ -40,14 +40,6 @@ const fn null_move_reduction(depth: i32) -> i32 {
     if depth >= 6 { 3 } else { NULL_MOVE_REDUCTION }
 }
 
-const fn late_move_reduction(depth: i32, history_score: i32) -> i32 {
-    if depth >= 6 && history_score < 0 {
-        2
-    } else {
-        1
-    }
-}
-
 #[derive(Clone, Copy)]
 struct SearchContext {
     preferred: Option<Move>,
@@ -888,7 +880,6 @@ impl<'a> Searcher<'a> {
             if tt_move == Some(mv) {
                 self.statistics.tt_move_searches += 1;
             }
-            let history_score = self.history.score(moving_color, mv);
             let can_reduce = ply != 0
                 && depth >= 3
                 && move_index >= 4
@@ -898,7 +889,7 @@ impl<'a> Searcher<'a> {
                 && !mv.is_promotion()
                 && tt_move != Some(mv)
                 && !self.killers[ply].contains(&mv)
-                && history_score < HistoryTable::MAX_SCORE / 4;
+                && self.history.score(moving_color, mv) < HistoryTable::MAX_SCORE / 4;
             self.push_move_accumulator(position, mv, ply);
             let undo = position.make_move(mv);
             let gives_check = (can_reduce || can_futility_prune || can_see_prune)
@@ -953,7 +944,7 @@ impl<'a> Searcher<'a> {
                     }
                     score = -self.negamax(
                         position,
-                        depth - 1 - late_move_reduction(depth, history_score),
+                        depth - 2,
                         ply + 1,
                         -alpha - 1,
                         -alpha,
@@ -1453,9 +1444,7 @@ mod timing_tests {
 mod tests {
     use std::sync::atomic::AtomicBool;
 
-    use super::{
-        SearchContext, SearchSetup, SearchStatistics, late_move_reduction, null_move_reduction,
-    };
+    use super::{SearchContext, SearchSetup, SearchStatistics, null_move_reduction};
     use crate::{
         chess::{Move, Position},
         rekhne::{SearchLimits, Searcher, VALUE_INFINITE, VALUE_MATE, tt::Bound},
@@ -1524,14 +1513,6 @@ mod tests {
         assert_eq!(null_move_reduction(4), 2);
         assert_eq!(null_move_reduction(5), 2);
         assert_eq!(null_move_reduction(6), 3);
-    }
-
-    #[test]
-    fn negative_history_deepens_late_move_reduction() {
-        assert_eq!(late_move_reduction(5, -1), 1);
-        assert_eq!(late_move_reduction(6, 0), 1);
-        assert_eq!(late_move_reduction(6, -1), 2);
-        assert_eq!(late_move_reduction(8, 1), 1);
     }
 
     #[test]

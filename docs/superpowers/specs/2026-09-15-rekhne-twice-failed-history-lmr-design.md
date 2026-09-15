@@ -34,3 +34,13 @@ NEYRANG's existing update scale; it is not copied from another engine.
    screen; external progress requires exceeding the retained 26.56% score.
 
 Failure removes the playing code while preserving the measured result.
+
+## Outcome
+
+Rejected before remote testing. The focused boundary regression compiled and
+passed, but the hybrid depth-8 workload remained exactly inert: H4v and H4m
+both searched 513,582 nodes with identical move/score signatures. The
+`-HistoryTable::MAX_SCORE / 16` condition did not activate in representative
+search, so the candidate failed the 2% tree-reduction floor.
+
+The playing code and temporary regression were removed; no remote games ran.

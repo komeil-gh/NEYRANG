@@ -720,19 +720,6 @@ impl<'a> Searcher<'a> {
         }
 
         let in_check = position.is_in_check(position.side_to_move());
-        let moves = position.legal_moves();
-        #[cfg(feature = "stats")]
-        {
-            self.statistics.move_generation_calls += 1;
-            self.statistics.moves_generated += moves.len() as u64;
-        }
-        if moves.is_empty() {
-            return if in_check {
-                -VALUE_MATE + ply as i32
-            } else {
-                VALUE_DRAW
-            };
-        }
         let mate_bound = VALUE_MATE - MAX_PLY as i32;
         let mut static_eval = None;
         let tt_has_quiet_move = tt_data.is_some_and(|data| {
@@ -752,7 +739,7 @@ impl<'a> Searcher<'a> {
         {
             let evaluation =
                 *static_eval.get_or_insert_with(|| self.evaluate_position(position, ply));
-            if evaluation - REVERSE_FUTILITY_MARGIN * depth >= beta {
+            if evaluation - REVERSE_FUTILITY_MARGIN * depth >= beta && position.has_legal_move() {
                 #[cfg(feature = "stats")]
                 {
                     self.statistics.futility_prunes += 1;
@@ -770,6 +757,7 @@ impl<'a> Searcher<'a> {
             && beta < mate_bound
             && has_meaningful_non_pawn_material(position)
             && *static_eval.get_or_insert_with(|| self.evaluate_position(position, ply)) >= beta
+            && position.has_legal_move()
         {
             #[cfg(feature = "stats")]
             {
@@ -799,6 +787,19 @@ impl<'a> Searcher<'a> {
                 }
                 return beta;
             }
+        }
+        let moves = position.legal_moves();
+        #[cfg(feature = "stats")]
+        {
+            self.statistics.move_generation_calls += 1;
+            self.statistics.moves_generated += moves.len() as u64;
+        }
+        if moves.is_empty() {
+            return if in_check {
+                -VALUE_MATE + ply as i32
+            } else {
+                VALUE_DRAW
+            };
         }
         let moving_color = position.side_to_move();
         let tt_move = tt_data.map(|data| data.best_move);

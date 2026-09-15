@@ -32,3 +32,14 @@ changes.
    zero anomaly. A pure throughput result needs no game claim.
 
 Failure removes the playing code while retaining the measured outcome.
+
+## Result
+
+The focused fail-low/fail-high/clamping regression passed. The candidate
+preserved the complete five-position hybrid depth-8 identity at 513,582 nodes
+and the exact five best-move/score signatures, so it did not qualify as a search
+change. Across 21 interleaved runs per frozen binary, parent median elapsed time
+was 0.461213 seconds and candidate median was 0.469116 seconds (-1.69%
+throughput). It failed the registered identity-preserving speed gate; no remote
+build or match was opened, and the playing code plus temporary test were
+removed.

@@ -31,6 +31,10 @@ const FORWARD_FUTILITY_MAX_DEPTH: i32 = 4;
 const FORWARD_FUTILITY_MARGIN: i32 = 100;
 const STATIC_EXCHANGE_PRUNING_MAX_DEPTH: i32 = 6;
 const STATIC_EXCHANGE_PRUNING_MARGIN: i32 = 100;
+const TACTICAL_CONFIRMATION_MIN_DEPTH: i32 = 5;
+const TACTICAL_CONFIRMATION_REDUCTION: i32 = 4;
+const TACTICAL_CONFIRMATION_MARGIN: i32 = 160;
+const TACTICAL_CONFIRMATION_MAX_MOVES: usize = 3;
 
 const fn late_move_pruning_threshold(depth: i32) -> usize {
     (3 + depth * depth) as usize
@@ -175,6 +179,9 @@ pub struct SearchStatistics {
     pub null_move_fail_highs: u64,
     pub null_move_cutoffs: u64,
     pub null_move_verifications: u64,
+    pub tactical_confirmation_attempts: u64,
+    pub tactical_confirmation_searches: u64,
+    pub tactical_confirmation_cutoffs: u64,
     pub lmr_reductions: u64,
     pub lmr_researches: u64,
     #[cfg(feature = "stats")]
@@ -239,6 +246,9 @@ impl SearchStatistics {
         self.null_move_fail_highs += other.null_move_fail_highs;
         self.null_move_cutoffs += other.null_move_cutoffs;
         self.null_move_verifications += other.null_move_verifications;
+        self.tactical_confirmation_attempts += other.tactical_confirmation_attempts;
+        self.tactical_confirmation_searches += other.tactical_confirmation_searches;
+        self.tactical_confirmation_cutoffs += other.tactical_confirmation_cutoffs;
         self.lmr_reductions += other.lmr_reductions;
         self.lmr_researches += other.lmr_researches;
         #[cfg(feature = "stats")]
@@ -720,7 +730,7 @@ impl<'a> Searcher<'a> {
         }
 
         let in_check = position.is_in_check(position.side_to_move());
-        let moves = position.legal_moves();
+        let mut moves = position.legal_moves();
         #[cfg(feature = "stats")]
         {
             self.statistics.move_generation_calls += 1;
@@ -803,6 +813,74 @@ impl<'a> Searcher<'a> {
         let moving_color = position.side_to_move();
         let tt_move = tt_data.map(|data| data.best_move);
         let ordering_preferred = tt_move.or(context.preferred);
+        if ply != 0
+            && !is_pv_node
+            && !context.in_null_subtree
+            && !in_check
+            && depth >= TACTICAL_CONFIRMATION_MIN_DEPTH
+            && beta > -mate_bound - TACTICAL_CONFIRMATION_MARGIN
+            && beta < mate_bound - TACTICAL_CONFIRMATION_MARGIN
+            && *static_eval.get_or_insert_with(|| self.evaluate_position(position, ply))
+                >= beta - TACTICAL_CONFIRMATION_MARGIN
+        {
+            #[cfg(feature = "stats")]
+            {
+                self.statistics.tactical_confirmation_attempts += 1;
+            }
+            let confirmation_beta = beta + TACTICAL_CONFIRMATION_MARGIN;
+            let mut tactical_picker = ordering::MovePicker::quiescence_with_context(
+                moves,
+                false,
+                self.killers[ply],
+                moving_color,
+                context.previous_to,
+            );
+            for _ in 0..TACTICAL_CONFIRMATION_MAX_MOVES {
+                let Some(mv) =
+                    tactical_picker.next_move_with_policy(position, &self.history, &self.policy)
+                else {
+                    break;
+                };
+                #[cfg(feature = "stats")]
+                {
+                    self.statistics.tactical_confirmation_searches += 1;
+                }
+                self.push_move_accumulator(position, mv, ply);
+                let undo = position.make_move(mv);
+                self.hashes.push(position.repetition_hash());
+                let mut score = -self.qsearch(
+                    position,
+                    ply + 1,
+                    -confirmation_beta,
+                    -confirmation_beta + 1,
+                    context.after_move(mv),
+                );
+                if score >= confirmation_beta {
+                    score = -self.negamax(
+                        position,
+                        depth - TACTICAL_CONFIRMATION_REDUCTION,
+                        ply + 1,
+                        -confirmation_beta,
+                        -confirmation_beta + 1,
+                        context.after_move(mv),
+                    );
+                }
+                self.hashes.pop();
+                position.unmake_move(mv, undo);
+                self.pop_accumulator(ply);
+                if self.stopped {
+                    return VALUE_DRAW;
+                }
+                if score >= confirmation_beta {
+                    #[cfg(feature = "stats")]
+                    {
+                        self.statistics.tactical_confirmation_cutoffs += 1;
+                    }
+                    return score;
+                }
+            }
+            moves = tactical_picker.into_moves();
+        }
         let can_futility_prune = ply != 0
             && !is_pv_node
             && !context.in_null_subtree
@@ -1519,6 +1597,37 @@ mod tests {
 
         assert!(score <= 500);
         assert!(searcher.statistics.futility_prunes > 0);
+        assert_eq!(position, original);
+    }
+
+    #[test]
+    fn tactical_confirmation_requires_quiescence_and_reduced_search() {
+        let mut position = Position::from_fen("6k1/8/8/3p4/4Q3/8/8/6K1 w - - 0 1")
+            .expect("winning-capture fixture must be valid");
+        let original = position.clone();
+        let stop = AtomicBool::new(false);
+        let mut searcher = Searcher::new(&stop);
+        let hashes = [position.repetition_hash()];
+        searcher.reset(
+            &mut position,
+            &SearchLimits::depth(5),
+            &hashes,
+            SearchSetup::normal(),
+        );
+
+        let score = searcher.negamax(
+            &mut position,
+            5,
+            1,
+            99,
+            100,
+            SearchContext::without_null(None),
+        );
+
+        assert!(score >= 100);
+        assert_eq!(searcher.statistics.tactical_confirmation_attempts, 1);
+        assert!(searcher.statistics.tactical_confirmation_searches > 0);
+        assert_eq!(searcher.statistics.tactical_confirmation_cutoffs, 1);
         assert_eq!(position, original);
     }
 

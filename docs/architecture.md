@@ -29,6 +29,14 @@ null moves all preserve the scalar full-refresh oracle. The engine
 implementation is intentionally independent from `tools/nnue-reference`. SIMD
 and default activation remain later evidence gates.
 
+The non-default `policy` feature reuses the registered SHEGERD-P1 additive
+tables as an optional CPU move-ordering signal. `PolicyFile` is fail-closed and
+classical ordering remains the default. REKHNE supplies the previous-move
+destination; SHEGERD reproduces the trainer's side normalization, material
+phase, piece codes and SEE buckets. The policy may only rank moves inside an
+existing MovePicker stage, so TT/PV priority, tactical SEE classification,
+killer stages and legal-move completeness remain authoritative.
+
 The engine has no runtime dependencies outside `std`. Strings, vectors, threads, and I/O remain at root/tool/protocol boundaries. A search node uses fixed move buffers and stack-based undo state.
 
 ## Position representation

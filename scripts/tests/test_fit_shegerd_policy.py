@@ -74,6 +74,12 @@ class FitShegerdPolicyTests(unittest.TestCase):
             )
             self.assertTrue(audit["ok"])
 
+            corrupted = bytearray((root / "first.bin").read_bytes())
+            corrupted[-1] ^= 1
+            (root / "corrupted.bin").write_bytes(corrupted)
+            with self.assertRaisesRegex(auditor.AuditError, "checksum"):
+                auditor.read_weights(root / "corrupted.bin")
+
     def test_rejects_noncontiguous_rows_and_holdout_paths(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

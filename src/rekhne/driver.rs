@@ -8,9 +8,9 @@ use std::{
 #[cfg(feature = "nnue")]
 use crate::sanj::nnue::AccumulatorPair;
 use crate::{
-    chess::{Move, MoveList, PieceType, Position},
+    chess::{Move, MoveList, PieceType, Position, Square},
     sanj,
-    shegerd::{fischer, history::HistoryTable, ordering},
+    shegerd::{MovePolicy, fischer, history::HistoryTable, ordering},
 };
 
 use super::{
@@ -43,6 +43,7 @@ const fn null_move_reduction(depth: i32) -> i32 {
 #[derive(Clone, Copy)]
 struct SearchContext {
     preferred: Option<Move>,
+    previous_to: Option<Square>,
     null_allowed: bool,
     in_null_subtree: bool,
 }
@@ -51,6 +52,7 @@ impl SearchContext {
     const fn normal(preferred: Option<Move>) -> Self {
         Self {
             preferred,
+            previous_to: None,
             null_allowed: true,
             in_null_subtree: false,
         }
@@ -60,14 +62,16 @@ impl SearchContext {
     const fn without_null(preferred: Option<Move>) -> Self {
         Self {
             preferred,
+            previous_to: None,
             null_allowed: false,
             in_null_subtree: false,
         }
     }
 
-    const fn after_move(self) -> Self {
+    fn after_move(self, mv: Move) -> Self {
         Self {
             preferred: None,
+            previous_to: Some(mv.to()),
             null_allowed: self.null_allowed,
             in_null_subtree: self.in_null_subtree,
         }
@@ -76,6 +80,7 @@ impl SearchContext {
     const fn after_null(self) -> Self {
         Self {
             preferred: None,
+            previous_to: None,
             null_allowed: false,
             in_null_subtree: true,
         }
@@ -298,6 +303,7 @@ pub struct Searcher<'a> {
     killers: [[Move; 2]; MAX_PLY],
     history: HistoryTable,
     evaluator: sanj::Evaluator,
+    policy: MovePolicy,
     #[cfg(feature = "nnue")]
     accumulators: Vec<AccumulatorPair>,
     statistics: SearchStatistics,
@@ -324,14 +330,24 @@ impl<'a> Searcher<'a> {
         Self::with_evaluator_context(stop, tt, None, None, evaluator)
     }
 
+    pub fn with_table_evaluator_and_policy(
+        stop: &'a AtomicBool,
+        tt: TranspositionTable,
+        evaluator: sanj::Evaluator,
+        policy: MovePolicy,
+    ) -> Self {
+        Self::with_components(stop, tt, None, None, evaluator, policy)
+    }
+
     pub(crate) fn with_parallel_context_and_evaluator(
         stop: &'a AtomicBool,
         tt: TranspositionTable,
         global_nodes: Option<&'a AtomicU64>,
         progress: &'a SearchProgress,
         evaluator: sanj::Evaluator,
+        policy: MovePolicy,
     ) -> Self {
-        Self::with_evaluator_context(stop, tt, global_nodes, Some(progress), evaluator)
+        Self::with_components(stop, tt, global_nodes, Some(progress), evaluator, policy)
     }
 
     fn with_context(
@@ -356,6 +372,24 @@ impl<'a> Searcher<'a> {
         progress: Option<&'a SearchProgress>,
         evaluator: sanj::Evaluator,
     ) -> Self {
+        Self::with_components(
+            stop,
+            tt,
+            global_nodes,
+            progress,
+            evaluator,
+            MovePolicy::NONE,
+        )
+    }
+
+    fn with_components(
+        stop: &'a AtomicBool,
+        tt: TranspositionTable,
+        global_nodes: Option<&'a AtomicU64>,
+        progress: Option<&'a SearchProgress>,
+        evaluator: sanj::Evaluator,
+        policy: MovePolicy,
+    ) -> Self {
         Self {
             stop,
             global_nodes,
@@ -373,6 +407,7 @@ impl<'a> Searcher<'a> {
             killers: [[Move::NONE; 2]; MAX_PLY],
             history: HistoryTable::default(),
             evaluator,
+            policy,
             #[cfg(feature = "nnue")]
             accumulators: Vec::with_capacity(MAX_PLY),
             statistics: SearchStatistics::default(),
@@ -775,13 +810,18 @@ impl<'a> Searcher<'a> {
             && alpha < mate_bound
             && has_meaningful_non_pawn_material(position)
             && self.evaluate_position(position, ply) + FORWARD_FUTILITY_MARGIN * depth <= alpha;
-        let mut picker =
-            ordering::MovePicker::main(moves, ordering_preferred, self.killers[ply], moving_color);
+        let mut picker = ordering::MovePicker::main_with_context(
+            moves,
+            ordering_preferred,
+            self.killers[ply],
+            moving_color,
+            context.previous_to,
+        );
 
         let mut best = -VALUE_INFINITE;
         let mut best_move = Move::NONE;
         let mut searched_moves = MoveList::new();
-        while let Some(mv) = picker.next_move(position, &self.history) {
+        while let Some(mv) = picker.next_move_with_policy(position, &self.history, &self.policy) {
             let move_index = searched_moves.len();
             if ply != 0
                 && !is_pv_node
@@ -877,7 +917,7 @@ impl<'a> Searcher<'a> {
                     ply + 1,
                     -beta,
                     -alpha,
-                    context.after_move(),
+                    context.after_move(mv),
                 );
             } else {
                 #[cfg(feature = "stats")]
@@ -895,7 +935,7 @@ impl<'a> Searcher<'a> {
                         ply + 1,
                         -alpha - 1,
                         -alpha,
-                        context.after_move(),
+                        context.after_move(mv),
                     );
                     if score > alpha {
                         #[cfg(feature = "stats")]
@@ -909,7 +949,7 @@ impl<'a> Searcher<'a> {
                             ply + 1,
                             -alpha - 1,
                             -alpha,
-                            context.after_move(),
+                            context.after_move(mv),
                         );
                     }
                 } else {
@@ -919,7 +959,7 @@ impl<'a> Searcher<'a> {
                         ply + 1,
                         -alpha - 1,
                         -alpha,
-                        context.after_move(),
+                        context.after_move(mv),
                     );
                 }
                 if score > alpha && score < beta {
@@ -933,7 +973,7 @@ impl<'a> Searcher<'a> {
                         ply + 1,
                         -beta,
                         -alpha,
-                        context.after_move(),
+                        context.after_move(mv),
                     );
                 }
             }
@@ -1046,11 +1086,16 @@ impl<'a> Searcher<'a> {
             };
         }
         let moving_color = position.side_to_move();
-        let mut picker =
-            ordering::MovePicker::quiescence(moves, in_check, self.killers[ply], moving_color);
+        let mut picker = ordering::MovePicker::quiescence_with_context(
+            moves,
+            in_check,
+            self.killers[ply],
+            moving_color,
+            context.previous_to,
+        );
         #[cfg(feature = "stats")]
         let mut exhausted = true;
-        while let Some(mv) = picker.next_move(position, &self.history) {
+        while let Some(mv) = picker.next_move_with_policy(position, &self.history, &self.policy) {
             #[cfg(feature = "stats")]
             {
                 self.statistics.moves_searched += 1;
@@ -1069,7 +1114,7 @@ impl<'a> Searcher<'a> {
             if !context.in_null_subtree {
                 self.hashes.push(position.repetition_hash());
             }
-            let score = -self.qsearch(position, ply + 1, -beta, -alpha, context.after_move());
+            let score = -self.qsearch(position, ply + 1, -beta, -alpha, context.after_move(mv));
             if !context.in_null_subtree {
                 self.hashes.pop();
             }

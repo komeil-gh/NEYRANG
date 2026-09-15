@@ -265,6 +265,37 @@ done
 
 echo "per-engine EvalFile configuration test passed"
 
+policy_meta_out="$scratch/policy.meta.txt"
+policy_output="$(
+    DRY_RUN=1 \
+    FASTCHESS_BIN=true \
+    ENGINE_A=/usr/bin/true \
+    ENGINE_B=/usr/bin/true \
+    ENGINE_A_POLICY_FILE="$network_fixture" \
+    OPENINGS_FILE="$repo_root/scripts/openings.epd" \
+    GAMES=10 \
+    META_OUT="$policy_meta_out" \
+    PGN_OUT="$scratch/policy.pgn" \
+    "$script_dir/match.sh"
+)"
+
+if [[ "$policy_output" != *"name=NEYRANG-new option.PolicyFile=$network_fixture"* ]]; then
+    echo "policy dry-run output is missing the candidate PolicyFile" >&2
+    exit 1
+fi
+for expected in \
+    "engine_a_policy_file=$network_fixture" \
+    "engine_a_policy_file_sha256=$network_sha256" \
+    "engine_b_policy_file=" \
+    "engine_b_policy_file_sha256="; do
+    if ! grep -Fqx "$expected" "$policy_meta_out"; then
+        echo "policy metadata is missing: $expected" >&2
+        exit 1
+    fi
+done
+
+echo "per-engine PolicyFile configuration test passed"
+
 compat_meta_out="$scratch/compat.meta.txt"
 compat_output="$(
     DRY_RUN=1 \

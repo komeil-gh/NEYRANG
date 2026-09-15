@@ -99,6 +99,20 @@ Generated games, corpora, networks, profiles, machine inventories, absolute
 paths, credentials, and host-specific launch files belong under ignored local
 directories such as `testing/private/`, never in Git.
 
+The optional policy build is checked with:
+
+```bash
+cargo test --locked --all-features
+python3 -m unittest scripts.tests.test_fit_shegerd_policy
+scripts/test-match-config.sh
+```
+
+`ENGINE_A_POLICY_FILE` and `ENGINE_B_POLICY_FILE` pass separately hashed
+`PolicyFile` artifacts through the paired-match runner. Fast screens use at
+most one concurrent game per physical core, one engine thread, paired colors,
+ponder off, and fixed nodes. Parallelism may shorten evidence collection but
+does not increase either engine's registered resources.
+
 `scripts.teacher_export` creates the complete parent chain for a new shard
 output, but still refuses to reuse an existing output directory. Its focused
 regression check is:

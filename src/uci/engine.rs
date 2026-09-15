@@ -1,4 +1,4 @@
-#[cfg(feature = "nnue")]
+#[cfg(any(feature = "nnue", feature = "policy"))]
 use std::fs;
 use std::{
     io::{self, BufRead, Write},
@@ -19,6 +19,7 @@ use crate::{
         search_parallel_with_evaluator, time::TimeManager, tt::TranspositionTable,
     },
     sanj,
+    shegerd::MovePolicy,
 };
 
 use super::parser::{Command, GoParameters, PositionSpecification, parse};
@@ -57,6 +58,7 @@ struct UciEngine {
     active: Option<ActiveSearch>,
     table: Option<TranspositionTable>,
     evaluator: sanj::Evaluator,
+    policy: MovePolicy,
 }
 
 impl UciEngine {
@@ -72,6 +74,7 @@ impl UciEngine {
             active: None,
             table: Some(table_for(DEFAULT_HASH_MB, 1)),
             evaluator: sanj::Evaluator::classical(),
+            policy: MovePolicy::NONE,
         }
     }
 
@@ -145,6 +148,8 @@ impl UciEngine {
         ))?;
         #[cfg(feature = "nnue")]
         send_line("option name EvalFile type string default <empty>")?;
+        #[cfg(feature = "policy")]
+        send_line("option name PolicyFile type string default <empty>")?;
         send_line("uciok")
     }
 
@@ -216,6 +221,21 @@ impl UciEngine {
                     table.clear();
                 }
             }
+            #[cfg(feature = "policy")]
+            "policyfile" => {
+                self.policy = if value.is_empty() || value == "<empty>" {
+                    MovePolicy::NONE
+                } else {
+                    let bytes = fs::read(value)
+                        .map_err(|error| format!("cannot read PolicyFile '{value}': {error}"))?;
+                    let network = crate::shegerd::policy::Network::from_bytes(&bytes)
+                        .map_err(|error| format!("invalid PolicyFile '{value}': {error}"))?;
+                    MovePolicy::from_network(network)
+                };
+                if let Some(table) = &mut self.table {
+                    table.clear();
+                }
+            }
             _ => return Err(format!("unknown option '{name}'")),
         }
         Ok(())
@@ -237,6 +257,7 @@ impl UciEngine {
         let supervisor_stop = Arc::clone(&stop);
         let threads = self.threads;
         let evaluator = self.evaluator.clone();
+        let policy = self.policy.clone();
         let deadline = limits.hard_time.map(|hard| started + hard);
         let table = self
             .table
@@ -247,8 +268,12 @@ impl UciEngine {
             let worker_stop = Arc::clone(&supervisor_stop);
             let child = thread::spawn(move || {
                 let (result, table) = if threads == 1 {
-                    let mut searcher =
-                        Searcher::with_table_and_evaluator(&worker_stop, table, evaluator);
+                    let mut searcher = Searcher::with_table_evaluator_and_policy(
+                        &worker_stop,
+                        table,
+                        evaluator,
+                        policy,
+                    );
                     let result = searcher.search_started(
                         &mut position,
                         &limits,
@@ -266,7 +291,7 @@ impl UciEngine {
                         &game_hashes,
                         &worker_stop,
                         table,
-                        ParallelOptions::new(threads, evaluator, started),
+                        ParallelOptions::new(threads, evaluator, started).with_policy(policy),
                         |info| {
                             let _ = sender.send(SearchMessage::Info(info.clone()));
                         },

@@ -18,6 +18,13 @@ Main-search move ordering is delivered progressively by a fixed-capacity staged 
 4. quiet history
 5. losing captures
 
+An explicit `policy` build may add a bounded six-table SHEGERD score inside
+these stages. It reuses the SEE value already computed for tactical moves and
+the previous move's destination for contextual quiet ordering. It never moves a
+candidate across the TT/PV, good-tactical, killer, quiet, or losing-tactical
+boundaries. With no `PolicyFile`, the registered classical ordering is
+unchanged.
+
 Each stage is initialized only when search reaches it; a cutoff can therefore avoid scoring every later quiet or tactical move. The picker suppresses preferred/killer duplicates and returns every legal candidate at most once. Tactical classification still uses exact SEE. The oracle-equivalent `see_ge` primitive is retained and tested, but the experimental lazy main-search caller was reverted, so current production ordering does not silently substitute threshold classification for exact exchange scores.
 
 SEE builds one compact exchange board, computes attackers to the fixed target once, then carries piece/color occupancy and the attacker set through each recapture. Vacated sources reveal only the relevant diagonal or orthogonal slider x-rays, and the accepted legal least-valuable-attacker state is prepared once. Full king safety remains authoritative for every candidate; promotions, en passant, absolute pins, illegal king recaptures, piece-kind/Lsb LVA order, exact scores, and threshold answers retain their previous semantics. The complete pre-G1 algorithm remains a test-only oracle. Qsearch retains exact SEE classification and its established losing-capture pruning.

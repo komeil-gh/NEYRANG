@@ -103,6 +103,7 @@ versioned local builds on macOS.
 | `Threads` | Accepted; search uses one thread | Defaults to 1; higher values enable Lazy SMP |
 | `Move Overhead` | 10 ms by default | 30 ms by default |
 | `EvalFile` | Not available | Available with the `nnue` feature; empty selects classical evaluation |
+| `PolicyFile` | Not available | Available with the `policy` feature; empty preserves classical ordering |
 
 For a protocol check in a POSIX shell:
 
@@ -231,3 +232,18 @@ No NNUE network or training dataset is bundled with the engine. Experimental
 networks and corpora mentioned in the development records are separate local
 artifacts, not release assets; any future distributed artifact must state its
 own license and data provenance.
+
+### Experimental move policy
+
+The `policy` feature adds a CPU-only, opt-in SHEGERD policy used strictly to
+rank moves inside the existing MovePicker stages:
+
+```bash
+cargo build --release --locked --features policy
+```
+
+Set `PolicyFile` to a version-2 artifact produced by
+`scripts/fit-shegerd-policy.py`. The loader verifies the format, table sizes,
+weight bounds, payload length, and checksum. Leaving the option empty preserves
+the classical search tree. Policy artifacts remain separate private research
+outputs until a paired-game gate accepts one.

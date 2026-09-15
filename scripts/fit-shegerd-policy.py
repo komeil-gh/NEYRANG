@@ -10,6 +10,7 @@ import math
 import os
 import struct
 import sys
+import zlib
 from array import array
 from collections import defaultdict
 from dataclasses import dataclass
@@ -34,7 +35,7 @@ OFFSETS: tuple[int, ...] = tuple(
 )
 TOTAL_WEIGHTS = sum(FAMILY_SIZES)
 MAGIC = b"NYRSHGP1"
-BINARY_HEADER = struct.Struct("<8s7I")
+BINARY_HEADER = struct.Struct("<8s8I")
 EPOCHS = 12
 LEARNING_RATE = 0.15
 ADAGRAD_EPSILON = 1e-8
@@ -286,7 +287,8 @@ def quantized_payload(weights: list[int]) -> bytes:
     packed = array("h", weights)
     if sys.byteorder != "little":
         packed.byteswap()
-    return BINARY_HEADER.pack(MAGIC, 1, *FAMILY_SIZES) + packed.tobytes()
+    payload = packed.tobytes()
+    return BINARY_HEADER.pack(MAGIC, 2, *FAMILY_SIZES, zlib.crc32(payload)) + payload
 
 
 def write_once(path: Path, content: bytes) -> None:

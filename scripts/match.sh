@@ -11,6 +11,8 @@ engine_a_name="${ENGINE_A_NAME:-NEYRANG-new}"
 engine_b_name="${ENGINE_B_NAME:-NEYRANG-reference}"
 engine_a_eval_file="${ENGINE_A_EVAL_FILE:-}"
 engine_b_eval_file="${ENGINE_B_EVAL_FILE:-}"
+engine_a_policy_file="${ENGINE_A_POLICY_FILE:-}"
+engine_b_policy_file="${ENGINE_B_POLICY_FILE:-}"
 games="${GAMES:-200}"
 concurrency="${CONCURRENCY:-1}"
 time_control="${TC:-10+0.1}"
@@ -166,6 +168,16 @@ for eval_file in "$engine_a_eval_file" "$engine_b_eval_file"; do
         exit 2
     fi
 done
+for policy_file in "$engine_a_policy_file" "$engine_b_policy_file"; do
+    if [[ -n "$policy_file" && ! -r "$policy_file" ]]; then
+        echo "PolicyFile is not readable: $policy_file" >&2
+        exit 2
+    fi
+    if [[ "$policy_file" == *$'\n'* || "$policy_file" == *$'\r'* ]]; then
+        echo "PolicyFile paths must be single-line values" >&2
+        exit 2
+    fi
+done
 if [[ "$fastchess_bin" == */* ]]; then
     fastchess_path="$fastchess_bin"
 else
@@ -199,11 +211,19 @@ engine_a_sha256="$(sha256_file "$engine_a")"
 engine_b_sha256="$(sha256_file "$engine_b")"
 engine_a_eval_file_sha256=""
 engine_b_eval_file_sha256=""
+engine_a_policy_file_sha256=""
+engine_b_policy_file_sha256=""
 if [[ -n "$engine_a_eval_file" ]]; then
     engine_a_eval_file_sha256="$(sha256_file "$engine_a_eval_file")"
 fi
 if [[ -n "$engine_b_eval_file" ]]; then
     engine_b_eval_file_sha256="$(sha256_file "$engine_b_eval_file")"
+fi
+if [[ -n "$engine_a_policy_file" ]]; then
+    engine_a_policy_file_sha256="$(sha256_file "$engine_a_policy_file")"
+fi
+if [[ -n "$engine_b_policy_file" ]]; then
+    engine_b_policy_file_sha256="$(sha256_file "$engine_b_policy_file")"
 fi
 openings_sha256="$(sha256_file "$openings_file")"
 fastchess_sha256="$(sha256_file "$fastchess_path")"
@@ -231,6 +251,9 @@ command=(
 if [[ -n "$engine_a_eval_file" ]]; then
     command+=("option.EvalFile=$engine_a_eval_file")
 fi
+if [[ -n "$engine_a_policy_file" ]]; then
+    command+=("option.PolicyFile=$engine_a_policy_file")
+fi
 if [[ "$thread_mode" == "per-engine" ]]; then
     command+=("option.Threads=$engine_a_threads")
 fi
@@ -242,6 +265,9 @@ command+=(
 )
 if [[ -n "$engine_b_eval_file" ]]; then
     command+=("option.EvalFile=$engine_b_eval_file")
+fi
+if [[ -n "$engine_b_policy_file" ]]; then
+    command+=("option.PolicyFile=$engine_b_policy_file")
 fi
 if [[ "$thread_mode" == "per-engine" ]]; then
     command+=("option.Threads=$engine_b_threads")
@@ -288,12 +314,16 @@ fi
     echo "engine_a_sha256=$engine_a_sha256"
     echo "engine_a_eval_file=$engine_a_eval_file"
     echo "engine_a_eval_file_sha256=$engine_a_eval_file_sha256"
+    echo "engine_a_policy_file=$engine_a_policy_file"
+    echo "engine_a_policy_file_sha256=$engine_a_policy_file_sha256"
     echo "engine_b=$engine_b"
     echo "engine_b_name=$engine_b_name"
     echo "engine_b_git_sha=$engine_b_git_sha"
     echo "engine_b_sha256=$engine_b_sha256"
     echo "engine_b_eval_file=$engine_b_eval_file"
     echo "engine_b_eval_file_sha256=$engine_b_eval_file_sha256"
+    echo "engine_b_policy_file=$engine_b_policy_file"
+    echo "engine_b_policy_file_sha256=$engine_b_policy_file_sha256"
     echo "fastchess=$fastchess_path"
     echo "fastchess_version=$fastchess_version"
     echo "fastchess_sha256=$fastchess_sha256"

@@ -1,6 +1,6 @@
-use crate::chess::{Color, Move, MoveList, PieceType, Position};
+use crate::chess::{Color, Move, MoveList, PieceType, Position, Square};
 
-use super::{history::HistoryTable, see::see};
+use super::{MovePolicy, history::HistoryTable, see::see};
 
 const PIECE_VALUE: [i32; 6] = [100, 320, 330, 500, 900, 20_000];
 const GOOD_TACTICAL_SCORE: i32 = 200_000;
@@ -61,6 +61,7 @@ pub(crate) struct MovePicker {
     preferred: Option<Move>,
     killers: [Move; 2],
     color: Color,
+    previous_to: Option<Square>,
     tactical_only: bool,
     stage: Stage,
     stage_initialized: bool,
@@ -70,22 +71,44 @@ pub(crate) struct MovePicker {
 }
 
 impl MovePicker {
+    #[cfg(test)]
     pub(crate) fn main(
         moves: MoveList,
         preferred: Option<Move>,
         killers: [Move; 2],
         color: Color,
     ) -> Self {
-        Self::new(moves, preferred, killers, color, false)
+        Self::main_with_context(moves, preferred, killers, color, None)
     }
 
+    pub(crate) fn main_with_context(
+        moves: MoveList,
+        preferred: Option<Move>,
+        killers: [Move; 2],
+        color: Color,
+        previous_to: Option<Square>,
+    ) -> Self {
+        Self::new(moves, preferred, killers, color, previous_to, false)
+    }
+
+    #[cfg(test)]
     pub(crate) fn quiescence(
         moves: MoveList,
         in_check: bool,
         killers: [Move; 2],
         color: Color,
     ) -> Self {
-        Self::new(moves, None, killers, color, !in_check)
+        Self::quiescence_with_context(moves, in_check, killers, color, None)
+    }
+
+    pub(crate) fn quiescence_with_context(
+        moves: MoveList,
+        in_check: bool,
+        killers: [Move; 2],
+        color: Color,
+        previous_to: Option<Square>,
+    ) -> Self {
+        Self::new(moves, None, killers, color, previous_to, !in_check)
     }
 
     fn new(
@@ -93,6 +116,7 @@ impl MovePicker {
         preferred: Option<Move>,
         killers: [Move; 2],
         color: Color,
+        previous_to: Option<Square>,
         tactical_only: bool,
     ) -> Self {
         Self {
@@ -103,6 +127,7 @@ impl MovePicker {
             preferred,
             killers,
             color,
+            previous_to,
             tactical_only,
             stage: Stage::Preferred,
             stage_initialized: false,
@@ -112,10 +137,20 @@ impl MovePicker {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn next_move(
         &mut self,
         position: &Position,
         history: &HistoryTable,
+    ) -> Option<Move> {
+        self.next_move_with_policy(position, history, &MovePolicy::NONE)
+    }
+
+    pub(crate) fn next_move_with_policy(
+        &mut self,
+        position: &Position,
+        history: &HistoryTable,
+        policy: &MovePolicy,
     ) -> Option<Move> {
         self.last_move_was_scored = false;
         self.last_tactical_see = None;
@@ -144,7 +179,7 @@ impl MovePicker {
                         {
                             self.statistics.good_tactical_stage_visits += 1;
                         }
-                        self.classify_tacticals(position);
+                        self.classify_tacticals(position, policy);
                         self.stage_initialized = true;
                     }
                     if let Some(mv) = self.pick_best(MoveClass::GoodTactical) {
@@ -163,7 +198,7 @@ impl MovePicker {
                         {
                             self.statistics.killer_stage_visits += 1;
                         }
-                        self.classify_killers(history);
+                        self.classify_killers(position, history, policy);
                         self.stage_initialized = true;
                     }
                     if let Some(mv) = self.pick_best(MoveClass::Killer) {
@@ -178,7 +213,7 @@ impl MovePicker {
                         {
                             self.statistics.quiet_stage_visits += 1;
                         }
-                        self.classify_quiets(history);
+                        self.classify_quiets(position, history, policy);
                         self.stage_initialized = true;
                     }
                     if let Some(mv) = self.pick_best(MoveClass::Quiet) {
@@ -248,14 +283,20 @@ impl MovePicker {
             .map(|(index, _)| index)
     }
 
-    fn classify_tacticals(&mut self, position: &Position) {
+    fn classify_tacticals(&mut self, position: &Position, policy: &MovePolicy) {
         for (index, &mv) in self.moves.iter().enumerate() {
             if self.classes[index] != MoveClass::Unclassified
                 || (!mv.is_capture() && !mv.is_promotion())
             {
                 continue;
             }
-            let (score, is_good, exchange) = tactical_score(position, mv, &mut self.statistics);
+            let (score, is_good, exchange) = tactical_score_with_policy(
+                position,
+                mv,
+                self.previous_to,
+                policy,
+                &mut self.statistics,
+            );
             self.scores[index] = score;
             self.exchanges[index] = exchange;
             self.classes[index] = if is_good {
@@ -267,12 +308,25 @@ impl MovePicker {
         }
     }
 
-    fn classify_killers(&mut self, history: &HistoryTable) {
+    fn classify_killers(
+        &mut self,
+        position: &Position,
+        history: &HistoryTable,
+        policy: &MovePolicy,
+    ) {
         for (index, &mv) in self.moves.iter().enumerate() {
             if self.classes[index] != MoveClass::Unclassified || !self.killers.contains(&mv) {
                 continue;
             }
-            self.scores[index] = quiet_score(mv, self.killers, history, self.color);
+            self.scores[index] = quiet_score_with_policy(
+                position,
+                mv,
+                self.killers,
+                history,
+                self.color,
+                self.previous_to,
+                policy,
+            );
             self.classes[index] = MoveClass::Killer;
             #[cfg(feature = "stats")]
             {
@@ -281,12 +335,25 @@ impl MovePicker {
         }
     }
 
-    fn classify_quiets(&mut self, history: &HistoryTable) {
+    fn classify_quiets(
+        &mut self,
+        position: &Position,
+        history: &HistoryTable,
+        policy: &MovePolicy,
+    ) {
         for (index, &mv) in self.moves.iter().enumerate() {
             if self.classes[index] != MoveClass::Unclassified {
                 continue;
             }
-            self.scores[index] = quiet_score(mv, self.killers, history, self.color);
+            self.scores[index] = quiet_score_with_policy(
+                position,
+                mv,
+                self.killers,
+                history,
+                self.color,
+                self.previous_to,
+                policy,
+            );
             self.classes[index] = MoveClass::Quiet;
             #[cfg(feature = "stats")]
             {
@@ -315,9 +382,20 @@ impl MovePicker {
     }
 }
 
+#[cfg(test)]
 fn tactical_score(
     position: &Position,
     mv: Move,
+    _statistics: &mut OrderingStatistics,
+) -> (i32, bool, i32) {
+    tactical_score_with_policy(position, mv, None, &MovePolicy::NONE, _statistics)
+}
+
+fn tactical_score_with_policy(
+    position: &Position,
+    mv: Move,
+    previous_to: Option<Square>,
+    policy: &MovePolicy,
     _statistics: &mut OrderingStatistics,
 ) -> (i32, bool, i32) {
     #[cfg(feature = "stats")]
@@ -350,7 +428,11 @@ fn tactical_score(
             _statistics.good_captures += 1;
         }
         (
-            GOOD_TACTICAL_SCORE + promotion_bonus + mvv_lva + exchange,
+            GOOD_TACTICAL_SCORE
+                + promotion_bonus
+                + mvv_lva
+                + exchange
+                + policy.score(position, mv, previous_to, exchange),
             true,
             exchange,
         )
@@ -359,7 +441,14 @@ fn tactical_score(
         {
             _statistics.bad_captures += 1;
         }
-        (BAD_CAPTURE_SCORE + mvv_lva + exchange, false, exchange)
+        (
+            BAD_CAPTURE_SCORE
+                + mvv_lva
+                + exchange
+                + policy.score(position, mv, previous_to, exchange),
+            false,
+            exchange,
+        )
     }
 }
 
@@ -374,6 +463,18 @@ fn quiet_score(mv: Move, killers: [Move; 2], history: &HistoryTable, color: Colo
         score += 80_000;
     }
     score + history.score(color, mv)
+}
+
+fn quiet_score_with_policy(
+    position: &Position,
+    mv: Move,
+    killers: [Move; 2],
+    history: &HistoryTable,
+    color: Color,
+    previous_to: Option<Square>,
+    policy: &MovePolicy,
+) -> i32 {
+    quiet_score(mv, killers, history, color) + policy.score(position, mv, previous_to, 0)
 }
 
 #[cfg(test)]
@@ -565,6 +666,33 @@ mod tests {
                 1
             );
         }
+    }
+
+    #[cfg(feature = "policy")]
+    #[test]
+    fn active_policy_ranks_quiets_inside_their_existing_stage() {
+        use crate::shegerd::{MovePolicy, policy::Network};
+
+        let position = Position::startpos();
+        let e2e4 = position
+            .clone()
+            .find_legal_move("e2e4")
+            .expect("fixture move is legal");
+        let mut weights = vec![0_i16; 8697];
+        weights[e2e4.from().index() * 64 + e2e4.to().index()] = 128;
+        let policy = MovePolicy::from_network(Network::from_test_weights(weights));
+        let history = HistoryTable::default();
+        let mut picker = MovePicker::main(
+            position.clone().legal_moves(),
+            None,
+            [Move::NONE; 2],
+            position.side_to_move(),
+        );
+
+        assert_eq!(
+            picker.next_move_with_policy(&position, &history, &policy),
+            Some(e2e4)
+        );
     }
 
     #[test]

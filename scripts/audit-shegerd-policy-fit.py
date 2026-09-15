@@ -9,6 +9,7 @@ import json
 import math
 import struct
 import sys
+import zlib
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,7 +25,7 @@ HEADER = (
 )
 FAMILY_SIZES = (64 * 64, 6 * 64, 7 * 7, 3, 65 * 64, 5)
 OFFSETS = tuple(sum(FAMILY_SIZES[:index]) for index in range(len(FAMILY_SIZES)))
-BINARY_HEADER = struct.Struct("<8s7I")
+BINARY_HEADER = struct.Struct("<8s8I")
 MAGIC = b"NYRSHGP1"
 
 
@@ -143,13 +144,20 @@ def read_weights(path: Path) -> tuple[int, ...]:
     payload = path.read_bytes()
     if len(payload) < BINARY_HEADER.size:
         raise AuditError("quantized artifact is truncated")
-    magic, version, *sizes = BINARY_HEADER.unpack_from(payload)
-    if magic != MAGIC or version != 1 or tuple(sizes) != FAMILY_SIZES:
+    magic, version, *header_values = BINARY_HEADER.unpack_from(payload)
+    sizes, expected_checksum = header_values[:-1], header_values[-1]
+    if magic != MAGIC or version != 2 or tuple(sizes) != FAMILY_SIZES:
         raise AuditError("quantized artifact header differs")
     count = sum(FAMILY_SIZES)
     if len(payload) != BINARY_HEADER.size + count * 2:
         raise AuditError("quantized artifact length differs")
-    return struct.unpack_from(f"<{count}h", payload, BINARY_HEADER.size)
+    weights = payload[BINARY_HEADER.size:]
+    if zlib.crc32(weights) != expected_checksum:
+        raise AuditError("quantized artifact checksum differs")
+    values = struct.unpack_from(f"<{count}h", weights)
+    if any(abs(value) > 128 for value in values):
+        raise AuditError("quantized artifact contains an out-of-range weight")
+    return values
 
 
 def candidate_score(candidate: Candidate, weights: tuple[int, ...]) -> int:

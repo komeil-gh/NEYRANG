@@ -6,6 +6,7 @@ use std::{
 use crate::{
     chess::{Move, Position},
     sanj,
+    shegerd::MovePolicy,
 };
 
 use super::{
@@ -16,6 +17,7 @@ use super::{
 pub(crate) struct ParallelOptions {
     threads: usize,
     evaluator: sanj::Evaluator,
+    policy: MovePolicy,
     started: Instant,
 }
 
@@ -24,8 +26,14 @@ impl ParallelOptions {
         Self {
             threads,
             evaluator,
+            policy: MovePolicy::NONE,
             started,
         }
+    }
+
+    pub(crate) fn with_policy(mut self, policy: MovePolicy) -> Self {
+        self.policy = policy;
+        self
     }
 }
 
@@ -68,6 +76,7 @@ where
     let ParallelOptions {
         threads,
         evaluator,
+        policy,
         started,
     } = options;
     assert!(threads > 1, "parallel search requires at least two workers");
@@ -88,6 +97,7 @@ where
             let worker_table = table.shared_handle();
             let worker_global_nodes = global_nodes.as_ref();
             let worker_evaluator = evaluator.clone();
+            let worker_policy = policy.clone();
             let preferred = if root_moves.is_empty() {
                 None
             } else {
@@ -102,6 +112,7 @@ where
                         worker_global_nodes,
                         worker_progress,
                         worker_evaluator,
+                        worker_policy,
                     );
                     searcher.search_prepared(
                         &mut worker_position,
@@ -122,6 +133,7 @@ where
             global_nodes.as_ref(),
             &progress[0],
             evaluator,
+            policy,
         );
         let main_result = main_searcher.search_prepared(
             &mut main_position,

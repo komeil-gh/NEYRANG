@@ -29,3 +29,8 @@ trees, scores, best moves, and checksums. Across 21 interleaved hybrid depth-8
 runs per binary, median time fell from 0.454067 seconds to 0.443108 seconds, a
 2.473% throughput improvement. The candidate passed the registered gate and is
 retained.
+
+The target Windows node independently preserved the pure-N7 depth-8 identity
+at 1,018,755 nodes and checksum `9f2a4572c73982f7`. Across 21 interleaved runs
+per binary, median time fell from 840 ms to 821 ms, a 2.314% improvement. The
+private evidence is retained under `runs/h4c-native` on the test node.

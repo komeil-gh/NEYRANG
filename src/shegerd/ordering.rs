@@ -241,6 +241,12 @@ impl MovePicker {
         }
     }
 
+    pub(crate) fn skip_quiet_moves(&mut self) {
+        if self.stage == Stage::Quiet {
+            self.advance(Stage::BadTactical);
+        }
+    }
+
     #[inline]
     #[cfg(any(feature = "stats", test))]
     pub(crate) const fn last_move_was_scored(&self) -> bool {
@@ -599,6 +605,18 @@ mod tests {
         assert!(!rest.contains(&preferred));
         #[cfg(feature = "stats")]
         assert!(picker.statistics().see_calls > 0);
+    }
+
+    #[test]
+    fn skip_quiet_moves_advances_to_the_next_stage() {
+        let position = Position::startpos();
+        let moves = position.clone().legal_moves();
+        let mut picker = MovePicker::main(moves, None, [Move::NONE; 2], position.side_to_move());
+        let history = HistoryTable::default();
+
+        assert!(picker.next_move(&position, &history).is_some());
+        picker.skip_quiet_moves();
+        assert!(picker.next_move(&position, &history).is_none());
     }
 
     #[test]

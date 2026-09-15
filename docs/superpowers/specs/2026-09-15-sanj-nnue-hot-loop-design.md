@@ -29,3 +29,9 @@ preserved the five-position hybrid tree at depth 5 (37,039 nodes) and depth 8
 interleaved native runs per binary, median depth-8 wall time fell from
 0.492566 seconds to 0.455146 seconds, an 8.222% throughput improvement. The
 candidate passed the registered gate and is retained.
+
+The target Windows node independently preserved the pure-N7 depth-8 identity
+at 1,018,755 nodes and checksum `9f2a4572c73982f7`. Over 21 interleaved runs
+per binary, median time fell from 1,158 ms to 840 ms, a 37.857% pure-N7
+throughput improvement. The private evidence is retained under
+`runs/h4a-native` on the test node.

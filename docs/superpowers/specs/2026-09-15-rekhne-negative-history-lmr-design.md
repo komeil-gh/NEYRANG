@@ -39,3 +39,15 @@ their existing protection.
    screen; external progress requires exceeding the retained 26.56% score.
 
 Failure removes the playing code while preserving the measured result.
+
+## Outcome
+
+Rejected before remote testing. The reduction-boundary regression, all 143
+Rust tests, the 11-position tactical suite, start-position perft 5, formatting,
+and Clippy passed. The five-position hybrid depth-8 workload was nevertheless
+inert: H4u and H4m both searched 513,582 nodes with identical move/score
+signatures.
+
+At `-HistoryTable::MAX_SCORE / 8`, the extra reduction did not activate in the
+representative search. The playing code and temporary regression were removed;
+no remote games ran.

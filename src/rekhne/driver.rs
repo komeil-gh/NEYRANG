@@ -44,6 +44,8 @@ const fn null_move_reduction(depth: i32) -> i32 {
 struct SearchContext {
     preferred: Option<Move>,
     previous_to: Option<Square>,
+    parent_static_eval: Option<i32>,
+    grandparent_static_eval: Option<i32>,
     null_allowed: bool,
     in_null_subtree: bool,
 }
@@ -53,6 +55,8 @@ impl SearchContext {
         Self {
             preferred,
             previous_to: None,
+            parent_static_eval: None,
+            grandparent_static_eval: None,
             null_allowed: true,
             in_null_subtree: false,
         }
@@ -63,15 +67,19 @@ impl SearchContext {
         Self {
             preferred,
             previous_to: None,
+            parent_static_eval: None,
+            grandparent_static_eval: None,
             null_allowed: false,
             in_null_subtree: false,
         }
     }
 
-    fn after_move(self, mv: Move) -> Self {
+    fn after_move(self, mv: Move, static_eval: Option<i32>) -> Self {
         Self {
             preferred: None,
             previous_to: Some(mv.to()),
+            parent_static_eval: static_eval,
+            grandparent_static_eval: self.parent_static_eval,
             null_allowed: self.null_allowed,
             in_null_subtree: self.in_null_subtree,
         }
@@ -81,6 +89,8 @@ impl SearchContext {
         Self {
             preferred: None,
             previous_to: None,
+            parent_static_eval: None,
+            grandparent_static_eval: None,
             null_allowed: false,
             in_null_subtree: true,
         }
@@ -727,6 +737,9 @@ impl<'a> Searcher<'a> {
                 && !data.best_move.is_capture()
                 && !data.best_move.is_promotion()
         });
+        if is_pv_node && depth >= 8 && !in_check {
+            static_eval = Some(self.evaluate_position(position, ply));
+        }
         if ply != 0
             && !is_pv_node
             && !context.in_null_subtree
@@ -882,6 +895,19 @@ impl<'a> Searcher<'a> {
                 && tt_move != Some(mv)
                 && !self.killers[ply].contains(&mv)
                 && self.history.score(moving_color, mv) < HistoryTable::MAX_SCORE / 4;
+            let reduction = if can_reduce
+                && depth >= 6
+                && move_index >= 8
+                && !context.in_null_subtree
+                && has_meaningful_non_pawn_material(position)
+                && static_eval
+                    .zip(context.grandparent_static_eval)
+                    .is_some_and(|(current, previous)| current <= previous)
+            {
+                2
+            } else {
+                1
+            };
             self.push_move_accumulator(position, mv, ply);
             let undo = position.make_move(mv);
             let gives_check = (can_reduce || can_futility_prune || can_see_prune)
@@ -922,7 +948,7 @@ impl<'a> Searcher<'a> {
                     ply + 1,
                     -beta,
                     -alpha,
-                    context.after_move(mv),
+                    context.after_move(mv, static_eval),
                 );
             } else {
                 #[cfg(feature = "stats")]
@@ -936,11 +962,11 @@ impl<'a> Searcher<'a> {
                     }
                     score = -self.negamax(
                         position,
-                        depth - 2,
+                        depth - 1 - reduction,
                         ply + 1,
                         -alpha - 1,
                         -alpha,
-                        context.after_move(mv),
+                        context.after_move(mv, static_eval),
                     );
                     if score > alpha {
                         #[cfg(feature = "stats")]
@@ -954,7 +980,7 @@ impl<'a> Searcher<'a> {
                             ply + 1,
                             -alpha - 1,
                             -alpha,
-                            context.after_move(mv),
+                            context.after_move(mv, static_eval),
                         );
                     }
                 } else {
@@ -964,7 +990,7 @@ impl<'a> Searcher<'a> {
                         ply + 1,
                         -alpha - 1,
                         -alpha,
-                        context.after_move(mv),
+                        context.after_move(mv, static_eval),
                     );
                 }
                 if score > alpha && score < beta {
@@ -978,7 +1004,7 @@ impl<'a> Searcher<'a> {
                         ply + 1,
                         -beta,
                         -alpha,
-                        context.after_move(mv),
+                        context.after_move(mv, static_eval),
                     );
                 }
             }
@@ -1119,7 +1145,13 @@ impl<'a> Searcher<'a> {
             if !context.in_null_subtree {
                 self.hashes.push(position.repetition_hash());
             }
-            let score = -self.qsearch(position, ply + 1, -beta, -alpha, context.after_move(mv));
+            let score = -self.qsearch(
+                position,
+                ply + 1,
+                -beta,
+                -alpha,
+                context.after_move(mv, None),
+            );
             if !context.in_null_subtree {
                 self.hashes.pop();
             }
@@ -1408,6 +1440,22 @@ mod timing_tests {
                 assert_eq!(position, original);
             }
         }
+    }
+
+    #[test]
+    fn search_context_tracks_only_the_active_eval_lineage() {
+        let mut position = Position::startpos();
+        let e4 = position.find_legal_move("e2e4").unwrap();
+        let nf3 = position.find_legal_move("g1f3").unwrap();
+        let root = SearchContext::normal(None);
+        let child = root.after_move(e4, Some(10));
+        let grandchild = child.after_move(nf3, Some(20));
+        let sibling = root.after_move(nf3, Some(30));
+
+        assert_eq!(grandchild.parent_static_eval, Some(20));
+        assert_eq!(grandchild.grandparent_static_eval, Some(10));
+        assert_eq!(sibling.parent_static_eval, Some(30));
+        assert_eq!(sibling.grandparent_static_eval, None);
     }
 
     #[test]

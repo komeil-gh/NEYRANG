@@ -33,3 +33,27 @@ frozen.
    20,000 nodes against H4c. Reject on an anomaly or negative point estimate.
 4. Only a passing parent screen opens a separate 256-game Blunder 7.6.0 screen;
    it must exceed the retained 26.56% point estimate to claim progress.
+
+## Engineering result
+
+All 142 Rust tests, the 11-test tactical suite, start-position perft 5, and
+Clippy passed. H4i preserved all five hybrid depth-8 best moves and scores while
+reducing their combined tree from 513,582 to 412,324 nodes (-19.72%). Across 21
+interleaved runs per binary, median time improved from 0.444238 to 0.372122
+seconds (+19.38% throughput). The 20-position historical Blunder-error replay
+also produced exactly the same move and completed-depth sequence as H4c.
+
+## Match outcome
+
+The fresh strict 256-game parent screen completed without warnings or stderr.
+H4i scored 84 wins, 93 draws, and 79 losses: 50.98%
+(`+6.79 +/-16.59 Elo`), so it opened the external gate.
+
+The first Blunder run was interrupted after the immutable opponent emitted its
+known post-threefold PV warning; it is not decision evidence. A complete rerun
+of the same preselected 128 pairs disabled strict interruption and registered
+the narrow opponent-warning audit policy before launch. It finished with zero
+warnings, empty stderr, and 256 normal terminations. H4i scored 30 wins, 49
+draws, and 177 losses: 21.29% (`-227.15 +/-43.59 Elo`), below the retained H3o
+26.56% point estimate. H4i therefore failed its external gate and the playing
+code was removed.

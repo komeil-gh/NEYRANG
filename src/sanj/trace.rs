@@ -33,6 +33,7 @@ const TEMPO: i32 = 6;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct EvalTrace {
     pub side_to_move: Color,
+    halfmove_clock: u16,
     pub phase: i32,
     pub piece_count: [i32; 6],
     pub pawn_rank: i32,
@@ -78,6 +79,7 @@ struct Totals {
 pub fn trace(position: &Position) -> EvalTrace {
     let mut result = EvalTrace {
         side_to_move: position.side_to_move(),
+        halfmove_clock: position.halfmove_clock(),
         phase: 0,
         piece_count: [0; 6],
         pawn_rank: 0,
@@ -190,8 +192,10 @@ impl EvalTrace {
             - self.doubled_extra * 14
             - self.isolated_pawn * 9
             + self.passed_rank_sq * 6;
-        let white_score =
-            (middlegame * self.phase + endgame * (MAX_PHASE - self.phase)) / MAX_PHASE;
+        let white_score = rule50_damp(
+            (middlegame * self.phase + endgame * (MAX_PHASE - self.phase)) / MAX_PHASE,
+            self.halfmove_clock,
+        );
         let final_score = match self.side_to_move {
             Color::White => white_score + TEMPO,
             Color::Black => -white_score + TEMPO,
@@ -203,6 +207,11 @@ impl EvalTrace {
             final_score,
         }
     }
+}
+
+fn rule50_damp(score: i32, halfmove_clock: u16) -> i32 {
+    let remaining = 199 - i64::from(halfmove_clock.min(100));
+    (i64::from(score) * remaining / 199) as i32
 }
 
 impl fmt::Display for EvalTrace {

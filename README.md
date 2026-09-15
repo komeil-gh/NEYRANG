@@ -103,6 +103,7 @@ versioned local builds on macOS.
 | `Threads` | Accepted; search uses one thread | Defaults to 1; higher values enable Lazy SMP |
 | `Move Overhead` | 10 ms by default | 30 ms by default |
 | `EvalFile` | Not available | Available with the `nnue` feature; empty selects classical evaluation |
+| `EvalMix` | Not available | NNUE share from 0 to 100; applies only when `EvalFile` is loaded |
 | `PolicyFile` | Not available | Available with the `policy` feature; empty preserves classical ordering |
 
 For a protocol check in a POSIX shell:
@@ -200,8 +201,9 @@ cargo build --release --locked --features nnue
 
 This build does not embed a network. Set the UCI `EvalFile` option to a
 compatible, separately validated network; leave it empty for classical
-evaluation. No NNUE network is bundled or recommended for play. Format and
-training documentation is linked below.
+evaluation. `EvalMix` can bound an experimental network as a residual around
+classical SANJ: 0 is classical and 100 is pure NNUE. No NNUE network is bundled
+or recommended for play. Format and training documentation is linked below.
 
 ## Documentation
 

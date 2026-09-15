@@ -24,6 +24,9 @@ feature. The UCI engine starts with classical SANJ even in that build and only
 loads a network after an explicit `EvalFile` option passes the version-1
 `NEYRANG\0` decoder. Each searcher owns its accumulator stack; Lazy-SMP workers
 share only an immutable `Arc` network and never share mutable accumulator state.
+The optional `EvalMix` combines the incremental NNUE score with classical SANJ
+using a bounded integer percentage; it changes neither accumulator ownership
+nor the artifact format.
 Ordinary moves, captures, en-passant, castling, promotions, re-searches, and
 null moves all preserve the scalar full-refresh oracle. The engine
 implementation is intentionally independent from `tools/nnue-reference`. SIMD

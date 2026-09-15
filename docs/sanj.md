@@ -36,6 +36,9 @@ target/release/neyrang bench-nnue /path/to/network.nnue 5
 The feature exposes the UCI string option `EvalFile`. A non-empty path must be a
 complete supported `NEYRANG\0` artifact: version 1 uses Chess768 and version 2
 uses the registered three-bank horizontally mirrored Chess768x3hm mapping.
+`EvalMix` selects the NNUE percentage from 0 through 100 while retaining
+classical SANJ for the remainder; its default is 100 for compatibility with
+the existing pure-network evidence.
 Decoding is fail-closed. The loaded network is immutable and shared across
 Lazy-SMP workers, while every worker owns a move-delta accumulator stack. The
 engine scalar output is checked bit-for-bit against the independent reference

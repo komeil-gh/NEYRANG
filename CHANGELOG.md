@@ -11,6 +11,8 @@ All notable changes to NEYRANG are documented here.
   stages, plus separately hashed `PolicyFile` match-runner support.
 - Policy fitting and independent audit exclude cross-stage comparisons that the
   runtime MovePicker cannot reorder.
+- An opt-in integer `EvalMix` bounds experimental NNUE output as a residual
+  around classical SANJ while preserving pure NNUE as the compatibility default.
 - Exact-quota teacher corpus selection with registered-order transposition
   deduplication, input/output hash binding, and streamed exposure expansion.
 - Exclusive-create protocol evidence logging with expected-byte SHA-256 checks

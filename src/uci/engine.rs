@@ -58,6 +58,8 @@ struct UciEngine {
     active: Option<ActiveSearch>,
     table: Option<TranspositionTable>,
     evaluator: sanj::Evaluator,
+    #[cfg(feature = "nnue")]
+    eval_mix: u8,
     policy: MovePolicy,
 }
 
@@ -74,6 +76,8 @@ impl UciEngine {
             active: None,
             table: Some(table_for(DEFAULT_HASH_MB, 1)),
             evaluator: sanj::Evaluator::classical(),
+            #[cfg(feature = "nnue")]
+            eval_mix: 100,
             policy: MovePolicy::NONE,
         }
     }
@@ -148,6 +152,8 @@ impl UciEngine {
         ))?;
         #[cfg(feature = "nnue")]
         send_line("option name EvalFile type string default <empty>")?;
+        #[cfg(feature = "nnue")]
+        send_line("option name EvalMix type spin default 100 min 0 max 100")?;
         #[cfg(feature = "policy")]
         send_line("option name PolicyFile type string default <empty>")?;
         send_line("uciok")
@@ -215,8 +221,22 @@ impl UciEngine {
                         .map_err(|error| format!("cannot read EvalFile '{value}': {error}"))?;
                     let network = sanj::nnue::Network::from_bytes(&bytes)
                         .map_err(|error| format!("invalid EvalFile '{value}': {error}"))?;
-                    sanj::Evaluator::nnue(network)
+                    sanj::Evaluator::nnue_with_mix(network, self.eval_mix)
                 };
+                if let Some(table) = &mut self.table {
+                    table.clear();
+                }
+            }
+            #[cfg(feature = "nnue")]
+            "evalmix" => {
+                let parsed: u8 = value
+                    .parse()
+                    .map_err(|_| "EvalMix must be an integer".to_owned())?;
+                if parsed > 100 {
+                    return Err("EvalMix must be between 0 and 100".to_owned());
+                }
+                self.eval_mix = parsed;
+                self.evaluator.set_nnue_mix(parsed);
                 if let Some(table) = &mut self.table {
                     table.clear();
                 }

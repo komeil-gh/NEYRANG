@@ -1156,7 +1156,8 @@ impl<'a> Searcher<'a> {
                 .accumulators
                 .get(ply)
                 .expect("NNUE accumulator stack must match the search ply");
-            return network.evaluate_accumulator(accumulator, position.side_to_move());
+            let nnue_score = network.evaluate_accumulator(accumulator, position.side_to_move());
+            return self.evaluator.blend_accumulator_score(position, nnue_score);
         }
         let _ = ply;
         self.evaluator.evaluate(position)

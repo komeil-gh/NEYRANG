@@ -315,6 +315,7 @@ fn pawn_coefficients(position: &Position, color: Color) -> PawnCoefficients {
 fn mobility_coefficients(position: &Position, color: Color) -> [i32; 4] {
     let own = position.occupancy(color);
     let all = position.all_occupancy();
+    let enemy_pawn_attacks = pawn_attack_map(position, color.opposite());
     let mut result = [0; 4];
     for (index, kind) in [
         PieceType::Knight,
@@ -330,17 +331,33 @@ fn mobility_coefficients(position: &Position, color: Color) -> [i32; 4] {
             let square_index = pieces.trailing_zeros() as u8;
             pieces &= pieces - 1;
             let square = Square::from_index(square_index).expect("piece bit is a valid square");
-            let targets = match kind {
+            let mut targets = match kind {
                 PieceType::Knight => attacks::knight_attacks(square),
                 PieceType::Bishop => attacks::bishop_attacks(square, all),
                 PieceType::Rook => attacks::rook_attacks(square, all),
                 PieceType::Queen => attacks::queen_attacks(square, all),
                 _ => 0,
             };
-            result[index] += (targets & !own).count_ones() as i32;
+            targets &= !own;
+            if matches!(kind, PieceType::Knight | PieceType::Bishop) {
+                targets &= !enemy_pawn_attacks;
+            }
+            result[index] += targets.count_ones() as i32;
         }
     }
     result
+}
+
+fn pawn_attack_map(position: &Position, color: Color) -> u64 {
+    let mut pawns = position.pieces(color, PieceType::Pawn);
+    let mut attacked = 0;
+    while pawns != 0 {
+        let index = pawns.trailing_zeros() as u8;
+        pawns &= pawns - 1;
+        let square = Square::from_index(index).expect("pawn bit is a valid square");
+        attacked |= attacks::pawn_attacks(color, square);
+    }
+    attacked
 }
 
 fn rook_file_coefficients(position: &Position, color: Color) -> (i32, i32) {

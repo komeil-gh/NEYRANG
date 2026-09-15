@@ -53,6 +53,7 @@ pub fn evaluate(position: &Position) -> i32 {
 fn mobility(position: &Position, color: Color) -> i32 {
     let own = position.occupancy(color);
     let all = position.all_occupancy();
+    let enemy_pawn_attacks = pawn_attack_map(position, color.opposite());
     let mut score = 0;
     for (kind, weight) in [
         (PieceType::Knight, 5),
@@ -72,10 +73,26 @@ fn mobility(position: &Position, color: Color) -> i32 {
                 PieceType::Queen => attacks::queen_attacks(square, all),
                 _ => 0,
             };
-            score += (attacks & !own).count_ones() as i32 * weight;
+            let mut destinations = attacks & !own;
+            if matches!(kind, PieceType::Knight | PieceType::Bishop) {
+                destinations &= !enemy_pawn_attacks;
+            }
+            score += destinations.count_ones() as i32 * weight;
         }
     }
     score
+}
+
+fn pawn_attack_map(position: &Position, color: Color) -> u64 {
+    let mut pawns = position.pieces(color, PieceType::Pawn);
+    let mut attacked = 0;
+    while pawns != 0 {
+        let index = pawns.trailing_zeros() as u8;
+        pawns &= pawns - 1;
+        let square = Square::from_index(index).expect("pawn bit is a valid square");
+        attacked |= attacks::pawn_attacks(color, square);
+    }
+    attacked
 }
 
 fn rook_files(position: &Position, color: Color) -> i32 {
@@ -180,5 +197,16 @@ mod tests {
 
         assert_eq!(king_pressure(&lone, Color::White, king), 0);
         assert!(king_pressure(&coordinated, Color::White, king) > 0);
+    }
+
+    #[test]
+    fn enemy_pawn_control_removes_one_knight_mobility_unit() {
+        let free = Position::from_fen("k7/8/8/8/3N4/8/8/7K w - - 0 1").unwrap();
+        let controlled = Position::from_fen("k7/8/4p3/8/3N4/8/8/7K w - - 0 1").unwrap();
+
+        assert_eq!(
+            mobility(&free, Color::White) - mobility(&controlled, Color::White),
+            5
+        );
     }
 }

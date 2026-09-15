@@ -55,5 +55,7 @@ of the same preselected 128 pairs disabled strict interruption and registered
 the narrow opponent-warning audit policy before launch. It finished with zero
 warnings, empty stderr, and 256 normal terminations. H4i scored 30 wins, 49
 draws, and 177 losses: 21.29% (`-227.15 +/-43.59 Elo`), below the retained H3o
-26.56% point estimate. H4i therefore failed its external gate and the playing
-code was removed.
+26.56% point estimate. The retained UTF-16 PowerShell log and PGN were
+independently re-audited after log decoding was corrected; the audit returned
+`ok: true` with totals and pentanomial counts matching fastchess. H4i therefore
+failed its external gate and the playing code was removed.

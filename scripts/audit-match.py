@@ -313,7 +313,9 @@ def scan_log(
 ) -> tuple[dict[str, int], list[str], dict[str, Any], list[str]]:
     if warning_policy not in WARNING_POLICIES:
         raise ValueError(f"unknown warning policy: {warning_policy}")
-    text = path.read_text(encoding="utf-8", errors="replace")
+    raw = path.read_bytes()
+    encoding = "utf-16" if raw.startswith((b"\xff\xfe", b"\xfe\xff")) else "utf-8"
+    text = raw.decode(encoding, errors="replace")
     lines = text.splitlines()
     counts: dict[str, int] = {}
     examples: list[str] = []

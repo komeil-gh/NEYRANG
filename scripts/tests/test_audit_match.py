@@ -101,6 +101,27 @@ class ScanLogTests(unittest.TestCase):
         self.assertEqual(counts["warning"], len(warnings))
         self.assertEqual(allowed, [])
 
+    def test_utf16_windows_log_final_summary_is_parsed(self) -> None:
+        text = (
+            "Elo: -227.15 +/- 43.59, nElo: -293.63 +/- 42.56\r\n"
+            "Games: 256, Wins: 30, Losses: 177, Draws: 49, "
+            "Points: 54.5 (21.29 %)\r\n"
+            "Ptnml(0-2): [58, 40, 24, 3, 3]\r\n"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "match.log"
+            path.write_text(text, encoding="utf-16")
+
+            counts, _, final, _ = AUDIT_MATCH.scan_log(path)
+
+        self.assertFalse(any(counts.values()))
+        self.assertEqual(final["games"], 256)
+        self.assertEqual(final["wins"], 30)
+        self.assertEqual(final["losses"], 177)
+        self.assertEqual(final["draws"], 49)
+        self.assertEqual(final["pentanomial"], [58, 40, 24, 3, 3])
+        self.assertEqual(final["elo"], -227.15)
+
 
 class ExpectedMetadataTests(unittest.TestCase):
     def test_exact_fields_pass(self) -> None:

@@ -74,6 +74,8 @@ compiler, and build flags.
 Use balanced openings, color-reversed pairs, equal resource limits, frozen
 binaries, and a predeclared acceptance rule. Record game count, W/D/L,
 pentanomial results, time control, engine options, and abnormal terminations.
+`scripts/audit-match.py` accepts UTF-8 logs and BOM-marked UTF-16 logs produced
+by Windows PowerShell redirection before checking anomalies and final totals.
 
 Do not treat Perft, tactical positions, node reductions, NPS, or offline model
 loss as Elo evidence.

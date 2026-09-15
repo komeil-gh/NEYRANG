@@ -31,3 +31,23 @@ feature correction, not a new parameter-tuning pass.
    estimates and zero anomalies before a fresh Blunder screen.
 
 Failure removes the playing code while retaining the measured outcome.
+
+## Result
+
+The focused mobility regression, all 143 Rust tests, the 11-position tactical
+suite, start-position perft 5 (4,865,609 nodes), formatting, and Clippy passed.
+The five-position hybrid depth-8 tree fell from 513,582 to 479,651 nodes
+(-6.61%). The equal-scored initial choice changed from `d2d4/23` to `g1f3/23`;
+the other changed scores were `d7c8q/584` and `c3d5/116`.
+
+The clean audited 20,000-node parent screen scored 86/86/84 over 256 games:
+129/256 (50.39%), +2.71 +/-32.23 Elo. The separate clean audited equal-time
+screen scored 76/99/81: 125.5/256 (49.02%), -6.79 +/-32.11 Elo. Both runs used
+128 unique fresh color-reversed pairs and had zero crash, timeout, protocol,
+forfeit, warning, or timing anomaly.
+
+The equal-time point estimate is negative, so gate 3 fails. No Blunder screen
+was opened and the playing code was removed. Private evidence is retained under
+`testing/private/h5b-pawn-safe-mobility-20260915/`; the candidate executable
+SHA-256 is
+`570db1e72d3724ed8ce5f2206c081fc4c644a023461efb162b0b5ca44a3bdff1`.

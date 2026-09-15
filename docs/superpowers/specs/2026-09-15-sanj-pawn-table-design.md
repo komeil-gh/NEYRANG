@@ -19,3 +19,11 @@ Require all Rust tests, the tactical suite, Clippy, and identical classical and
 hybrid depth-5/depth-8 nodes, scores, best moves, and checksums. Measure at
 least 21 interleaved depth-8 hybrid runs per binary. Retain only if median wall
 time improves by at least 1% without an anomaly.
+
+## Outcome
+
+Rejected before remote benchmarking. All 142 Rust tests, the 11-test tactical
+suite, and Clippy passed, and H4b preserved the complete depth-5/depth-8 hybrid
+identity. Across 21 interleaved depth-8 runs per binary, however, median time
+improved only from 0.454530 seconds to 0.451355 seconds (0.703%), below the
+registered 1% floor. The cache and its search-worker state were removed.

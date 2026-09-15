@@ -46,6 +46,7 @@ struct SearchContext {
     previous_to: Option<Square>,
     null_allowed: bool,
     in_null_subtree: bool,
+    qcheck_allowed: bool,
 }
 
 impl SearchContext {
@@ -55,6 +56,7 @@ impl SearchContext {
             previous_to: None,
             null_allowed: true,
             in_null_subtree: false,
+            qcheck_allowed: true,
         }
     }
 
@@ -65,6 +67,7 @@ impl SearchContext {
             previous_to: None,
             null_allowed: false,
             in_null_subtree: false,
+            qcheck_allowed: true,
         }
     }
 
@@ -74,6 +77,17 @@ impl SearchContext {
             previous_to: Some(mv.to()),
             null_allowed: self.null_allowed,
             in_null_subtree: self.in_null_subtree,
+            qcheck_allowed: self.qcheck_allowed,
+        }
+    }
+
+    fn after_qcheck(self, mv: Move) -> Self {
+        Self {
+            preferred: None,
+            previous_to: Some(mv.to()),
+            null_allowed: self.null_allowed,
+            in_null_subtree: self.in_null_subtree,
+            qcheck_allowed: false,
         }
     }
 
@@ -83,6 +97,7 @@ impl SearchContext {
             previous_to: None,
             null_allowed: false,
             in_null_subtree: true,
+            qcheck_allowed: false,
         }
     }
 }
@@ -175,6 +190,7 @@ pub struct SearchStatistics {
     pub null_move_fail_highs: u64,
     pub null_move_cutoffs: u64,
     pub null_move_verifications: u64,
+    pub forced_qcheck_searches: u64,
     pub lmr_reductions: u64,
     pub lmr_researches: u64,
     #[cfg(feature = "stats")]
@@ -239,6 +255,7 @@ impl SearchStatistics {
         self.null_move_fail_highs += other.null_move_fail_highs;
         self.null_move_cutoffs += other.null_move_cutoffs;
         self.null_move_verifications += other.null_move_verifications;
+        self.forced_qcheck_searches += other.forced_qcheck_searches;
         self.lmr_reductions += other.lmr_reductions;
         self.lmr_researches += other.lmr_researches;
         #[cfg(feature = "stats")]
@@ -1098,6 +1115,8 @@ impl<'a> Searcher<'a> {
                 VALUE_DRAW
             };
         }
+        let quiet_checks = (!in_check && context.qcheck_allowed && !context.in_null_subtree)
+            .then(|| moves.clone());
         let moving_color = position.side_to_move();
         let mut picker = ordering::MovePicker::quiescence_with_context(
             moves,
@@ -1148,6 +1167,59 @@ impl<'a> Searcher<'a> {
                         exhausted = false;
                     }
                     break;
+                }
+            }
+        }
+        if alpha < beta
+            && let Some(moves) = quiet_checks
+        {
+            for &mv in moves.iter() {
+                if mv.is_capture() || mv.is_promotion() {
+                    continue;
+                }
+                self.push_move_accumulator(position, mv, ply);
+                let undo = position.make_move(mv);
+                let gives_check = position.is_in_check(position.side_to_move());
+                let forced = if gives_check {
+                    let replies = position.legal_moves();
+                    #[cfg(feature = "stats")]
+                    {
+                        self.statistics.move_generation_calls += 1;
+                        self.statistics.moves_generated += replies.len() as u64;
+                    }
+                    replies.len() <= 1
+                } else {
+                    false
+                };
+                if !forced {
+                    position.unmake_move(mv, undo);
+                    self.pop_accumulator(ply);
+                    continue;
+                }
+
+                #[cfg(feature = "stats")]
+                {
+                    self.statistics.forced_qcheck_searches += 1;
+                    self.statistics.moves_searched += 1;
+                }
+                self.hashes.push(position.repetition_hash());
+                let score =
+                    -self.qsearch(position, ply + 1, -beta, -alpha, context.after_qcheck(mv));
+                self.hashes.pop();
+                position.unmake_move(mv, undo);
+                self.pop_accumulator(ply);
+
+                if self.stopped {
+                    #[cfg(feature = "stats")]
+                    self.record_ordering_statistics(picker.statistics());
+                    return VALUE_DRAW;
+                }
+                if score > alpha {
+                    alpha = score;
+                    self.update_pv(ply, mv);
+                    if alpha >= beta {
+                        break;
+                    }
                 }
             }
         }
@@ -1506,6 +1578,28 @@ mod tests {
 
         assert!(searcher.statistics.bad_captures > 0);
         assert_eq!(searcher.statistics.see_prunes, 0);
+    }
+
+    #[test]
+    fn qsearch_crosses_one_quiet_mating_check_and_restores_state() {
+        let mut position = Position::from_fen("7k/8/5KQ1/8/8/8/8/8 w - - 0 1")
+            .expect("quiet-mate fixture must be valid");
+        let original = position.clone();
+        let stop = AtomicBool::new(false);
+        let mut searcher = Searcher::new(&stop);
+        let hashes = [position.repetition_hash()];
+        searcher.reset(
+            &mut position,
+            &SearchLimits::depth(1),
+            &hashes,
+            SearchSetup::normal(),
+        );
+
+        let score = searcher.qsearch(&mut position, 0, 0, VALUE_MATE, SearchContext::normal(None));
+
+        assert_eq!(score, VALUE_MATE - 1);
+        assert!(searcher.statistics.forced_qcheck_searches > 0);
+        assert_eq!(position, original);
     }
 
     #[test]

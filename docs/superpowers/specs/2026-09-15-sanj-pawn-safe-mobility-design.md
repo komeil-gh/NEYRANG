@@ -31,14 +31,3 @@ feature correction, not a new parameter-tuning pass.
    estimates and zero anomalies before a fresh Blunder screen.
 
 Failure removes the playing code while retaining the measured outcome.
-
-## Engineering result
-
-The focused mobility regression, all 143 Rust tests, the 11-position tactical
-suite, start-position perft 5 (4,865,609 nodes), formatting, and Clippy pass.
-The five-position hybrid depth-8 tree fell from 513,582 to 479,651 nodes
-(-6.61%). Kiwipete and the rook ending retained `e2a6/-6` and `b4f4/82`; the
-promotion tactic retained `d7c8q` with score 584 instead of 579, and the attack
-position retained `c3d5` with score 116 instead of 104. The equal-scored initial
-choice changed from `d2d4/23` to `g1f3/23`. No tactical fixture regressed, so
-the registered local gate passes.

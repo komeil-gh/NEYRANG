@@ -40,18 +40,3 @@ every inspected move.
    External progress requires exceeding the retained 26.56% point estimate.
 
 Failure removes the playing code while preserving the measured result.
-
-## Engineering result
-
-The direct quiet-mate regression passes and restores the complete position.
-All 143 Rust tests, the 11-position tactical suite, start-position perft 5
-(4,865,609 nodes), formatting, and Clippy pass.
-
-At hybrid depth 8, H4r searched 481,916 nodes versus H4m's 513,582
-(-6.17%). Four of five move/score signatures were identical; the initial
-position changed from `d2d4/23` to `b1c3/23`. Local elapsed time increased
-from 0.482 s to 0.623 s (+29.3%), so the fixed-node parent match remains only
-a strength screen and cannot establish a speed-neutral gain.
-
-The declared local tree and tactical gates pass. H4r advances to the fresh
-128-pair H4m parent screen.

@@ -33,3 +33,16 @@ defaults remain frozen. There is no external threshold or copied tuning value.
 4. Only a passing parent screen opens a separate 256-game Blunder 7.6.0 screen;
    it must exceed the retained 26.56% point estimate to claim external progress.
 
+## Outcome
+
+All 143 Rust tests, the 11-test tactical suite, start-position perft 5,
+formatting, and Clippy passed. H4n preserved all five hybrid depth-8 best moves
+and scores while growing the combined tree from 513,582 to 576,220 nodes
+(+12.20%), inside the registered 15% ceiling.
+
+The clean 256-game parent screen scored 86 wins, 104 draws, and 66 losses
+(53.91%, `+27.20 +/-31.17 Elo`). The separate clean Blunder 7.6.0 screen then
+scored 37 wins, 49 draws, and 170 losses (24.02%, `-200.02 +/-43.01 Elo`). Both
+audits found 256 normal terminations, complete paired openings, and no rejected
+warning or protocol anomaly. Because 24.02% is below the retained 26.56%
+external baseline, H4n is rejected and its playing code is removed.

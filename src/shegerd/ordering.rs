@@ -247,10 +247,6 @@ impl MovePicker {
         }
     }
 
-    pub(crate) fn into_moves(self) -> MoveList {
-        self.moves
-    }
-
     #[inline]
     #[cfg(any(feature = "stats", test))]
     pub(crate) const fn last_move_was_scored(&self) -> bool {

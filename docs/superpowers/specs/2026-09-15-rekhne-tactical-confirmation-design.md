@@ -29,3 +29,11 @@ frozen N7 network, stage-aligned policy, and `EvalMix=10`, H3u reduced the
 five-position depth-8 tree from 513,582 to 354,534 nodes (-30.97%) while
 preserving all five best moves and reported scores. The registered parent
 screen is therefore open.
+
+## Outcome
+
+The clean 256-game parent screen scored 91/81/84 (51.95%,
+`+13.58 +/-29.89 Elo`). A separately registered Blunder screen then completed
+39/165/52 (25.39%, `-187.25 +/-42.48 Elo`) with all 128 pairs, empty stderr,
+and no warning, crash, forfeit, or illegal move. That missed the frozen 26.56%
+target point estimate. H3u is rejected and its playing code was removed.

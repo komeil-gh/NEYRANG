@@ -58,6 +58,8 @@ pub(crate) struct MovePicker {
     classes: [MoveClass; MoveList::CAPACITY],
     scores: [i32; MoveList::CAPACITY],
     exchanges: [i32; MoveList::CAPACITY],
+    stage_indices: [u8; MoveList::CAPACITY],
+    stage_len: usize,
     preferred: Option<Move>,
     killers: [Move; 2],
     color: Color,
@@ -124,6 +126,8 @@ impl MovePicker {
             classes: [MoveClass::Unclassified; MoveList::CAPACITY],
             scores: [i32::MIN; MoveList::CAPACITY],
             exchanges: [0; MoveList::CAPACITY],
+            stage_indices: [0; MoveList::CAPACITY],
+            stage_len: 0,
             preferred,
             killers,
             color,
@@ -180,6 +184,7 @@ impl MovePicker {
                             self.statistics.good_tactical_stage_visits += 1;
                         }
                         self.classify_tacticals(position, policy);
+                        self.prepare_stage(MoveClass::GoodTactical);
                         self.stage_initialized = true;
                     }
                     if let Some(mv) = self.pick_best(MoveClass::GoodTactical) {
@@ -199,6 +204,7 @@ impl MovePicker {
                             self.statistics.killer_stage_visits += 1;
                         }
                         self.classify_killers(position, history, policy);
+                        self.prepare_stage(MoveClass::Killer);
                         self.stage_initialized = true;
                     }
                     if let Some(mv) = self.pick_best(MoveClass::Killer) {
@@ -214,6 +220,7 @@ impl MovePicker {
                             self.statistics.quiet_stage_visits += 1;
                         }
                         self.classify_quiets(position, history, policy);
+                        self.prepare_stage(MoveClass::Quiet);
                         self.stage_initialized = true;
                     }
                     if let Some(mv) = self.pick_best(MoveClass::Quiet) {
@@ -228,6 +235,7 @@ impl MovePicker {
                         {
                             self.statistics.bad_tactical_stage_visits += 1;
                         }
+                        self.prepare_stage(MoveClass::BadTactical);
                         self.stage_initialized = true;
                     }
                     if let Some(mv) = self.pick_best(MoveClass::BadTactical) {
@@ -273,6 +281,7 @@ impl MovePicker {
     fn advance(&mut self, stage: Stage) {
         self.stage = stage;
         self.stage_initialized = false;
+        self.stage_len = 0;
     }
 
     fn find_unclassified(&self, expected: Move) -> Option<usize> {
@@ -362,18 +371,34 @@ impl MovePicker {
         }
     }
 
-    fn pick_best(&mut self, class: MoveClass) -> Option<Move> {
-        let mut best_index = None;
-        let mut best_score = i32::MIN;
+    fn prepare_stage(&mut self, class: MoveClass) {
+        self.stage_len = 0;
         for index in 0..self.moves.len() {
-            if self.classes[index] == class
-                && (best_index.is_none() || self.scores[index] > best_score)
-            {
-                best_index = Some(index);
-                best_score = self.scores[index];
+            if self.classes[index] == class {
+                self.stage_indices[self.stage_len] = index as u8;
+                self.stage_len += 1;
             }
         }
-        let index = best_index?;
+    }
+
+    fn pick_best(&mut self, class: MoveClass) -> Option<Move> {
+        if self.stage_len == 0 {
+            return None;
+        }
+        let mut best_slot = 0;
+        for slot in 1..self.stage_len {
+            let index = usize::from(self.stage_indices[slot]);
+            let best_index = usize::from(self.stage_indices[best_slot]);
+            if self.scores[index] > self.scores[best_index]
+                || (self.scores[index] == self.scores[best_index] && index < best_index)
+            {
+                best_slot = slot;
+            }
+        }
+        let index = usize::from(self.stage_indices[best_slot]);
+        self.stage_len -= 1;
+        self.stage_indices[best_slot] = self.stage_indices[self.stage_len];
+        debug_assert_eq!(self.classes[index], class);
         if matches!(class, MoveClass::GoodTactical | MoveClass::BadTactical) {
             self.last_tactical_see = Some(self.exchanges[index]);
         }
@@ -617,6 +642,21 @@ mod tests {
         assert!(picker.next_move(&position, &history).is_some());
         picker.skip_quiet_moves();
         assert!(picker.next_move(&position, &history).is_none());
+    }
+
+    #[test]
+    fn equal_scores_keep_generated_order() {
+        let position = Position::startpos();
+        let legal = position.clone().legal_moves();
+        let history = HistoryTable::default();
+        let mut picker = MovePicker::main(
+            legal.clone(),
+            None,
+            [Move::NONE; 2],
+            position.side_to_move(),
+        );
+
+        assert_eq!(collect(&mut picker, &position, &history), legal.as_slice());
     }
 
     #[test]

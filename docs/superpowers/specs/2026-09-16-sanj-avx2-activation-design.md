@@ -45,4 +45,13 @@ The 16-game, 10,000-node, concurrency-1 UCI check produced eight mirrored
 result pairs and identical node, depth, seldepth, and result distributions.
 Across 671 reported decisions per engine, median NPS increased from 863,790 to
 942,506 (+9.11%); mean NPS increased from 904,997 to 989,154 (+9.30%). The
-candidate changes throughput only and therefore makes no isolated Elo claim.
+candidate changes throughput only, so this fixed-node check makes no Elo claim.
+
+A separate equal-time confirmation used 1,000 games at `0.5+0.005`, 500
+color-reversed opening pairs, and concurrency 8 on the same remote worker. The
+candidate scored 329 wins, 404 draws, and 267 losses: 53.10%, or +21.57 logistic
+Elo against its parent. The paired-outcome normal approximation gives a 95%
+interval of +6.05 to +37.17 Elo. Its pentanomial result was
+`[18, 121, 198, 107, 56]`. Independent PGN replay accepted all 1,000 games,
+found 500 unique paired openings, normal termination for every game, balanced
+colors, complete telemetry, and no negative time-left sample.

@@ -195,6 +195,13 @@ All notable changes to NEYRANG are documented here.
 
 ### Rejected
 
+- H19 fused good-tactical, killer, and quiet active-index collection into each
+  stage's existing classification pass. It preserved the exact 536,259-node
+  depth-8 tree/checksum and improved 31-pair native median throughput by 2.88%,
+  but its independently audited 1,000-game equal-time parent screen scored
+  `302/382/316` (49.30%, `-4.86 +/-15.29 Elo`). The negative point estimate
+  failed the registered gate, so the playing code was removed before PGO or a
+  Blunder screen.
 - H17's stage-local reuse of the SHEGERD material-phase bucket preserved the
   exact 536,259-node depth-8 tree and checksum, but across 31 interleaved
   native pairs its median rose from 256 ms to 259 ms and paired median

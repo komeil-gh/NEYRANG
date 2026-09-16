@@ -36,5 +36,14 @@ boundary, tie rule, or search decision is allowed.
 
 ## Outcome
 
-Pending. No performance or strength claim exists until every applicable gate
-above has completed.
+Rejected. The candidate passed all Linux-applicable repository checks, preserved
+Perft 5 (`4,865,609`) and the exact depth-8 tree/checksum
+(`536,259`, `9d8d22b14e51010d`), and reduced the 31-pair native median from
+250 ms to 243 ms. Paired median throughput improved by 2.88%, clearing the
+registered engineering floor.
+
+The independently audited 1,000-game equal-time parent match then scored
+`302/382/316` (49.30%, `-4.86 +/-15.29 Elo`) with 1,000 normal terminations
+and zero warning, timeout, crash, legality, or protocol anomaly. The negative
+point estimate failed gate 3, so the playing change was removed. Per gate 4,
+no H19 PGO training or Blunder screen was run.

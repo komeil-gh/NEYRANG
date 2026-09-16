@@ -220,4 +220,12 @@ against Blunder versus H15-PGO's same-opening 31.85%. The paired external gain
 was +2.20 percentage points (95% interval -1.15 to +5.50), so it is directional
 rather than statistically proven.
 
+H19 then tested collecting good-tactical, killer, and quiet active indices in
+the existing classification passes. The tree and checksum stayed exact and its
+31-pair native median improved from 250 ms to 243 ms (2.88% paired median
+throughput), but the audited 1,000-game parent screen scored 49.30%
+(`-4.86 +/-15.29 Elo`). The negative point estimate failed the registered
+retention rule, so the playing change was removed without PGO or a Blunder
+screen.
+
 NEYRANG does not learn merely by playing games; improvements still require an explicit, tested patch. Any future baseline-protocol repair, null-move refinement, LMP, ProbCut, or singular-extension work must be pre-registered and isolated rather than bundled into the accepted candidate. The complete outcome is in the [0.3 final report](development/0.3.0-final-report.md).

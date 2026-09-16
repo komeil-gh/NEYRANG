@@ -157,6 +157,7 @@ class EvalFeatureAnalysisTests(unittest.TestCase):
             "rook_open_delta",
             "rook_semi_open_delta",
             "king_shield_delta",
+            "king_danger_delta",
             "middlegame_cp",
             "endgame_cp",
             "white_cp",
@@ -193,7 +194,7 @@ class EvalFeatureAnalysisTests(unittest.TestCase):
             invalid.write_text(
                 "\t".join(invalid_header) + "\n" + "\n".join(rows) + "\n"
             )
-            with self.assertRaisesRegex(ValueError, "canonical 38-column header"):
+            with self.assertRaisesRegex(ValueError, "canonical 39-column header"):
                 analysis.load_partition(invalid)
 
         self.assertEqual(partition.design.shape, (2, 42))

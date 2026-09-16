@@ -94,6 +94,7 @@ TRACE_COLUMNS = (
     "rook_open_delta",
     "rook_semi_open_delta",
     "king_shield_delta",
+    "king_danger_delta",
     "middlegame_cp",
     "endgame_cp",
     "white_cp",
@@ -198,7 +199,9 @@ def load_partition(path: Path) -> Partition:
     with path.open(encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle, delimiter="\t")
         if tuple(reader.fieldnames or ()) != TRACE_COLUMNS:
-            raise ValueError(f"{path}: expected canonical 38-column header")
+            raise ValueError(
+                f"{path}: expected canonical {len(TRACE_COLUMNS)}-column header"
+            )
         rows = list(reader)
     if not rows:
         raise ValueError(f"{path}: partition is empty")

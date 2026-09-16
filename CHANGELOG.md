@@ -157,6 +157,9 @@ All notable changes to NEYRANG are documented here.
   equal-time games. Its clean same-opening Blunder screen scored 28.10% versus
   H8's 27.40%; the paired +0.70-point interval (-2.50 to +3.90) crosses zero,
   so the external gain is directional rather than statistically proven.
+- SANJ feature analysis now accepts the current 39-column trace contract,
+  including the fixed king-danger diagnostic column; its 42 tunable columns
+  and production-score reconstruction remain unchanged.
 
 ### Rejected
 
@@ -192,6 +195,11 @@ All notable changes to NEYRANG are documented here.
   concurrency test but reduced the depth-8 tree by only 0.006% and tied H9's
   295 ms median across 21 interleaved pairs. It failed both registered
   engineering floors, so no games ran and the playing code was removed.
+- H11's outcome diagnostic kept both colors of each Blunder opening pair in
+  one partition and removed ambiguous repeated positions. A scale fitted on
+  98 training pairs worsened both cross-entropy and MSE on 30 unseen pairs,
+  with both 95% group-bootstrap intervals crossing zero. No 42-weight fit or
+  playing change was opened.
 
 ## [0.2.0] - 2026-08-29
 

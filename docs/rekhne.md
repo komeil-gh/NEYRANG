@@ -200,4 +200,10 @@ tactical stages. Focused tests passed, but the depth-8 tree expanded by 12.93%
 and paired median throughput fell by 14.09%. It failed the registered
 engineering gate, so zero games ran and the playing code was removed.
 
+H17 then tested reuse of one unchanged SHEGERD material-phase bucket per
+MovePicker stage. The exact depth-8 tree and checksum were preserved, but the
+31-pair native median rose from 256 ms to 259 ms and paired median throughput
+fell by 1.53%. It failed the registered +1.5% engineering floor, so zero games
+ran and the playing code was removed.
+
 NEYRANG does not learn merely by playing games; improvements still require an explicit, tested patch. Any future baseline-protocol repair, null-move refinement, LMP, ProbCut, or singular-extension work must be pre-registered and isolated rather than bundled into the accepted candidate. The complete outcome is in the [0.3 final report](development/0.3.0-final-report.md).

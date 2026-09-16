@@ -186,6 +186,11 @@ All notable changes to NEYRANG are documented here.
 
 ### Rejected
 
+- H17's stage-local reuse of the SHEGERD material-phase bucket preserved the
+  exact 536,259-node depth-8 tree and checksum, but across 31 interleaved
+  native pairs its median rose from 256 ms to 259 ms and paired median
+  throughput fell by 1.53%. It failed the registered engineering gate, so zero
+  games ran and the playing code was removed.
 - H16's search-local capture history passed focused correctness tests but
   expanded the native depth-8 tree from 536,259 to 605,581 nodes (+12.93%).
   Across 31 interleaved pairs its median rose from 257 ms to 299 ms and paired

@@ -19,17 +19,19 @@ into UCI or REKHNE. Historical byte-identity claims remain attached to their
 recorded pre-rename commits; the identity migration necessarily changes the
 binary bytes.
 
-The NNUE path is isolated behind the default-enabled `nnue` feature. The UCI
-engine starts with the embedded retained N7 network at the accepted 10% residual
-mix; an external `EvalFile` must still pass the fail-closed `NEYRANG\0` decoder,
-and `<empty>` restores classical SANJ. Versions 1 and 2 retain one scalar output head; version 3
+The NNUE path is isolated behind the default-enabled `nnue` feature. The default
+`stockfish-nnue` companion feature starts UCI with the embedded Stockfish-18
+small network at 100%; external `EvalFile` data must pass either the fail-closed
+`NEYRANG\0` decoder or the Stockfish-compatible decoder, and `<empty>` restores
+classical SANJ. Versions 1 and 2 of the native format retain one scalar output head; version 3
 uses the same three-bank input transformer with four material-routed output
 heads; experimental version 4 adds one post-SCReLU absolute-difference channel
 to a single output head. Each searcher owns its accumulator stack; Lazy-SMP workers
 share only an immutable `Arc` network and never share mutable accumulator state.
-The optional `EvalMix` combines the incremental NNUE score with classical SANJ
-using a bounded integer percentage; it changes neither accumulator ownership
-nor the artifact format.
+The optional `EvalMix` combines NNUE with classical SANJ using a bounded integer
+percentage; it changes neither artifact format nor ownership. Native networks
+use each searcher's accumulator stack. The accepted Stockfish-compatible path
+currently uses immutable shared weights and full-refresh evaluation.
 Ordinary moves, captures, en-passant, castling, promotions, re-searches, and
 null moves all preserve the scalar full-refresh oracle, including the remaining
 piece count used by version 3. The version-4 imbalance channel uses the existing
@@ -47,7 +49,9 @@ phase, piece codes and SEE buckets. The policy may only rank moves inside an
 existing MovePicker stage, so TT/PV priority, tactical SEE classification,
 killer stages and legal-move completeness remain authoritative.
 
-The engine has no runtime dependencies outside `std`. Strings, vectors, threads, and I/O remain at root/tool/protocol boundaries. A search node uses fixed move buffers and stack-based undo state.
+The engine has no dynamic service dependency. Strings, vectors, threads, and
+I/O remain at root/tool/protocol boundaries. A search node uses fixed move
+buffers and stack-based undo state.
 
 ## Position representation
 

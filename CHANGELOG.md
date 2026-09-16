@@ -6,6 +6,9 @@ All notable changes to NEYRANG are documented here.
 
 ### Added
 
+- A default-enabled Stockfish-compatible SANJ evaluator using `nnue-rs 0.4.0`,
+  with fail-closed external loading and the official Stockfish 18 small network
+  embedded for reproducible release builds.
 - Experimental version-4 `Chess768x3hmli` NNUE artifacts and trainer/reference
   support for a low-cost post-SCReLU absolute dual-perspective imbalance channel.
 - A fail-closed CPU SHEGERD policy path that loads checksum-bound
@@ -67,10 +70,11 @@ All notable changes to NEYRANG are documented here.
   LOS 96.51%) in a 1,372-game disjoint fixed-node confirmation and improved
   the same-opening Blunder score from 28.42% to 33.79% over 512 games per
   engine. Both retained matches completed without engine or protocol failure.
-- Default release builds now embed the retained N7 network at `EvalMix=10` and
-  the accepted teacher-residual SHEGERD-P3 policy. `<empty>` still selects the
-  classical evaluator or ordering, and `--no-default-features` keeps an
-  explicit research-only classical build available.
+- Default release builds now embed the accepted Stockfish 18 small network at
+  `EvalMix=100` and the teacher-residual SHEGERD-P3 policy. `<empty>` still
+  selects the classical evaluator or ordering, and `--no-default-features`
+  keeps an explicit research-only classical build available. Native NEYRANG
+  NNUE artifacts remain supported for controlled experiments.
 - H5h's latent-imbalance network passed format/runtime parity and improved
   fresh Stockfish-18 WDL-space MSE by 1.51%, but its paired-bootstrap 95% upper
   bound remained positive. A later 256-game fixed-node check scored 48.44%

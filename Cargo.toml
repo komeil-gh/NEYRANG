@@ -7,11 +7,15 @@ description = "NEYRANG, an independent UCI chess engine written in Rust"
 license = "GPL-3.0-or-later"
 
 [features]
-default = ["nnue", "policy"]
+default = ["nnue", "policy", "stockfish-nnue"]
 nnue = []
 policy = []
 sanj-tools = []
 stats = []
+stockfish-nnue = ["nnue", "dep:nnue-rs"]
+
+[dependencies]
+nnue-rs = { version = "0.4.0", optional = true }
 
 [profile.release]
 opt-level = 3

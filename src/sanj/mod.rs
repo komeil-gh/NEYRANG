@@ -13,6 +13,8 @@ mod classical;
 pub mod nnue;
 mod pawns;
 mod psqt;
+#[cfg(feature = "stockfish-nnue")]
+mod stockfish;
 #[cfg(any(test, feature = "sanj-tools"))]
 mod trace;
 
@@ -31,6 +33,11 @@ pub enum Evaluator {
     #[cfg(feature = "nnue")]
     Nnue {
         network: Arc<nnue::Network>,
+        nnue_percent: u8,
+    },
+    #[cfg(feature = "stockfish-nnue")]
+    StockfishNnue {
+        network: Arc<nnue_rs::Network>,
         nnue_percent: u8,
     },
 }
@@ -57,12 +64,29 @@ impl Evaluator {
         }
     }
 
+    #[cfg(feature = "stockfish-nnue")]
+    pub fn stockfish_nnue(bytes: &[u8]) -> Result<Self, nnue_rs::Error> {
+        Ok(Self::StockfishNnue {
+            network: Arc::new(nnue_rs::Network::from_bytes(bytes)?),
+            nnue_percent: 100,
+        })
+    }
+
     #[must_use]
     pub fn evaluate(&self, position: &Position) -> i32 {
         match self {
             Self::Classical => evaluate(position),
             #[cfg(feature = "nnue")]
             Self::Nnue {
+                network,
+                nnue_percent,
+            } => match nnue_percent {
+                0 => evaluate(position),
+                100 => network.evaluate(position),
+                percent => blend(evaluate(position), network.evaluate(position), *percent),
+            },
+            #[cfg(feature = "stockfish-nnue")]
+            Self::StockfishNnue {
                 network,
                 nnue_percent,
             } => match nnue_percent {
@@ -83,6 +107,14 @@ impl Evaluator {
         {
             *active = nnue_percent;
         }
+        #[cfg(feature = "stockfish-nnue")]
+        if let Self::StockfishNnue {
+            nnue_percent: active,
+            ..
+        } = self
+        {
+            *active = nnue_percent;
+        }
     }
 
     #[cfg(feature = "nnue")]
@@ -94,6 +126,8 @@ impl Evaluator {
                 100 => nnue_score,
                 percent => blend(evaluate(position), nnue_score, *percent),
             },
+            #[cfg(feature = "stockfish-nnue")]
+            Self::StockfishNnue { .. } => unreachable!("external NNUE uses direct evaluation"),
         }
     }
 
@@ -102,6 +136,8 @@ impl Evaluator {
         match self {
             Self::Classical => None,
             Self::Nnue { network, .. } => Some(network),
+            #[cfg(feature = "stockfish-nnue")]
+            Self::StockfishNnue { .. } => None,
         }
     }
 }

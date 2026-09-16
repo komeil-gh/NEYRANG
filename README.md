@@ -57,8 +57,9 @@ command-line tools for testing and benchmarking.
 
 Use `main` for the `0.2.0` baseline and `dev/0.3-search` to work with the newer
 engine and research tools. Development results do not constitute a `0.3.0`
-release. The development branch now embeds its retained SANJ N7 residual and
-SHEGERD policy, so a normal release build uses the strongest accepted stack
+release. The development branch now embeds the accepted Stockfish-18 small NNUE
+network through SANJ's compatible CPU evaluator, plus the retained SHEGERD
+policy. A normal release build therefore uses the strongest accepted stack
 without machine-specific file paths.
 
 ## Build and run
@@ -115,8 +116,8 @@ versioned local builds on macOS.
 | `Hash` | 64 MB by default | 64 MB by default |
 | `Threads` | Accepted; search uses one thread | Defaults to 1; higher values enable Lazy SMP |
 | `Move Overhead` | 10 ms by default | 30 ms by default |
-| `EvalFile` | Not available | Defaults to the embedded N7 artifact; `<empty>` selects classical evaluation |
-| `EvalMix` | Not available | Defaults to the retained 10% NNUE residual; accepts 0 through 100 |
+| `EvalFile` | Not available | Defaults to the embedded Stockfish-18 small network; `<empty>` selects classical evaluation |
+| `EvalMix` | Not available | Defaults to 100% NNUE; accepts 0 through 100 |
 | `PolicyFile` | Not available | Defaults to the embedded accepted policy; `<empty>` disables it |
 
 For a protocol check in a POSIX shell:
@@ -146,8 +147,9 @@ interrupt a search, or `quit` to close the session.
   make/unmake, Zobrist hashing, and repetition and draw detection.
 - **Search:** iterative deepening, alpha-beta/PVS, quiescence, aspiration
   windows, transposition tables, SEE-based move ordering, and late move reductions.
-- **Evaluation:** a tuned handcrafted tapered evaluator plus the retained 10%
-  N7 residual. The development branch also provides separate data and training tools.
+- **Evaluation:** the embedded Stockfish-18 small NNUE through SANJ's compatible
+  evaluator, with the handcrafted evaluator retained as an explicit fallback.
+  The development branch also provides separate data and training tools.
 - **Time and protocol:** asynchronous UCI commands, cooperative search stopping,
   and soft/hard time limits. The development branch adds Lazy SMP parallel search.
 
@@ -206,16 +208,21 @@ host details, private datasets, and raw experiment artifacts outside Git.
 
 ### Embedded strength assets
 
-The ordinary development build includes the accepted NNUE residual and policy:
+The ordinary development build includes the accepted Stockfish-compatible NNUE
+network and SHEGERD policy:
 
 ```bash
 cargo build --release --locked
 ```
 
-`EvalFile=<embedded>`, `EvalMix=10`, and `PolicyFile=<embedded>` are the defaults.
+`EvalFile=<embedded>`, `EvalMix=100`, and `PolicyFile=<embedded>` are the defaults.
 Set either file option to `<empty>` to disable that asset. External compatible
 artifacts can still be loaded for controlled experiments. A deliberately
 classical-only developer build remains available with `--no-default-features`.
+
+The embedded network is the official Stockfish 18 small network, not a network
+trained by NEYRANG. Its provenance and the `nnue-rs` license are recorded in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Documentation
 

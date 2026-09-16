@@ -98,6 +98,9 @@ replays the packed output through python-chess, verifies terminal WDL, and only
 then publishes a no-clobber corpus plus manifest. No training-data I/O or
 provenance branch enters the REKHNE hot path.
 
-No x86 or ARM intrinsics are currently required. The N2 scalar NNUE path is the
-bit-exact fallback/oracle. CPU-specific NNUE or attack code must stay behind
-isolated platform modules when introduced.
+No x86 or ARM intrinsic is required by the portable build. Retained N7 uses a
+runtime-checked AVX2 output kernel with the N2 scalar path as its bit-exact
+fallback/oracle. A separately tested `target-cpu=native` deployment build may
+let the compiler use more host instructions across the engine, but it is a
+machine-specific artifact rather than a portable release binary. Further
+CPU-specific NNUE or attack code must stay behind isolated platform modules.

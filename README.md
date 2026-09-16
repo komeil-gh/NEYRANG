@@ -91,6 +91,17 @@ git switch dev/0.3-search
 cargo build --release --locked
 ```
 
+For a binary used only on the machine that builds it, Rust can enable that
+host's full CPU instruction set:
+
+```bash
+RUSTFLAGS="-C target-cpu=native" cargo build --release --locked
+```
+
+This artifact is not portable to older CPUs. Keep the ordinary command above
+for distribution builds; benchmark and match-test each native target before
+using it as strength evidence.
+
 ## Play and analyze
 
 Add `target/release/neyrang` (or `neyrang.exe` on Windows) as a **UCI engine**

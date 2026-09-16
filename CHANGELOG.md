@@ -103,6 +103,8 @@ All notable changes to NEYRANG are documented here.
 - H3l adds a SANJ-specific bounded king-ring term that rewards coordinated pressure rather than lone-piece gestures. It requires multiple non-pawn attackers, or queen backing for one attacker, and caps middlegame danger at 120 centipawns.
 - H3o reuses one lazily computed static SANJ score across pruning guards at the
   same node without changing their conditions or outcomes.
+- H8 retains a separately benchmarked host-native deployment artifact while
+  leaving the portable default build and all search decisions unchanged.
 ### Evidence
 
 - O1 captured 6,326 macOS top-of-stack samples from an unchanged SHA-256-bound
@@ -141,6 +143,13 @@ All notable changes to NEYRANG are documented here.
   checksums exactly. Its 21-run interleaved native Windows depth-8 median was
   309 ms versus 321 ms for the frozen parent, a 3.738% improvement. This is
   retained throughput evidence, not a standalone Elo claim.
+- H8 preserved exact classical and pure-N7 benchmark identities while reducing
+  their 21-pair medians by 8.41% and 25.10%. It beat portable H7 in 1,000 clean
+  equal-time games at 59.50% (`+66.82 +/-17.17 Elo`) and scored 27.40% against
+  Blunder 7.6.0, versus H7's same-opening 23.90%. The paired external gain was
+  +3.50 percentage points (95% interval +0.47 to +6.53), or +31.92 logistic Elo
+  (paired 95% interval +4.11 to +59.73). This claim is specific to the tested
+  host-native binary.
 
 ### Rejected
 

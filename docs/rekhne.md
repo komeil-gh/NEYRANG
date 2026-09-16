@@ -150,4 +150,15 @@ without a timing, legality, crash, warning, or protocol anomaly. H3h met the
 pre-registered non-negative point-estimate floor; neither Elo gain is
 statistically proven.
 
+H8 then froze the complete H7 source and changed only deployment code
+generation to `-C target-cpu=native` on the registered x86-64 worker. Exact
+classical and pure-N7 trees and checksums were preserved while their 21-pair
+median wall times improved by 8.41% and 25.10%. In a clean audited 1,000-game
+equal-time match H8 beat the portable H7 binary at 59.50%
+(`+66.82 +/-17.17 Elo`). Against Blunder 7.6.0 it raised the same-opening score
+from H7's 23.90% to 27.40%; the paired difference was +3.50 percentage points
+(95% interval +0.47 to +6.53), or +31.92 logistic Elo (paired 95% interval
++4.11 to +59.73). H8 is retained only as a host-specific deployment artifact;
+the ordinary build remains portable.
+
 NEYRANG does not learn merely by playing games; improvements still require an explicit, tested patch. Pawn hashing remains deferred. Any future baseline-protocol repair, null-move refinement, LMP, ProbCut, or singular-extension work must be pre-registered and isolated rather than bundled into the accepted candidate. The complete outcome is in the [0.3 final report](development/0.3.0-final-report.md).

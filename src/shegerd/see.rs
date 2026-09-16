@@ -1,4 +1,6 @@
-use crate::chess::{Color, Move, PieceType, Position, Square, attacks};
+use crate::chess::{
+    Color, Move, PieceType, Position, Square, attackers_to as position_attackers_to, attacks,
+};
 
 const VALUE: [i32; 6] = [100, 320, 330, 500, 900, 20_000];
 
@@ -68,6 +70,9 @@ pub fn see(position: &Position, mv: Move) -> i32 {
 }
 
 fn see_observed<O: SeeObserver>(position: &Position, mv: Move, observer: &mut O) -> i32 {
+    if let Some(gain) = unrecapturable_gain(position, mv) {
+        return gain;
+    }
     let Some(exchange) = prepare_exchange(position, mv) else {
         return 0;
     };
@@ -80,6 +85,32 @@ fn see_observed<O: SeeObserver>(position: &Position, mv: Move, observer: &mut O)
             exchange.attackers,
             observer,
         )
+}
+
+fn unrecapturable_gain(position: &Position, mv: Move) -> Option<i32> {
+    let (color, _) = position.piece_at(mv.from())?;
+    let capture_square = if mv.is_en_passant() {
+        Square::from_coords(mv.to().file(), mv.from().rank())?
+    } else {
+        mv.to()
+    };
+    let captured_kind = position.piece_at(capture_square).map(|(_, kind)| kind);
+    let removed_enemy = captured_kind.map_or(0, |_| capture_square.bit());
+    let occupancy = position.all_occupancy() & !mv.from().bit() & !removed_enemy | mv.to().bit();
+    if position_attackers_to(
+        position,
+        mv.to(),
+        color.opposite(),
+        occupancy,
+        removed_enemy,
+    ) != 0
+    {
+        return None;
+    }
+    let promotion_gain = mv.promotion().map_or(0, |kind| {
+        VALUE[kind.index()] - VALUE[PieceType::Pawn.index()]
+    });
+    Some(captured_kind.map_or(0, |kind| VALUE[kind.index()]) + promotion_gain)
 }
 
 fn prepare_exchange(position: &Position, mv: Move) -> Option<ExchangeState> {
@@ -159,6 +190,13 @@ fn see_ge_observed<O: SeeObserver>(
     threshold: i32,
     observer: &mut O,
 ) -> bool {
+    if let Some(gain) = unrecapturable_gain(position, mv) {
+        if gain < threshold {
+            observer.early_exit();
+            return false;
+        }
+        return true;
+    }
     let Some(exchange) = prepare_exchange(position, mv) else {
         return 0 >= threshold;
     };
@@ -713,6 +751,19 @@ mod tests {
         promotions: usize,
         en_passant: usize,
         threshold_queries: usize,
+    }
+
+    #[test]
+    fn bypasses_exchange_state_only_when_no_enemy_can_recapture() {
+        let mut safe =
+            Position::from_fen("4k3/8/8/8/8/8/p7/R3K3 w - - 0 1").expect("safe-capture FEN");
+        let capture = safe.find_legal_move("a1a2").expect("capture is legal");
+        assert_eq!(unrecapturable_gain(&safe, capture), Some(100));
+
+        let mut defended =
+            Position::from_fen("r3k3/8/8/8/8/8/p7/R3K3 w - - 0 1").expect("defended-capture FEN");
+        let capture = defended.find_legal_move("a1a2").expect("capture is legal");
+        assert_eq!(unrecapturable_gain(&defended, capture), None);
     }
 
     #[test]

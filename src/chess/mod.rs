@@ -15,6 +15,7 @@ pub mod zobrist;
 
 pub use bitboard::Bitboard;
 pub use fen::FenError;
+pub(crate) use movegen::attackers_to;
 pub use mv::{Move, MoveFlag, MoveList};
 pub use perft::{divide, perft};
 pub use piece::Piece;

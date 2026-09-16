@@ -169,4 +169,12 @@ from 27.40% to 28.10%, but the paired 95% interval (-2.50 to +3.90 percentage
 points) crosses zero; this is retained throughput work, not a proven external
 Elo gain.
 
+H12 then reused the move generator's occupancy-aware attacker query to bypass
+recursive SEE when the destination cannot be recaptured. It preserved the exact
+H9 depth-8 tree and checksum while reducing the 21-pair host-native median from
+330 ms to 313 ms (5.43%). Its audited 1,000-game parent match scored 50.45%,
+and its same-opening Blunder score rose from 28.10% to 29.75%. The paired
+difference was +1.65 percentage points with a 95% interval of -1.70 to +5.10,
+so the external gain is directional rather than statistically proven.
+
 NEYRANG does not learn merely by playing games; improvements still require an explicit, tested patch. Pawn hashing remains deferred. Any future baseline-protocol repair, null-move refinement, LMP, ProbCut, or singular-extension work must be pre-registered and isolated rather than bundled into the accepted candidate. The complete outcome is in the [0.3 final report](development/0.3.0-final-report.md).

@@ -145,7 +145,7 @@ fn king_is_safe_after_move(
     ) == 0
 }
 
-fn attackers_to(
+pub(crate) fn attackers_to(
     position: &Position,
     square: Square,
     by: Color,

@@ -157,6 +157,13 @@ All notable changes to NEYRANG are documented here.
   equal-time games. Its clean same-opening Blunder screen scored 28.10% versus
   H8's 27.40%; the paired +0.70-point interval (-2.50 to +3.90) crosses zero,
   so the external gain is directional rather than statistically proven.
+- H12 bypasses recursive SEE when the post-move destination has no geometric
+  enemy recapture. It preserved the exact H9 tree and checksum while reducing
+  the 21-pair native median from 330 ms to 313 ms (5.43%). Its audited
+  1,000-game parent match scored 50.45% (`+3.13 +/-16.76 Elo`), and its
+  same-opening Blunder score rose from 28.10% to 29.75%. The paired +1.65-point
+  interval (-1.70 to +5.10) crosses zero, so the external gain remains
+  directional rather than statistically proven.
 - SANJ feature analysis now accepts the current 39-column trace contract,
   including the fixed king-danger diagnostic column; its 42 tunable columns
   and production-score reconstruction remain unchanged.

@@ -219,6 +219,11 @@ All notable changes to NEYRANG are documented here.
 
 ### Rejected
 
+- Raising guarded null-move reduction from R3 to R4 only at depth eight and
+  deeper reduced the depth-9 tree by 2.27%, but its clean audited 512-game
+  parent screen scored `140/210/162` (47.85%, `-14.94 +/-19.79 Elo`). The
+  playing change was removed without an external-engine screen.
+
 - A follow-up that avoided a second `make_move` during Stockfish accumulator
   updates passed score-parity tests but tied the retained bitboard adapter
   `161/189/162` in 512 audited equal-time games (49.90%,

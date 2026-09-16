@@ -246,4 +246,11 @@ separate 256-opening Blunder screen, H18-PGO scored 28.42% and H21 scored
 33.79%, a gain of 5.37 percentage points. The accepted P3 artifact changes only
 within-stage move ordering; search rules and SANJ remain unchanged.
 
+An H29 follow-up tested R4 null-move reduction only from depth eight while
+preserving every retained eligibility guard. The depth-8 tree was unchanged;
+the depth-9 tree fell from 1,474,560 to 1,441,063 nodes (-2.27%). Its clean,
+audited 512-game equal-time parent screen scored `140/210/162` (47.85%,
+`-14.94 +/-19.79 Elo`). The negative point estimate rejected the candidate,
+and its playing code was removed without an external-engine screen.
+
 NEYRANG does not learn merely by playing games; improvements still require an explicit, tested patch. Any future baseline-protocol repair, null-move refinement, LMP, ProbCut, or singular-extension work must be pre-registered and isolated rather than bundled into the accepted candidate. The complete outcome is in the [0.3 final report](development/0.3.0-final-report.md).

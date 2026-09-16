@@ -184,7 +184,6 @@ impl MovePicker {
                             self.statistics.good_tactical_stage_visits += 1;
                         }
                         self.classify_tacticals(position, policy);
-                        self.prepare_stage(MoveClass::GoodTactical);
                         self.stage_initialized = true;
                     }
                     if let Some(mv) = self.pick_best(MoveClass::GoodTactical) {
@@ -204,7 +203,6 @@ impl MovePicker {
                             self.statistics.killer_stage_visits += 1;
                         }
                         self.classify_killers(position, history, policy);
-                        self.prepare_stage(MoveClass::Killer);
                         self.stage_initialized = true;
                     }
                     if let Some(mv) = self.pick_best(MoveClass::Killer) {
@@ -220,7 +218,6 @@ impl MovePicker {
                             self.statistics.quiet_stage_visits += 1;
                         }
                         self.classify_quiets(position, history, policy);
-                        self.prepare_stage(MoveClass::Quiet);
                         self.stage_initialized = true;
                     }
                     if let Some(mv) = self.pick_best(MoveClass::Quiet) {
@@ -293,6 +290,7 @@ impl MovePicker {
     }
 
     fn classify_tacticals(&mut self, position: &Position, policy: &MovePolicy) {
+        debug_assert_eq!(self.stage_len, 0);
         for (index, &mv) in self.moves.iter().enumerate() {
             if self.classes[index] != MoveClass::Unclassified
                 || (!mv.is_capture() && !mv.is_promotion())
@@ -308,12 +306,14 @@ impl MovePicker {
             );
             self.scores[index] = score;
             self.exchanges[index] = exchange;
-            self.classes[index] = if is_good {
-                MoveClass::GoodTactical
+            if is_good {
+                self.classes[index] = MoveClass::GoodTactical;
+                self.stage_indices[self.stage_len] = index as u8;
+                self.stage_len += 1;
             } else {
                 self.statistics.bad_capture_count += 1;
-                MoveClass::BadTactical
-            };
+                self.classes[index] = MoveClass::BadTactical;
+            }
         }
     }
 
@@ -323,6 +323,7 @@ impl MovePicker {
         history: &HistoryTable,
         policy: &MovePolicy,
     ) {
+        debug_assert_eq!(self.stage_len, 0);
         for (index, &mv) in self.moves.iter().enumerate() {
             if self.classes[index] != MoveClass::Unclassified || !self.killers.contains(&mv) {
                 continue;
@@ -337,6 +338,8 @@ impl MovePicker {
                 policy,
             );
             self.classes[index] = MoveClass::Killer;
+            self.stage_indices[self.stage_len] = index as u8;
+            self.stage_len += 1;
             #[cfg(feature = "stats")]
             {
                 self.statistics.moves_scored += 1;
@@ -350,6 +353,7 @@ impl MovePicker {
         history: &HistoryTable,
         policy: &MovePolicy,
     ) {
+        debug_assert_eq!(self.stage_len, 0);
         for (index, &mv) in self.moves.iter().enumerate() {
             if self.classes[index] != MoveClass::Unclassified {
                 continue;
@@ -364,6 +368,8 @@ impl MovePicker {
                 policy,
             );
             self.classes[index] = MoveClass::Quiet;
+            self.stage_indices[self.stage_len] = index as u8;
+            self.stage_len += 1;
             #[cfg(feature = "stats")]
             {
                 self.statistics.moves_scored += 1;
@@ -509,7 +515,9 @@ mod tests {
         shegerd::see,
     };
 
-    use super::{HistoryTable, MovePicker, OrderingStatistics, quiet_score, tactical_score};
+    use super::{
+        HistoryTable, MoveClass, MovePicker, OrderingStatistics, Stage, quiet_score, tactical_score,
+    };
 
     fn collect(picker: &mut MovePicker, position: &Position, history: &HistoryTable) -> Vec<Move> {
         let mut picked = Vec::new();
@@ -657,6 +665,55 @@ mod tests {
         );
 
         assert_eq!(collect(&mut picker, &position, &history), legal.as_slice());
+    }
+
+    #[test]
+    fn fused_collection_tracks_only_the_active_stage() {
+        let mut position = Position::from_fen("6k1/8/5p2/3qp3/2P1Q3/8/8/6K1 w - - 0 1")
+            .expect("ordering fixture must be valid");
+        let killer = position
+            .find_legal_move("g1f2")
+            .expect("killer move must be legal");
+        let history = HistoryTable::default();
+        let mut picker = MovePicker::main(
+            position.legal_moves(),
+            None,
+            [killer, Move::NONE],
+            position.side_to_move(),
+        );
+        let mut skipped_quiets = false;
+        let mut saw_bad_tactical = false;
+
+        while picker.next_move(&position, &history).is_some() {
+            let class = match picker.stage {
+                Stage::GoodTactical => MoveClass::GoodTactical,
+                Stage::Killer => MoveClass::Killer,
+                Stage::Quiet => MoveClass::Quiet,
+                Stage::BadTactical => {
+                    saw_bad_tactical = true;
+                    MoveClass::BadTactical
+                }
+                stage => panic!("unexpected active stage: {stage:?}"),
+            };
+            let mut active = picker.stage_indices[..picker.stage_len].to_vec();
+            active.sort_unstable();
+            let expected = picker
+                .classes
+                .iter()
+                .take(picker.moves.len())
+                .enumerate()
+                .filter_map(|(index, &candidate)| (candidate == class).then_some(index as u8))
+                .collect::<Vec<_>>();
+            assert_eq!(active, expected);
+
+            if picker.stage == Stage::Quiet {
+                picker.skip_quiet_moves();
+                skipped_quiets = true;
+            }
+        }
+
+        assert!(skipped_quiets);
+        assert!(saw_bad_tactical);
     }
 
     #[test]

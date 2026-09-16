@@ -185,4 +185,14 @@ same tree and checksum while reducing the 21-pair median from 289 to 257 ms
 and scored 30.00% against Blunder versus H12's same-opening 29.75%; that
 external +0.25-point difference remains directional only.
 
+H15 then kept H14 source-identical and used 256 normal fixed-node self-play
+games only to guide native compiler layout. Perft, the 536,259-node depth-8
+tree, and checksum remained exact. Across 31 interleaved pairs, median time
+fell from 259 to 251 ms and paired median throughput improved by 3.23%. H15
+scored 52.15% (`+14.95 +/-16.63 Elo`) against H14 in 1,000 clean equal-time
+games. Its same-opening Blunder score rose from 30.00% to 31.85%; the paired
+gain was +1.85 percentage points (95% interval -1.20 to +4.95), so the
+external gain remains directional rather than statistically proven. H15 is a
+host-specific deployment artifact, not a portable release build.
+
 NEYRANG does not learn merely by playing games; improvements still require an explicit, tested patch. Any future baseline-protocol repair, null-move refinement, LMP, ProbCut, or singular-extension work must be pre-registered and isolated rather than bundled into the accepted candidate. The complete outcome is in the [0.3 final report](development/0.3.0-final-report.md).

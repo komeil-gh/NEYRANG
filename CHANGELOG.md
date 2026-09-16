@@ -107,6 +107,8 @@ All notable changes to NEYRANG are documented here.
   leaving the portable default build and all search decisions unchanged.
 - H14 adds a BMI2/PEXT sliding-attack table only to host-native x86-64 builds;
   the portable ray backend remains the fallback and independent oracle.
+- H15 keeps H14 source-identical and adds profile-guided code layout only to a
+  separately tested host-native artifact; portable release builds are unchanged.
 ### Evidence
 
 - O1 captured 6,326 macOS top-of-stack samples from an unchanged SHA-256-bound
@@ -171,6 +173,13 @@ All notable changes to NEYRANG are documented here.
   `334/374/292` in 1,000 audited equal-time games (52.10%,
   `+14.60 +/-16.02 Elo`) and scored 30.00% against Blunder versus H12's
   same-opening 29.75%; the +0.25-point external difference is directional only.
+- H15 preserved the exact H14 depth-8 tree/checksum and Perft 5 while reducing
+  the 31-pair native median from 259 ms to 251 ms (3.23% paired median
+  throughput). It scored `342/359/299` against H14 in 1,000 audited equal-time
+  games (52.15%, `+14.95 +/-16.63 Elo`). On the identical 500 opening/color
+  pairs against Blunder it scored 31.85% versus H14's 30.00%; the paired
+  +1.85-point interval (-1.20 to +4.95) crosses zero, so the external gain is
+  directional rather than statistically proven.
 - SANJ feature analysis now accepts the current 39-column trace contract,
   including the fixed king-danger diagnostic column; its 42 tunable columns
   and production-score reconstruction remain unchanged.

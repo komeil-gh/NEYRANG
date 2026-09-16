@@ -109,3 +109,9 @@ also enables H14's BMI2 slider tables. Its only `unsafe` operation is the
 compile-time-gated `_pext_u64` intrinsic call; the portable ray backend and
 independent exhaustive oracle remain authoritative. Native binaries are
 machine-specific artifacts rather than portable releases.
+
+H15 optionally adds profile-guided code layout to that same native artifact.
+Its profile comes from the normal UCI path, but neither the profile nor the
+optimized binary changes search or evaluation semantics. PGO artifacts remain
+compiler-, workload-, and host-specific; the portable repository build is
+still the release baseline.

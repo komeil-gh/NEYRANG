@@ -69,6 +69,49 @@ Node counts and checksums are deterministic for a given engine version and
 workload. Timing and nodes per second depend on the machine, operating system,
 compiler, and build flags.
 
+## Native profile-guided build
+
+PGO is optional deployment work; it does not replace the portable release.
+Build an instrumented native binary into a new profile directory:
+
+```bash
+scripts/build-native-pgo.sh instrument testing/private/pgo \
+  testing/private/neyrang-pgo-instrumented
+```
+
+Exercise that binary through a representative, audited UCI workload while
+writing raw profiles without collisions:
+
+```bash
+LLVM_PROFILE_FILE="$PWD/testing/private/pgo/raw/%m_%p.profraw" \
+FASTCHESS_BIN=/path/to/fastchess \
+ENGINE_A=testing/private/neyrang-pgo-instrumented \
+ENGINE_B=testing/private/neyrang-pgo-instrumented \
+ENGINE_A_NAME=NEYRANG-PGO-train-A ENGINE_B_NAME=NEYRANG-PGO-train-B \
+GAMES=256 NODES=50000 CONCURRENCY=8 HASH_MB=64 THREADS=1 \
+OPENINGS_FILE=scripts/openings.epd OPENING_ORDER=sequential \
+OPENING_SEED=20260916 STRICT=1 \
+PGN_OUT=testing/private/pgo/training.pgn \
+META_OUT=testing/private/pgo/training.meta.txt \
+LOG_OUT=testing/private/pgo/training.log \
+CONFIG_OUT=testing/private/pgo/training.config.json \
+bash scripts/match.sh
+```
+
+Then merge the raw profiles and build the optimized artifact:
+
+```bash
+scripts/build-native-pgo.sh optimize testing/private/pgo \
+  testing/private/neyrang-pgo
+```
+
+The script refuses to overwrite the profile directory, merged profile, or
+binary. `llvm-tools-preview` must be installed for the selected Rust toolchain,
+or `LLVM_PROFDATA` must name a compatible executable. Before retention, rerun
+Perft, deterministic tree/checksum checks, interleaved timing, and a paired
+equal-resource match. Never transfer native/PGO measurements to another CPU or
+workload without fresh evidence.
+
 ## Match testing
 
 Use balanced openings, color-reversed pairs, equal resource limits, frozen

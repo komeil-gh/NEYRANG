@@ -170,6 +170,11 @@ All notable changes to NEYRANG are documented here.
 
 ### Rejected
 
+- H13's exact 4,096-entry pawn cache preserved the depth-8 tree and checksum
+  and reduced the 21-pair native median from 303 ms to 287 ms (5.57%), but its
+  audited 1,000-game equal-time parent screen scored 49.40%
+  (`-4.17 +/-15.98 Elo`). The negative point estimate failed the registered
+  gate, so the playing cache was removed before any Blunder screen.
 - H3m's one-ply check-evasion extension passed its 128-game hybrid-parent screen
   at 53.12% (`+21.74 +/-46.53 Elo`) but expanded the five-position depth-5 tree
   from 34,345 to 40,415 nodes (+17.67%) and scored only 23.24%

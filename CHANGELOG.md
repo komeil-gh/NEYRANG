@@ -186,6 +186,11 @@ All notable changes to NEYRANG are documented here.
 
 ### Rejected
 
+- H16's search-local capture history passed focused correctness tests but
+  expanded the native depth-8 tree from 536,259 to 605,581 nodes (+12.93%).
+  Across 31 interleaved pairs its median rose from 257 ms to 299 ms and paired
+  median throughput fell by 14.09%. It failed the registered engineering gate,
+  so zero games ran and the playing code was removed.
 - H13's exact 4,096-entry pawn cache preserved the depth-8 tree and checksum
   and reduced the 21-pair native median from 303 ms to 287 ms (5.57%), but its
   audited 1,000-game equal-time parent screen scored 49.40%

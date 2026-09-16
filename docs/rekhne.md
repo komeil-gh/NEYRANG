@@ -195,4 +195,9 @@ gain was +1.85 percentage points (95% interval -1.20 to +4.95), so the
 external gain remains directional rather than statistically proven. H15 is a
 host-specific deployment artifact, not a portable release build.
 
+H16 tested search-local capture history inside the existing SEE-defined
+tactical stages. Focused tests passed, but the depth-8 tree expanded by 12.93%
+and paired median throughput fell by 14.09%. It failed the registered
+engineering gate, so zero games ran and the playing code was removed.
+
 NEYRANG does not learn merely by playing games; improvements still require an explicit, tested patch. Any future baseline-protocol repair, null-move refinement, LMP, ProbCut, or singular-extension work must be pre-registered and isolated rather than bundled into the accepted candidate. The complete outcome is in the [0.3 final report](development/0.3.0-final-report.md).

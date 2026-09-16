@@ -38,5 +38,11 @@ train the table.
 
 ## Outcome
 
-Pending. No result or strength claim exists until every applicable gate above
-has completed.
+Rejected at the engineering gate with zero games.
+
+The candidate passed its focused capture-history and stage-boundary tests, but
+the native depth-8 tree expanded from 536,259 to 605,581 nodes (+12.93%). Across
+31 interleaved pairs, the baseline median was 257 ms and the candidate median
+was 299 ms; paired median throughput fell by 14.09%. This exceeded the allowed
+5% regression, so no fixed-node, equal-time, or Blunder match was opened and
+the playing code was removed.

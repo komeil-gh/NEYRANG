@@ -161,4 +161,12 @@ from H7's 23.90% to 27.40%; the paired difference was +3.50 percentage points
 +4.11 to +59.73). H8 is retained only as a host-specific deployment artifact;
 the ordinary build remains portable.
 
+H9 then removed SANJ's duplicate non-pawn attack traversal while preserving
+every evaluation score. The exact depth-8 tree and checksum remained unchanged,
+the 21-pair host-native median fell from 319 ms to 300 ms, and H9 beat H8 at
+51.60% in 1,000 clean equal-time games. Its same-opening Blunder score rose
+from 27.40% to 28.10%, but the paired 95% interval (-2.50 to +3.90 percentage
+points) crosses zero; this is retained throughput work, not a proven external
+Elo gain.
+
 NEYRANG does not learn merely by playing games; improvements still require an explicit, tested patch. Pawn hashing remains deferred. Any future baseline-protocol repair, null-move refinement, LMP, ProbCut, or singular-extension work must be pre-registered and isolated rather than bundled into the accepted candidate. The complete outcome is in the [0.3 final report](development/0.3.0-final-report.md).

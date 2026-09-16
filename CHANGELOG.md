@@ -105,6 +105,8 @@ All notable changes to NEYRANG are documented here.
   same node without changing their conditions or outcomes.
 - H8 retains a separately benchmarked host-native deployment artifact while
   leaving the portable default build and all search decisions unchanged.
+- H14 adds a BMI2/PEXT sliding-attack table only to host-native x86-64 builds;
+  the portable ray backend remains the fallback and independent oracle.
 ### Evidence
 
 - O1 captured 6,326 macOS top-of-stack samples from an unchanged SHA-256-bound
@@ -164,6 +166,11 @@ All notable changes to NEYRANG are documented here.
   same-opening Blunder score rose from 28.10% to 29.75%. The paired +1.65-point
   interval (-1.70 to +5.10) crosses zero, so the external gain remains
   directional rather than statistically proven.
+- H14 preserved the exact H12 depth-8 tree and checksum while reducing the
+  21-pair native median from 289 ms to 257 ms (12.45%). It beat H12
+  `334/374/292` in 1,000 audited equal-time games (52.10%,
+  `+14.60 +/-16.02 Elo`) and scored 30.00% against Blunder versus H12's
+  same-opening 29.75%; the +0.25-point external difference is directional only.
 - SANJ feature analysis now accepts the current 39-column trace contract,
   including the fixed king-danger diagnostic column; its 42 tunable columns
   and production-score reconstruction remain unchanged.

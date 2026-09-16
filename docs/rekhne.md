@@ -177,4 +177,12 @@ and its same-opening Blunder score rose from 28.10% to 29.75%. The paired
 difference was +1.65 percentage points with a 95% interval of -1.70 to +5.10,
 so the external gain is directional rather than statistically proven.
 
-NEYRANG does not learn merely by playing games; improvements still require an explicit, tested patch. Pawn hashing remains deferred. Any future baseline-protocol repair, null-move refinement, LMP, ProbCut, or singular-extension work must be pre-registered and isolated rather than bundled into the accepted candidate. The complete outcome is in the [0.3 final report](development/0.3.0-final-report.md).
+H13's exact pawn cache was then rejected after a negative 49.40% parent point
+estimate despite a 5.57% speedup, and its playing code was removed. H14 instead
+targeted the shared slider-attack hot path. Native BMI2 tables preserved the
+same tree and checksum while reducing the 21-pair median from 289 to 257 ms
+(12.45%). H14 beat H12 at 52.10% (`+14.60 +/-16.02 Elo`) in 1,000 clean games
+and scored 30.00% against Blunder versus H12's same-opening 29.75%; that
+external +0.25-point difference remains directional only.
+
+NEYRANG does not learn merely by playing games; improvements still require an explicit, tested patch. Any future baseline-protocol repair, null-move refinement, LMP, ProbCut, or singular-extension work must be pre-registered and isolated rather than bundled into the accepted candidate. The complete outcome is in the [0.3 final report](development/0.3.0-final-report.md).

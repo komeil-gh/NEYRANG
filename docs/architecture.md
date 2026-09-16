@@ -59,7 +59,11 @@ The production implementation generates pseudo-legal moves into `[Move; 256]`, c
 
 The previous make/check/unmake filter remains compiled under tests as an immutable reference oracle. A deterministic 100,000-position corpus compares the exact legal list and order and explicitly records coverage of checks, double checks, pins, en passant, castling, and promotions. Castling still checks the origin, transit, and destination squares before emission and receives a final-occupancy safety check. En-passant discovered checks are handled by removing both the moving pawn's origin and the captured pawn before attack calculation.
 
-Leaper attacks are compile-time tables. Bishops, rooks, and queens use portable occupancy rays. A future magic or lookup backend must preserve the scalar implementation as a reference/fallback and demonstrate a benchmark gain on Apple Silicon.
+Leaper attacks are compile-time tables. Bishops, rooks, and queens use portable
+occupancy rays by default. A host-native x86-64 build with BMI2 instead indexes
+once-initialized bishop and rook tables with `PEXT`; the scalar rays remain the
+portable fallback, table builder, and independent test oracle. This backend is
+an H14 deployment optimization, not a search or evaluation change.
 
 ## Concurrency and portability
 
@@ -100,7 +104,8 @@ provenance branch enters the REKHNE hot path.
 
 No x86 or ARM intrinsic is required by the portable build. Retained N7 uses a
 runtime-checked AVX2 output kernel with the N2 scalar path as its bit-exact
-fallback/oracle. A separately tested `target-cpu=native` deployment build may
-let the compiler use more host instructions across the engine, but it is a
-machine-specific artifact rather than a portable release binary. Further
-CPU-specific NNUE or attack code must stay behind isolated platform modules.
+fallback/oracle. The separately tested `target-cpu=native` deployment build
+also enables H14's BMI2 slider tables. Its only `unsafe` operation is the
+compile-time-gated `_pext_u64` intrinsic call; the portable ray backend and
+independent exhaustive oracle remain authoritative. Native binaries are
+machine-specific artifacts rather than portable releases.

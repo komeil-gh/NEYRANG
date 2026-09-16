@@ -60,6 +60,10 @@ network. The Stockfish-compatible evaluator advances a preallocated per-ply
 accumulator for ordinary moves and copies the parent accumulator across null
 moves. A full-refresh oracle checks the incremental score after every move in a
 legal sequence.
+The adapter enumerates occupied squares directly from the engine's twelve
+piece bitboards, avoiding a 64-square mailbox scan each time `nnue-rs` requests
+a board view. This changes traversal cost only; piece identities, squares and
+network scores retain the same contract.
 Decoding is fail-closed. The loaded network is immutable and shared across
 Lazy-SMP workers, while every worker owns a move-delta accumulator stack. The
 engine scalar output is checked bit-for-bit against the independent reference

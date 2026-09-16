@@ -68,6 +68,9 @@ All notable changes to NEYRANG are documented here.
 - Stockfish-compatible SANJ evaluation now advances preallocated per-ply
   accumulators instead of refreshing the full network at every static
   evaluation; a full-refresh parity test protects the score contract.
+- The Stockfish-compatible board adapter now enumerates occupied squares
+  directly from NEYRANG's twelve piece bitboards instead of probing all 64
+  mailbox squares on every NNUE board traversal.
 - The separately trained SHEGERD move policy remains bundled and loadable with
   `PolicyFile=<embedded>`, but the default is now `<empty>` so the retained
   Stockfish-compatible evaluator uses the engine's native stage ordering.
@@ -207,8 +210,19 @@ All notable changes to NEYRANG are documented here.
 - SANJ feature analysis now accepts the current 39-column trace contract,
   including the fixed king-danger diagnostic column; its 42 tunable columns
   and production-score reconstruction remain unchanged.
+- The occupied-bitboard NNUE adapter beat its frozen source-identical parent
+  `341/393/290` in 1,024 audited equal-time games (52.49%,
+  `+17.32 +/-14.64 Elo`, LOS 98.99%). Its separate clean 1,024-game Blunder
+  8.0.0 screen scored `361/338/325` (51.76%, `+12.22 +/-17.11 Elo`). All
+  2,048 games terminated normally without timing, legality, crash or protocol
+  failure; the external score is not a paired improvement claim.
 
 ### Rejected
+
+- A follow-up that avoided a second `make_move` during Stockfish accumulator
+  updates passed score-parity tests but tied the retained bitboard adapter
+  `161/189/162` in 512 audited equal-time games (49.90%,
+  `-0.68 +/-20.76 Elo`). Its larger playing diff was removed.
 
 - H20 fused classical SANJ material, PSQT, phase, activity, pressure, and
   rook-file work into one color-local piece traversal. It preserved the exact

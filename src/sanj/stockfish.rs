@@ -14,14 +14,17 @@ impl nnue_rs::Board for Position {
     }
 
     fn for_each_piece(&self, visitor: &mut dyn FnMut(u8, nnue_rs::Piece)) {
-        for square in 0_u8..64 {
-            let square =
-                crate::chess::Square::from_index(square).expect("a board index is always a square");
-            if let Some((color, piece)) = self.piece_at(square) {
-                visitor(
-                    square.index() as u8,
-                    nnue_rs::Piece::new(map_color(color), map_piece(piece)),
-                );
+        for color in [Color::White, Color::Black] {
+            for piece in PieceType::ALL {
+                let mut pieces = self.pieces(color, piece);
+                while pieces != 0 {
+                    let square = pieces.trailing_zeros() as u8;
+                    pieces &= pieces - 1;
+                    visitor(
+                        square,
+                        nnue_rs::Piece::new(map_color(color), map_piece(piece)),
+                    );
+                }
             }
         }
     }

@@ -188,6 +188,10 @@ All notable changes to NEYRANG are documented here.
 - H3t's bounded search-local pawn correction expanded the deterministic
   depth-8 tree from 536,259 to 595,258 nodes (+11.00%), failing its registered
   2% ceiling. It was rejected before games and removed.
+- H10's four-entry transposition clusters passed every correctness and
+  concurrency test but reduced the depth-8 tree by only 0.006% and tied H9's
+  295 ms median across 21 interleaved pairs. It failed both registered
+  engineering floors, so no games ran and the playing code was removed.
 
 ## [0.2.0] - 2026-08-29
 

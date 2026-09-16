@@ -33,5 +33,15 @@ or search decisions.
 
 ## Outcome
 
-Pending. No performance or strength claim exists until every applicable gate
-above has completed.
+Rejected. The candidate passed every Linux-applicable repository check,
+including the 100,000-position SANJ reconstruction. It preserved Perft 5 and
+both registered search identities: depth 8 remained `536,259` nodes with
+checksum `9d8d22b14e51010d`, while depth 12 remained `29,459,618` nodes with
+checksum `0f8416196d8f7941`. Across 31 interleaved native pairs, the median fell
+from 254 ms to 245 ms and paired median throughput improved by 3.47%.
+
+The independently audited 1,000-game equal-time parent match scored
+`300/386/314` (49.30%, `-4.86 +/-15.83 Elo`) with 1,000 normal terminations
+and zero warning, timeout, crash, legality, or protocol anomaly. The negative
+point estimate failed gate 3, so the playing change was removed. Per gate 4,
+no H20 PGO training or Blunder screen was run.

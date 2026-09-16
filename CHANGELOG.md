@@ -195,6 +195,13 @@ All notable changes to NEYRANG are documented here.
 
 ### Rejected
 
+- H20 fused classical SANJ material, PSQT, phase, activity, pressure, and
+  rook-file work into one color-local piece traversal. It preserved the exact
+  depth-8 and depth-12 trees/checksums and improved 31-pair native median
+  throughput by 3.47%, but its independently audited 1,000-game equal-time
+  parent screen scored `300/386/314` (49.30%, `-4.86 +/-15.83 Elo`). The
+  negative point estimate failed the registered gate, so the playing code was
+  removed before PGO or a Blunder screen.
 - H19 fused good-tactical, killer, and quiet active-index collection into each
   stage's existing classification pass. It preserved the exact 536,259-node
   depth-8 tree/checksum and improved 31-pair native median throughput by 2.88%,

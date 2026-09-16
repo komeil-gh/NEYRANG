@@ -228,4 +228,11 @@ throughput), but the audited 1,000-game parent screen scored 49.30%
 retention rule, so the playing change was removed without PGO or a Blunder
 screen.
 
+H20 then fused classical SANJ's material, PSQT, phase, activity, king-pressure,
+and rook-file traversals. Depth-8 and depth-12 trees/checksums remained exact,
+and the 31-pair native median improved from 254 ms to 245 ms (3.47% paired
+median throughput). Its audited 1,000-game parent screen nevertheless scored
+49.30% (`-4.86 +/-15.83 Elo`), so the negative point estimate removed the
+playing change before PGO or a Blunder screen.
+
 NEYRANG does not learn merely by playing games; improvements still require an explicit, tested patch. Any future baseline-protocol repair, null-move refinement, LMP, ProbCut, or singular-extension work must be pre-registered and isolated rather than bundled into the accepted candidate. The complete outcome is in the [0.3 final report](development/0.3.0-final-report.md).

@@ -11,13 +11,45 @@ const MAX_PHASE: i32 = 24;
 
 /// Return centipawns from the side-to-move perspective.
 pub fn evaluate(position: &Position) -> i32 {
-    let white = color_terms(position, Color::White);
-    let black = color_terms(position, Color::Black);
-    let mut middlegame = white.middlegame - black.middlegame;
-    let endgame = white.endgame - black.endgame;
-    let mut phase = white.phase + black.phase;
-    middlegame += king_safety(position, Color::White, black.king_pressure);
-    middlegame -= king_safety(position, Color::Black, white.king_pressure);
+    let mut middlegame = 0_i32;
+    let mut endgame = 0_i32;
+    let mut phase = 0_i32;
+    let activity = [
+        piece_activity(position, Color::White),
+        piece_activity(position, Color::Black),
+    ];
+
+    for color in [Color::White, Color::Black] {
+        let sign = if color == Color::White { 1 } else { -1 };
+        for kind in PieceType::ALL {
+            let mut pieces = position.pieces(color, kind);
+            phase += pieces.count_ones() as i32 * PHASE_WEIGHT[kind.index()];
+            while pieces != 0 {
+                let index = pieces.trailing_zeros() as u8;
+                pieces &= pieces - 1;
+                let square = Square::from_index(index).expect("piece bit is a valid square");
+                middlegame +=
+                    sign * (MG_VALUE[kind.index()] + psqt::middlegame(kind, square, color));
+                endgame += sign * (EG_VALUE[kind.index()] + psqt::endgame(kind, square, color));
+            }
+        }
+
+        if position.pieces(color, PieceType::Bishop).count_ones() >= 2 {
+            middlegame += sign * 28;
+            endgame += sign * 41;
+        }
+        let (pawn_mg, pawn_eg) = pawns::evaluate(position, color);
+        middlegame += sign * pawn_mg;
+        endgame += sign * pawn_eg;
+        middlegame += sign * activity[color.index()].mobility;
+        middlegame += sign * rook_files(position, color);
+        middlegame += sign
+            * king_safety(
+                position,
+                color,
+                activity[color.opposite().index()].king_pressure,
+            );
+    }
 
     phase = phase.clamp(0, MAX_PHASE);
     let white_score = (middlegame * phase + endgame * (MAX_PHASE - phase)) / MAX_PHASE;
@@ -28,18 +60,14 @@ pub fn evaluate(position: &Position) -> i32 {
 }
 
 #[derive(Clone, Copy)]
-struct ColorTerms {
-    middlegame: i32,
-    endgame: i32,
-    phase: i32,
+struct Activity {
+    mobility: i32,
     king_pressure: i32,
 }
 
-fn color_terms(position: &Position, color: Color) -> ColorTerms {
+fn piece_activity(position: &Position, color: Color) -> Activity {
     let own = position.occupancy(color);
     let all = position.all_occupancy();
-    let own_pawns = position.pieces(color, PieceType::Pawn);
-    let all_pawns = own_pawns | position.pieces(color.opposite(), PieceType::Pawn);
     let enemy_king = position.pieces(color.opposite(), PieceType::King);
     let zone = if enemy_king == 0 {
         0
@@ -48,78 +76,72 @@ fn color_terms(position: &Position, color: Color) -> ColorTerms {
             Square::from_index(enemy_king.trailing_zeros() as u8).expect("king bit is valid");
         attacks::king_attacks(square) | square.bit()
     };
-    let mut middlegame = 0;
-    let mut endgame = 0;
-    let mut phase = 0;
+    let mut mobility = 0;
     let mut pressure = 0;
+    let mut pawns = position.pieces(color, PieceType::Pawn);
+    while pawns != 0 {
+        let index = pawns.trailing_zeros() as u8;
+        pawns &= pawns - 1;
+        let square = Square::from_index(index).expect("piece bit is a valid square");
+        pressure += (attacks::pawn_attacks(color, square) & zone).count_ones() as i32;
+    }
+
     let mut attackers = 0;
-    let mut bishop_count = 0;
-    let mut has_queen = false;
-    let mut rook_file_score = 0;
-    for kind in PieceType::ALL {
+    for (kind, weight) in [
+        (PieceType::Knight, (5, 2)),
+        (PieceType::Bishop, (8, 2)),
+        (PieceType::Rook, (4, 3)),
+        (PieceType::Queen, (3, 5)),
+    ] {
         let mut pieces = position.pieces(color, kind);
-        let count = pieces.count_ones() as i32;
-        phase += count * PHASE_WEIGHT[kind.index()];
-        if kind == PieceType::Bishop {
-            bishop_count = count;
-        } else if kind == PieceType::Queen {
-            has_queen = count != 0;
-        }
         while pieces != 0 {
             let index = pieces.trailing_zeros() as u8;
             pieces &= pieces - 1;
             let square = Square::from_index(index).expect("piece bit is a valid square");
-            middlegame += MG_VALUE[kind.index()] + psqt::middlegame(kind, square, color);
-            endgame += EG_VALUE[kind.index()] + psqt::endgame(kind, square, color);
-
-            if kind == PieceType::Pawn {
-                pressure += (attacks::pawn_attacks(color, square) & zone).count_ones() as i32;
-                continue;
-            }
-            let (attacked, mobility_weight, pressure_weight) = match kind {
-                PieceType::Knight => (attacks::knight_attacks(square), 5, 2),
-                PieceType::Bishop => (attacks::bishop_attacks(square, all), 8, 2),
-                PieceType::Rook => {
-                    let file = pawns::file_mask(square.file());
-                    rook_file_score += if all_pawns & file == 0 {
-                        27
-                    } else if own_pawns & file == 0 {
-                        15
-                    } else {
-                        0
-                    };
-                    (attacks::rook_attacks(square, all), 4, 3)
-                }
-                PieceType::Queen => (attacks::queen_attacks(square, all), 3, 5),
-                PieceType::King => continue,
-                PieceType::Pawn => unreachable!(),
+            let attacks = match kind {
+                PieceType::Knight => attacks::knight_attacks(square),
+                PieceType::Bishop => attacks::bishop_attacks(square, all),
+                PieceType::Rook => attacks::rook_attacks(square, all),
+                PieceType::Queen => attacks::queen_attacks(square, all),
+                _ => 0,
             };
-            middlegame += (attacked & !own).count_ones() as i32 * mobility_weight;
-            let hits = attacked & zone;
+            mobility += (attacks & !own).count_ones() as i32 * weight.0;
+            let hits = attacks & zone;
             if hits != 0 {
                 attackers += 1;
-                pressure += pressure_weight + hits.count_ones() as i32;
+                pressure += weight.1 + hits.count_ones() as i32;
             }
         }
     }
-    if bishop_count >= 2 {
-        middlegame += 28;
-        endgame += 41;
-    }
-    let (pawn_mg, pawn_eg) = pawns::evaluate(position, color);
-    middlegame += pawn_mg + rook_file_score;
-    endgame += pawn_eg;
-    let king_pressure = if attackers < 2 && (attackers == 0 || !has_queen) {
-        0
-    } else {
-        (pressure * (attackers + 1)).min(120)
-    };
-    ColorTerms {
-        middlegame,
-        endgame,
-        phase,
+    let king_pressure =
+        if attackers < 2 && (attackers == 0 || position.pieces(color, PieceType::Queen) == 0) {
+            0
+        } else {
+            (pressure * (attackers + 1)).min(120)
+        };
+    Activity {
+        mobility,
         king_pressure,
     }
+}
+
+fn rook_files(position: &Position, color: Color) -> i32 {
+    let own_pawns = position.pieces(color, PieceType::Pawn);
+    let all_pawns = own_pawns | position.pieces(color.opposite(), PieceType::Pawn);
+    let mut rooks = position.pieces(color, PieceType::Rook);
+    let mut score = 0;
+    while rooks != 0 {
+        let index = rooks.trailing_zeros() as u8;
+        rooks &= rooks - 1;
+        let square = Square::from_index(index).expect("rook bit is a valid square");
+        let file = pawns::file_mask(square.file());
+        if all_pawns & file == 0 {
+            score += 27;
+        } else if own_pawns & file == 0 {
+            score += 15;
+        }
+    }
+    score
 }
 
 fn king_safety(position: &Position, color: Color, enemy_pressure: i32) -> i32 {
@@ -156,7 +178,7 @@ mod tests {
         let lone = Position::from_fen("k7/8/8/8/8/5n2/8/6K1 w - - 0 1").unwrap();
         let coordinated = Position::from_fen("k7/8/8/8/8/5n2/7r/6K1 w - - 0 1").unwrap();
 
-        assert_eq!(color_terms(&lone, Color::Black).king_pressure, 0);
-        assert!(color_terms(&coordinated, Color::Black).king_pressure > 0);
+        assert_eq!(piece_activity(&lone, Color::Black).king_pressure, 0);
+        assert!(piece_activity(&coordinated, Color::Black).king_pressure > 0);
     }
 }

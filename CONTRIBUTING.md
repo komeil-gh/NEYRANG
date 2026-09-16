@@ -26,10 +26,10 @@ Do not copy another engine's code or tuned constants. Primary sources may justif
 - `src/uci`: protocol parsing and engine boundary
 - `src/tools` and `scripts`: deterministic developer and evidence tooling
 
-Keep the runtime dependency surface minimal. The default playing binary permits
-the documented `nnue-rs` dependency for Stockfish-compatible NNUE inference;
-any additional dependency requires an explicit proposal. Preserve
-scalar/reference implementations when adding platform-specific acceleration.
+Keep the playing binary free of third-party runtime dependencies and pretrained
+networks. Any proposed exception requires explicit review and cannot be used as
+evidence for NEYRANG's independent strength. Preserve scalar/reference
+implementations when adding platform-specific acceleration.
 
 ## Required local gates
 

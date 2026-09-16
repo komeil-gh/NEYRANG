@@ -6,9 +6,6 @@ All notable changes to NEYRANG are documented here.
 
 ### Added
 
-- A default-enabled Stockfish-compatible SANJ evaluator using `nnue-rs 0.4.0`,
-  with fail-closed external loading and the official Stockfish 18 small network
-  embedded for reproducible release builds.
 - Experimental version-4 `Chess768x3hmli` NNUE artifacts and trainer/reference
   support for a low-cost post-SCReLU absolute dual-perspective imbalance channel.
 - A fail-closed CPU SHEGERD policy path that loads checksum-bound
@@ -73,25 +70,20 @@ All notable changes to NEYRANG are documented here.
 - Historical machine-specific executables were removed from the tracked tree;
   their source commits remain available in Git history, and a repository
   contract test prevents generated `builds/` artifacts from returning.
-- Stockfish-compatible SANJ evaluation now advances preallocated per-ply
-  accumulators instead of refreshing the full network at every static
-  evaluation; a full-refresh parity test protects the score contract.
-- The Stockfish-compatible board adapter now enumerates occupied squares
-  directly from NEYRANG's twelve piece bitboards instead of probing all 64
-  mailbox squares on every NNUE board traversal.
-- The separately trained SHEGERD move policy remains bundled and loadable with
-  `PolicyFile=<embedded>`, but the default is now `<empty>` so the retained
-  Stockfish-compatible evaluator uses the engine's native stage ordering.
+- The imported `nnue-rs` adapter and Stockfish 18 small network were removed
+  from the playing binary. The default build again uses only NEYRANG's native
+  SANJ-N7 decoder/inference path at `EvalMix=10`; a repository contract test
+  prevents third-party runtime code or pretrained networks from returning.
+- The separately trained SHEGERD policy remains bundled and defaults to
+  `PolicyFile=<embedded>`; `<empty>` disables it for controlled comparisons.
 - The embedded SHEGERD policy is now P3: a conservative 75% P2 / 25%
   Stockfish-18 teacher blend. It scored 51.86% (`+12.92 +/-13.99 Elo`,
   LOS 96.51%) in a 1,372-game disjoint fixed-node confirmation and improved
   the same-opening Blunder score from 28.42% to 33.79% over 512 games per
   engine. Both retained matches completed without engine or protocol failure.
-- Default release builds now embed the accepted Stockfish 18 small network at
-  `EvalMix=100` and the teacher-residual SHEGERD-P3 policy. `<empty>` still
-  selects the classical evaluator or ordering, and `--no-default-features`
-  keeps an explicit research-only classical build available. Native NEYRANG
-  NNUE artifacts remain supported for controlled experiments.
+- Default release builds embed the NEYRANG-trained SANJ-N7 residual and
+  SHEGERD-P3 policy. `<empty>` selects classical evaluation or disables policy,
+  while `--no-default-features` keeps an explicit classical-only research build.
 - H5h's latent-imbalance network passed format/runtime parity and improved
   fresh Stockfish-18 WDL-space MSE by 1.51%, but its paired-bootstrap 95% upper
   bound remained positive. A later 256-game fixed-node check scored 48.44%
@@ -218,14 +210,14 @@ All notable changes to NEYRANG are documented here.
 - SANJ feature analysis now accepts the current 39-column trace contract,
   including the fixed king-danger diagnostic column; its 42 tunable columns
   and production-score reconstruction remain unchanged.
-- The occupied-bitboard NNUE adapter beat its frozen source-identical parent
-  `341/393/290` in 1,024 audited equal-time games (52.49%,
-  `+17.32 +/-14.64 Elo`, LOS 98.99%). Its separate clean 1,024-game Blunder
-  8.0.0 screen scored `361/338/325` (51.76%, `+12.22 +/-17.11 Elo`). All
-  2,048 games terminated normally without timing, legality, crash or protocol
-  failure; the external score is not a paired improvement claim.
-
 ### Rejected
+
+- H27-H29 embedded an official Stockfish 18 small NNUE through `nnue-rs`.
+  The final adapter scored `341/393/290` against its source-identical parent
+  and `361/338/325` against Blunder 8.0.0 in separate 1,024-game screens, but
+  those games measure NEYRANG search with an imported evaluator—not NEYRANG's
+  independent playing strength. The dependency, adapter, model, and all
+  default-build claims based on them were removed.
 
 - Raising guarded null-move reduction from R3 to R4 only at depth eight and
   deeper reduced the depth-9 tree by 2.27%, but its clean audited 512-game

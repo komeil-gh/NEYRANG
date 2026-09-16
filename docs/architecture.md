@@ -19,20 +19,18 @@ into UCI or REKHNE. Historical byte-identity claims remain attached to their
 recorded pre-rename commits; the identity migration necessarily changes the
 binary bytes.
 
-The NNUE path is isolated behind the default-enabled `nnue` feature. The default
-`stockfish-nnue` companion feature starts UCI with the embedded Stockfish-18
-small network at 100%; external `EvalFile` data must pass either the fail-closed
-`NEYRANG\0` decoder or the Stockfish-compatible decoder, and `<empty>` restores
-classical SANJ. Versions 1 and 2 of the native format retain one scalar output head; version 3
+The NNUE path is isolated behind the default-enabled `nnue` feature. UCI starts
+with NEYRANG's embedded SANJ-N7 residual at 10%; external `EvalFile` data must
+pass the fail-closed `NEYRANG\0` decoder, and `<empty>` restores classical SANJ.
+Versions 1 and 2 of the native format retain one scalar output head; version 3
 uses the same three-bank input transformer with four material-routed output
 heads; experimental version 4 adds one post-SCReLU absolute-difference channel
 to a single output head. Each searcher owns its accumulator stack; Lazy-SMP workers
 share only an immutable `Arc` network and never share mutable accumulator state.
 The optional `EvalMix` combines NNUE with classical SANJ using a bounded integer
-percentage; it changes neither artifact format nor ownership. Native and
-Stockfish-compatible networks use each searcher's preallocated per-ply
-accumulator stack. Both retain immutable shared weights; the external network
-path updates child accumulators from the parent position and move.
+percentage; it changes neither artifact format nor ownership. Each searcher
+owns its preallocated per-ply native accumulator stack and workers share only
+immutable SANJ weights.
 Ordinary moves, captures, en-passant, castling, promotions, re-searches, and
 null moves all preserve the scalar full-refresh oracle, including the remaining
 piece count used by version 3. The version-4 imbalance channel uses the existing
@@ -41,10 +39,11 @@ implementation is intentionally independent from `tools/nnue-reference`. SIMD
 and default activation remain later evidence gates.
 
 The default-enabled `policy` feature embeds the accepted stage-aligned
-SHEGERD-P3 additive tables as an optional CPU move-ordering signal. P3 retains
-75% of the general P2 policy and adds a 25% Stockfish-18 teacher residual fitted
-from current-engine decisions. The UCI default is `<empty>`; `<embedded>` opts
-into the bundled policy. External `PolicyFile` artifacts are fail-closed.
+SHEGERD-P3 additive tables as a CPU move-ordering signal. P3 was produced by
+NEYRANG's own fitter; 25% of its residual labels came from documented
+Stockfish-18 teacher analysis rather than a copied runtime model. The UCI
+default is `<embedded>`; `<empty>` disables the bundled policy. External
+`PolicyFile` artifacts are fail-closed.
 REKHNE supplies the previous-move
 destination; SHEGERD reproduces the trainer's side normalization, material
 phase, piece codes and SEE buckets. The policy may only rank moves inside an

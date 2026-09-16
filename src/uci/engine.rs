@@ -27,14 +27,10 @@ use super::parser::{Command, GoParameters, PositionSpecification, parse};
 const DEFAULT_HASH_MB: usize = 64;
 const DEFAULT_MOVE_OVERHEAD_MS: u64 = 30;
 const MAX_HASH_MB: usize = 65_536;
-#[cfg(all(feature = "nnue", not(feature = "stockfish-nnue")))]
+#[cfg(feature = "nnue")]
 const DEFAULT_EVAL_MIX: u8 = 10;
-#[cfg(feature = "stockfish-nnue")]
-const DEFAULT_EVAL_MIX: u8 = 100;
-#[cfg(all(feature = "nnue", not(feature = "stockfish-nnue")))]
+#[cfg(feature = "nnue")]
 const EMBEDDED_EVAL: &[u8] = include_bytes!("../../assets/models/sanj-n7.nnue");
-#[cfg(feature = "stockfish-nnue")]
-const EMBEDDED_EVAL: &[u8] = include_bytes!("../../assets/models/nn-37f18f62d772.nnue");
 #[cfg(feature = "policy")]
 const EMBEDDED_POLICY: &[u8] = include_bytes!("../../assets/models/shegerd-p3-teacher-blend25.bin");
 
@@ -92,7 +88,7 @@ impl UciEngine {
             #[cfg(feature = "nnue")]
             eval_mix: DEFAULT_EVAL_MIX,
             #[cfg(feature = "policy")]
-            policy: MovePolicy::NONE,
+            policy: embedded_policy(),
             #[cfg(not(feature = "policy"))]
             policy: MovePolicy::NONE,
         }
@@ -173,7 +169,7 @@ impl UciEngine {
             "option name EvalMix type spin default {DEFAULT_EVAL_MIX} min 0 max 100"
         ))?;
         #[cfg(feature = "policy")]
-        send_line("option name PolicyFile type string default <empty>")?;
+        send_line("option name PolicyFile type string default <embedded>")?;
         send_line("uciok")
     }
 
@@ -239,27 +235,9 @@ impl UciEngine {
                 } else {
                     let bytes = fs::read(value)
                         .map_err(|error| format!("cannot read EvalFile '{value}': {error}"))?;
-                    match sanj::nnue::Network::from_bytes(&bytes) {
-                        Ok(network) => sanj::Evaluator::nnue_with_mix(network, self.eval_mix),
-                        Err(internal_error) => {
-                            #[cfg(feature = "stockfish-nnue")]
-                            {
-                                sanj::Evaluator::stockfish_nnue(&bytes).map_err(
-                                    |external_error| {
-                                        format!(
-                                            "invalid EvalFile '{value}': NEYRANG={internal_error}; Stockfish={external_error}"
-                                        )
-                                    },
-                                )?
-                            }
-                            #[cfg(not(feature = "stockfish-nnue"))]
-                            {
-                                return Err(format!(
-                                    "invalid EvalFile '{value}': {internal_error}"
-                                ));
-                            }
-                        }
-                    }
+                    let network = sanj::nnue::Network::from_bytes(&bytes)
+                        .map_err(|error| format!("invalid EvalFile '{value}': {error}"))?;
+                    sanj::Evaluator::nnue_with_mix(network, self.eval_mix)
                 };
                 if let Some(table) = &mut self.table {
                     table.clear();
@@ -404,18 +382,8 @@ impl UciEngine {
 
 #[cfg(feature = "nnue")]
 fn embedded_evaluator(nnue_percent: u8) -> sanj::Evaluator {
-    #[cfg(feature = "stockfish-nnue")]
-    return {
-        let mut evaluator = sanj::Evaluator::stockfish_nnue(EMBEDDED_EVAL)
-            .expect("embedded Stockfish-compatible network must be valid");
-        evaluator.set_nnue_mix(nnue_percent);
-        evaluator
-    };
-
-    #[cfg(not(feature = "stockfish-nnue"))]
     let network = sanj::nnue::Network::from_bytes(EMBEDDED_EVAL)
         .expect("embedded SANJ network must match the engine format");
-    #[cfg(not(feature = "stockfish-nnue"))]
     sanj::Evaluator::nnue_with_mix(network, nnue_percent)
 }
 
@@ -609,9 +577,9 @@ mod tests {
         assert_eq!(DEFAULT_MOVE_OVERHEAD_MS, 30);
     }
 
-    #[cfg(all(feature = "nnue", feature = "policy", feature = "stockfish-nnue"))]
+    #[cfg(all(feature = "nnue", feature = "policy"))]
     #[test]
-    fn default_build_uses_nnue_and_keeps_optional_policy_disabled() {
+    fn default_build_loads_only_neyrang_strength_assets() {
         let mut engine = UciEngine::new();
         let mut position = Position::startpos();
         let mv = position
@@ -619,21 +587,12 @@ mod tests {
             .expect("legal opening move");
 
         assert_eq!(engine.eval_mix, super::DEFAULT_EVAL_MIX);
-        assert!(matches!(
-            engine.evaluator,
-            crate::sanj::Evaluator::StockfishNnue { .. }
-        ));
-        assert_eq!(engine.policy.score(&position, mv, None, 0), 0);
-
-        engine.set_option("PolicyFile", Some("<embedded>")).unwrap();
+        assert!(engine.evaluator.network().is_some());
         assert_ne!(engine.policy.score(&position, mv, None, 0), 0);
 
         engine.set_option("EvalFile", Some("<empty>")).unwrap();
         engine.set_option("PolicyFile", Some("<empty>")).unwrap();
-        assert!(matches!(
-            engine.evaluator,
-            crate::sanj::Evaluator::Classical
-        ));
+        assert!(engine.evaluator.network().is_none());
         assert_eq!(engine.policy.score(&position, mv, None, 0), 0);
     }
 

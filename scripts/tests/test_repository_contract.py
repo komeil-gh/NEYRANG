@@ -1,4 +1,5 @@
 import subprocess
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -67,6 +68,14 @@ class RepositoryContractTests(unittest.TestCase):
             text=True,
         ).stdout
         self.assertEqual("", tracked)
+
+    def test_playing_binary_has_no_third_party_runtime(self) -> None:
+        cargo = tomllib.loads(self.read("Cargo.toml"))
+        self.assertEqual({}, cargo.get("dependencies", {}))
+        self.assertNotIn("stockfish-nnue", cargo["features"])
+        self.assertFalse((ROOT / "src/sanj/stockfish.rs").exists())
+        self.assertFalse((ROOT / "assets/models/nn-37f18f62d772.nnue").exists())
+        self.assertNotIn("nnue-rs", self.read("Cargo.lock"))
 
     def test_genfens_has_independent_provenance_gates(self) -> None:
         self.assertIn("SplitMix64", self.read("src/tools/genfens.rs"))

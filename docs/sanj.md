@@ -1,9 +1,8 @@
 # SANJ
 
 SANJ is the judgment NEYRANG evaluates with. The normal development build uses
-the official Stockfish 18 small NNUE network through a compatible CPU evaluator.
-The deterministic tapered handcrafted evaluator remains the explicit
-`EvalFile=<empty>` fallback. It calculates separate middlegame and endgame
+the deterministic tapered handcrafted evaluation plus the NEYRANG-trained N7
+network as a 10% residual. The classical path calculates separate middlegame and endgame
 scores, derives phase from remaining non-pawn material, interpolates, then
 returns a side-to-move score with a 6-centipawn tempo term.
 
@@ -32,16 +31,15 @@ Known limitations include no pawn hash, no general threats/space/outposts, and n
 
 ## NNUE judgment
 
-The default `stockfish-nnue` feature ships the accepted external-network path:
+The default-enabled `nnue` feature ships the retained N7 residual:
 
 ```bash
 cargo build --release
 target/release/neyrang bench-nnue /path/to/network.nnue 5
 ```
 
-The UCI string option `EvalFile` accepts either a complete supported
-`NEYRANG\0` artifact or a Stockfish-compatible HalfKAv2 network. Version 1 of
-the native format uses Chess768 and version 2 uses the registered three-bank
+The UCI string option `EvalFile` accepts only a complete supported `NEYRANG\0`
+artifact. Version 1 of the native format uses Chess768 and version 2 uses the registered three-bank
 horizontally mirrored Chess768x3hm mapping.
 Version 3 keeps that input mapping and adds four material-routed output heads;
 H5f's independent heads and the trainer-only H5g shared-weight/phase-bias
@@ -55,34 +53,23 @@ state. It improved fresh teacher MSE by 1.51%, but its paired-bootstrap interval
 crossed zero; a later 256-game fixed-node check scored 48.44% against N7, so it
 remains rejected.
 `EvalMix` selects the NNUE percentage from 0 through 100 while retaining
-classical SANJ for the remainder; its default is 100 for the accepted embedded
-network. The Stockfish-compatible evaluator advances a preallocated per-ply
-accumulator for ordinary moves and copies the parent accumulator across null
-moves. A full-refresh oracle checks the incremental score after every move in a
-legal sequence.
-The adapter enumerates occupied squares directly from the engine's twelve
-piece bitboards, avoiding a 64-square mailbox scan each time `nnue-rs` requests
-a board view. This changes traversal cost only; piece identities, squares and
-network scores retain the same contract.
+classical SANJ for the remainder; its default is the accepted 10% residual.
 Decoding is fail-closed. The loaded network is immutable and shared across
 Lazy-SMP workers, while every worker owns a move-delta accumulator stack. The
 engine scalar output is checked bit-for-bit against the independent reference
 crate on frozen FEN suites.
 
-The native N7 residual remains supported for controlled experiments, not as the
-default or an absolute Elo claim.
+The embedded N7 residual was produced by NEYRANG's own data, trainer, artifact
+format, decoder, and inference code. External teacher labels used during
+training are provenance, not copied runtime code or an imported network. N7 is
+retained playing code, not an absolute Elo claim.
 The retained N1e-16M artifact passed bit-exact inference and deterministic
 benchmark gates but scored only 27.20% in its independently audited 1,000-game
 equal-node screen (`177/633/190`). That network is rejected and must not be made
 the default. A replacement still requires a new untouched final holdout,
 fixed-node and equal-time games, a normalized SPRT, longer-time-control
 confirmation, and an independent artifact audit. `EvalFile=<empty>` selects
-classical SANJ, while `<embedded>` restores the Stockfish-18 small network.
-
-The embedded file is `nn-37f18f62d772.nnue`, SHA-256
-`37f18f62d772f3107e1d6aaca3898c130c3c86f2ab63e6555fbbca20635a899d`.
-It is an official Stockfish 18 asset, not a network trained by NEYRANG; see the
-repository's third-party notices for source and licensing.
+classical SANJ, while `<embedded>` restores N7.
 
 The later N2d version-2 candidate passed parity, fresh selection and an
 untouched holdout, but scored `343/356/301` (`49.35%`) in its clean 1,000-game

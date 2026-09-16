@@ -6,7 +6,7 @@ use std::{
 };
 
 #[cfg(feature = "nnue")]
-use crate::sanj::SearchAccumulator;
+use crate::sanj::nnue::AccumulatorPair;
 use crate::{
     chess::{Move, MoveList, PieceType, Position, Square},
     sanj,
@@ -305,7 +305,7 @@ pub struct Searcher<'a> {
     evaluator: sanj::Evaluator,
     policy: MovePolicy,
     #[cfg(feature = "nnue")]
-    accumulators: Vec<SearchAccumulator>,
+    accumulators: Vec<AccumulatorPair>,
     statistics: SearchStatistics,
 }
 
@@ -621,15 +621,9 @@ impl<'a> Searcher<'a> {
         #[cfg(feature = "nnue")]
         {
             self.accumulators.clear();
-            if let Some(root) = self.evaluator.root_search_accumulator(position) {
-                self.accumulators.push(root);
-                while self.accumulators.len() < MAX_PLY {
-                    self.accumulators.push(
-                        self.evaluator
-                            .empty_search_accumulator()
-                            .expect("neural evaluator must provide accumulator storage"),
-                    );
-                }
+            if let Some(network) = self.evaluator.network() {
+                self.accumulators
+                    .push(AccumulatorPair::refresh(position, network));
             }
         }
         if let Some(progress) = self.progress {
@@ -1170,14 +1164,13 @@ impl<'a> Searcher<'a> {
     #[inline]
     fn evaluate_position(&self, position: &Position, ply: usize) -> i32 {
         #[cfg(feature = "nnue")]
-        if !self.accumulators.is_empty() {
+        if let Some(network) = self.evaluator.network() {
             let accumulator = self
                 .accumulators
                 .get(ply)
                 .expect("NNUE accumulator stack must match the search ply");
-            return self
-                .evaluator
-                .evaluate_search_accumulator(position, accumulator);
+            let nnue_score = network.evaluate_accumulator(accumulator, position.side_to_move());
+            return self.evaluator.blend_accumulator_score(position, nnue_score);
         }
         let _ = ply;
         self.evaluator.evaluate(position)
@@ -1186,10 +1179,10 @@ impl<'a> Searcher<'a> {
     #[inline]
     fn push_move_accumulator(&mut self, position: &Position, mv: Move, ply: usize) {
         #[cfg(feature = "nnue")]
-        if !self.accumulators.is_empty() {
-            let (parents, children) = self.accumulators.split_at_mut(ply + 1);
-            self.evaluator
-                .update_search_accumulator(position, mv, &parents[ply], &mut children[0]);
+        if let Some(network) = self.evaluator.network() {
+            debug_assert_eq!(self.accumulators.len(), ply + 1);
+            let next = self.accumulators[ply].after_move(position, mv, network);
+            self.accumulators.push(next);
         }
         let _ = (position, mv, ply);
     }
@@ -1197,9 +1190,9 @@ impl<'a> Searcher<'a> {
     #[inline]
     fn push_null_accumulator(&mut self, ply: usize) {
         #[cfg(feature = "nnue")]
-        if !self.accumulators.is_empty() {
-            let parent = self.accumulators[ply].clone();
-            self.accumulators[ply + 1] = parent;
+        if self.evaluator.network().is_some() {
+            debug_assert_eq!(self.accumulators.len(), ply + 1);
+            self.accumulators.push(self.accumulators[ply].clone());
         }
         let _ = ply;
     }
@@ -1207,7 +1200,10 @@ impl<'a> Searcher<'a> {
     #[inline]
     fn pop_accumulator(&mut self, ply: usize) {
         #[cfg(feature = "nnue")]
-        let _ = &self.accumulators;
+        if self.evaluator.network().is_some() {
+            debug_assert_eq!(self.accumulators.len(), ply + 2);
+            self.accumulators.pop();
+        }
         let _ = ply;
     }
 

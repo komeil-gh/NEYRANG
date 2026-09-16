@@ -65,6 +65,14 @@ All notable changes to NEYRANG are documented here.
 
 ### Changed
 
+- The local and CI quality gates now run every Rust tool with committed lockfiles,
+  cover the portable trainer and policy-trace exporter, and leave generated
+  private runtime artifacts ignored. CI installs the complete pinned Python
+  test dependencies rather than the runtime-only subset, pins the Rust toolchain,
+  and pins the checkout action to its reviewed release commit.
+- Historical machine-specific executables were removed from the tracked tree;
+  their source commits remain available in Git history, and a repository
+  contract test prevents generated `builds/` artifacts from returning.
 - Stockfish-compatible SANJ evaluation now advances preallocated per-ply
   accumulators instead of refreshing the full network at every static
   evaluation; a full-refresh parity test protects the score contract.

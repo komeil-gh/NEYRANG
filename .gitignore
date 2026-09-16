@@ -9,6 +9,7 @@
 /.venv/
 /.venv-sanj/
 /results/
+/.runtime/
 __pycache__/
 *.pgn
 *.epd

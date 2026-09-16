@@ -7,7 +7,8 @@ of the repository.
 ## Requirements
 
 - Rust 1.98 or newer
-- Python dependencies from `scripts/requirements.txt` for script tests
+- Python dependencies from `scripts/requirements-sanj.txt` for the complete
+  script test suite
 - A native linker
 
 ## Core checks
@@ -15,17 +16,19 @@ of the repository.
 Run these commands from the repository root:
 
 ```bash
-cargo fmt --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test --locked --all-features
+make quality
 scripts/test-match-config.sh
 ```
+
+`make quality` runs formatting, locked Clippy, and locked tests for the engine,
+NNUE reference/data/trainer tools, and policy-trace exporter. A successful run
+must leave the tracked tree unchanged.
 
 For the Python utilities:
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -r scripts/requirements.txt
+.venv/bin/pip install -r scripts/requirements-sanj.txt
 .venv/bin/python -m unittest discover -s scripts/tests
 ```
 

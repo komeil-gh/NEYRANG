@@ -26,22 +26,24 @@ Do not copy another engine's code or tuned constants. Primary sources may justif
 - `src/uci`: protocol parsing and engine boundary
 - `src/tools` and `scripts`: deterministic developer and evidence tooling
 
-Keep the runtime dependency-free unless a proposal demonstrates why a dependency belongs in the playing binary. Preserve scalar/reference implementations when adding platform-specific acceleration.
+Keep the runtime dependency surface minimal. The default playing binary permits
+the documented `nnue-rs` dependency for Stockfish-compatible NNUE inference;
+any additional dependency requires an explicit proposal. Preserve
+scalar/reference implementations when adding platform-specific acceleration.
 
 ## Required local gates
 
 ```bash
-cargo fmt --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test --locked
-cargo test --locked --all-features
-python3 -m unittest discover -s scripts/tests
+make quality
+python3 -m venv .venv
+.venv/bin/pip install -r scripts/requirements-sanj.txt
+.venv/bin/python -m unittest discover -s scripts/tests
 scripts/test-match-config.sh
 cargo build --release --locked
 scripts/test-openbench-contract.sh
 ```
 
-Run the three explicit Perft commands in [the testing guide](docs/testing.md#perft-gates). A deterministic tree/checksum change must be explained; it is never dismissed as a speed optimization.
+Run the three explicit Perft commands in [the testing guide](docs/testing.md#perft). A deterministic tree/checksum change must be explained; it is never dismissed as a speed optimization.
 
 ## Playing-strength evidence
 

@@ -2,9 +2,10 @@
 
 NEYRANG is an independent chess engine for play, analysis, and reproducible
 engine research. Written from scratch in Rust, it implements its own chess
-rules, search, and evaluation using only the standard library in the playing
-core. It speaks the Universal Chess Interface (UCI) protocol and includes
-command-line tools for testing and benchmarking.
+rules, search, and evaluation. The default build uses one documented Rust
+dependency for Stockfish-compatible NNUE inference. It speaks the Universal
+Chess Interface (UCI) protocol and includes command-line tools for testing and
+benchmarking.
 
 [Build](#build-and-run) · [Play and analyze](#play-and-analyze) ·
 [Verification](#verification-and-benchmarks) · [Documentation](#documentation) ·
@@ -65,7 +66,7 @@ without machine-specific file paths.
 ## Build and run
 
 **Requirements:** Git, Rust **1.98 or newer** with Cargo, and a native linker.
-The repository selects the stable Rust toolchain and uses Edition 2024. On
+The repository pins Rust 1.98.1 for its verification gates and uses Edition 2024. On
 macOS, `xcode-select --install` installs the required command-line tools if
 they are missing.
 
@@ -190,9 +191,7 @@ Perft, benchmark speed, and offline training results are not Elo ratings.
 Run the core checks from a POSIX shell on either branch:
 
 ```bash
-cargo fmt --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test --locked --all-features
+make quality
 scripts/test-match-config.sh
 ```
 

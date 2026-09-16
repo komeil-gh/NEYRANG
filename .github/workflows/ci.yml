@@ -28,7 +28,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Toolchain identity
         run: rustup show active-toolchain
@@ -45,18 +45,27 @@ jobs:
       - name: NNUE trainer format
         run: cargo fmt --manifest-path tools/nnue-trainer/Cargo.toml --check
 
+      - name: Policy trace format
+        run: cargo fmt --manifest-path tools/policy-trace/Cargo.toml --check
+
       - name: Clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
 
       - name: NNUE reference Clippy
-        run: cargo clippy --manifest-path tools/nnue-reference/Cargo.toml --all-targets -- -D warnings
+        run: cargo clippy --manifest-path tools/nnue-reference/Cargo.toml --locked --all-targets -- -D warnings
 
       - name: NNUE data Clippy
-        run: cargo clippy --manifest-path tools/nnue-data/Cargo.toml --all-targets -- -D warnings
+        run: cargo clippy --manifest-path tools/nnue-data/Cargo.toml --locked --all-targets -- -D warnings
 
-      - name: NNUE trainer Clippy
+      - name: NNUE trainer portable Clippy
+        run: cargo clippy --manifest-path tools/nnue-trainer/Cargo.toml --locked --no-default-features --all-targets -- -D warnings
+
+      - name: Policy trace Clippy
+        run: cargo clippy --manifest-path tools/policy-trace/Cargo.toml --locked --all-targets -- -D warnings
+
+      - name: NNUE trainer accelerator Clippy
         if: runner.os == 'macOS'
-        run: cargo clippy --manifest-path tools/nnue-trainer/Cargo.toml --all-targets -- -D warnings
+        run: cargo clippy --manifest-path tools/nnue-trainer/Cargo.toml --locked --all-targets -- -D warnings
 
       - name: Default tests
         run: cargo test --locked
@@ -70,14 +79,20 @@ jobs:
       - name: NNUE data tests
         run: cargo test --manifest-path tools/nnue-data/Cargo.toml --locked
 
-      - name: NNUE trainer tests
+      - name: NNUE trainer portable tests
+        run: cargo test --manifest-path tools/nnue-trainer/Cargo.toml --locked --no-default-features
+
+      - name: Policy trace tests
+        run: cargo test --manifest-path tools/policy-trace/Cargo.toml --locked
+
+      - name: NNUE trainer accelerator tests
         if: runner.os == 'macOS'
         run: cargo test --manifest-path tools/nnue-trainer/Cargo.toml --locked
 
       - name: Python test environment
         run: |
           python3 -m venv .venv
-          .venv/bin/pip install -r scripts/requirements.txt
+          .venv/bin/pip install -r scripts/requirements-sanj.txt
 
       - name: Python infrastructure tests
         run: .venv/bin/python -m unittest discover -s scripts/tests

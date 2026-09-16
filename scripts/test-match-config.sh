@@ -201,6 +201,38 @@ fi
 
 echo "per-engine Threads configuration test passed"
 
+mixed_threads_meta_out="$scratch/mixed-threads.meta.txt"
+mixed_threads_output="$(
+    DRY_RUN=1 \
+    FASTCHESS_BIN=true \
+    ENGINE_A=/usr/bin/true \
+    ENGINE_B=/usr/bin/true \
+    ENGINE_A_THREADS=4 \
+    ENGINE_B_THREADS=default \
+    OPENINGS_FILE="$repo_root/scripts/openings.epd" \
+    GAMES=10 \
+    META_OUT="$mixed_threads_meta_out" \
+    PGN_OUT="$scratch/mixed-threads.pgn" \
+    "$script_dir/match.sh"
+)"
+
+if [[ "$mixed_threads_output" != *"name=NEYRANG-new option.Threads=4"* ]] ||
+    [[ "$mixed_threads_output" == *"name=NEYRANG-reference option.Threads="* ]]; then
+    echo "mixed explicit/default Threads dry run is incorrect" >&2
+    exit 1
+fi
+for expected in \
+    "thread_mode=per-engine" \
+    "engine_a_threads=4" \
+    "engine_b_threads=default"; do
+    if ! grep -Fqx "$expected" "$mixed_threads_meta_out"; then
+        echo "mixed Threads metadata is missing: $expected" >&2
+        exit 1
+    fi
+done
+
+echo "mixed explicit/default Threads configuration test passed"
+
 default_threads_meta_out="$scratch/default-threads.meta.txt"
 default_threads_output="$(
     DRY_RUN=1 \

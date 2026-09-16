@@ -87,10 +87,11 @@ if [[ -n "$engine_a_threads" ]]; then
         echo "THREADS cannot be combined with ENGINE_A_THREADS/ENGINE_B_THREADS" >&2
         exit 2
     fi
-    if ! [[ "$engine_a_threads" =~ ^[1-9][0-9]*$ ]] ||
-        ! [[ "$engine_b_threads" =~ ^[1-9][0-9]*$ ]] ||
-        (( engine_a_threads > 256 || engine_b_threads > 256 )); then
-        echo "ENGINE_A_THREADS and ENGINE_B_THREADS must be integers between 1 and 256" >&2
+    if { [[ "$engine_a_threads" != "default" ]] &&
+        { ! [[ "$engine_a_threads" =~ ^[1-9][0-9]*$ ]] || (( engine_a_threads > 256 )); }; } ||
+        { [[ "$engine_b_threads" != "default" ]] &&
+            { ! [[ "$engine_b_threads" =~ ^[1-9][0-9]*$ ]] || (( engine_b_threads > 256 )); }; }; then
+        echo "ENGINE_A_THREADS and ENGINE_B_THREADS must be default or integers between 1 and 256" >&2
         exit 2
     fi
     thread_mode="per-engine"
@@ -256,7 +257,7 @@ fi
 if [[ -n "$engine_a_policy_file" ]]; then
     command+=("option.PolicyFile=$engine_a_policy_file")
 fi
-if [[ "$thread_mode" == "per-engine" ]]; then
+if [[ "$thread_mode" == "per-engine" && "$engine_a_threads" != "default" ]]; then
     command+=("option.Threads=$engine_a_threads")
 fi
 if [[ "$limit_mode" == "per-engine-nodes" ]]; then
@@ -271,7 +272,7 @@ fi
 if [[ -n "$engine_b_policy_file" ]]; then
     command+=("option.PolicyFile=$engine_b_policy_file")
 fi
-if [[ "$thread_mode" == "per-engine" ]]; then
+if [[ "$thread_mode" == "per-engine" && "$engine_b_threads" != "default" ]]; then
     command+=("option.Threads=$engine_b_threads")
 fi
 if [[ "$limit_mode" == "per-engine-nodes" ]]; then

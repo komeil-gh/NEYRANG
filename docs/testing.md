@@ -117,6 +117,9 @@ workload without fresh evidence.
 Use balanced openings, color-reversed pairs, equal resource limits, frozen
 binaries, and a predeclared acceptance rule. Record game count, W/D/L,
 pentanomial results, time control, engine options, and abnormal terminations.
+For asymmetric compatibility runs, set `ENGINE_A_THREADS` and
+`ENGINE_B_THREADS` independently; use `default` for an engine that does not
+expose the UCI `Threads` option.
 `scripts/audit-match.py` accepts UTF-8 logs and BOM-marked UTF-16 logs produced
 by Windows PowerShell redirection before checking anomalies and final totals.
 Warnings are rejected by default. Compatibility runs may explicitly allow only

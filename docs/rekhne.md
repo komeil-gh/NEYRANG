@@ -30,6 +30,11 @@ boundaries. `PolicyFile=<empty>` restores the registered classical ordering.
 
 Each stage is initialized only when search reaches it; a cutoff can therefore avoid scoring every later quiet or tactical move. The picker suppresses preferred/killer duplicates and returns every legal candidate at most once. Tactical classification still uses exact SEE. The oracle-equivalent `see_ge` primitive is retained and tested, but the experimental lazy main-search caller was reverted, so current production ordering does not silently substitute threshold classification for exact exchange scores.
 
+Within an initialized stage, H18 stores only that stage's original move indices
+in a fixed-capacity active range. Best-move selection scans that shrinking range
+and resolves score ties by the original generated index, preserving the prior
+delivery order while avoiding rescans of unrelated and already returned moves.
+
 SEE builds one compact exchange board, computes attackers to the fixed target once, then carries piece/color occupancy and the attacker set through each recapture. Vacated sources reveal only the relevant diagonal or orthogonal slider x-rays, and the accepted legal least-valuable-attacker state is prepared once. Full king safety remains authoritative for every candidate; promotions, en passant, absolute pins, illegal king recaptures, piece-kind/Lsb LVA order, exact scores, and threshold answers retain their previous semantics. The complete pre-G1 algorithm remains a test-only oracle. Qsearch retains exact SEE classification and its established losing-capture pruning.
 
 At non-root, non-PV nodes, sufficiently late quiet moves may be reduced by one ply. The reduction starts with the fifth searched move at depth three, excludes TT moves, killers, strong-history moves, captures, promotions, checks, and nodes already in check, and always performs a normal-depth zero-window re-search when the reduced result raises alpha. The ordinary PVS full-window re-search remains authoritative when needed.
@@ -205,5 +210,14 @@ MovePicker stage. The exact depth-8 tree and checksum were preserved, but the
 31-pair native median rose from 256 ms to 259 ms and paired median throughput
 fell by 1.53%. It failed the registered +1.5% engineering floor, so zero games
 ran and the playing code was removed.
+
+H18 then compacted each active MovePicker stage without changing a score or
+search decision. It preserved the exact 536,259-node tree/checksum, improved
+clean 31-pair native throughput by 4.49%, and scored 51.20%
+(`+8.34 +/-15.29 Elo`) in a clean audited 1,000-game parent match. Fresh
+H18-PGO was 2.97% faster than H15-PGO in paired timing and scored 34.05%
+against Blunder versus H15-PGO's same-opening 31.85%. The paired external gain
+was +2.20 percentage points (95% interval -1.15 to +5.50), so it is directional
+rather than statistically proven.
 
 NEYRANG does not learn merely by playing games; improvements still require an explicit, tested patch. Any future baseline-protocol repair, null-move refinement, LMP, ProbCut, or singular-extension work must be pre-registered and isolated rather than bundled into the accepted candidate. The complete outcome is in the [0.3 final report](development/0.3.0-final-report.md).

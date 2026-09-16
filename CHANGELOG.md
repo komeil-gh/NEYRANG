@@ -109,6 +109,9 @@ All notable changes to NEYRANG are documented here.
   the portable ray backend remains the fallback and independent oracle.
 - H15 keeps H14 source-identical and adds profile-guided code layout only to a
   separately tested host-native artifact; portable release builds are unchanged.
+- H18 keeps each lazy MovePicker stage in one fixed-capacity active-index range,
+  so repeated best-move selection no longer rescans unrelated or already used
+  moves. Scores, stage boundaries, tie order, tree, and checksum are unchanged.
 ### Evidence
 
 - O1 captured 6,326 macOS top-of-stack samples from an unchanged SHA-256-bound
@@ -180,6 +183,12 @@ All notable changes to NEYRANG are documented here.
   pairs against Blunder it scored 31.85% versus H14's 30.00%; the paired
   +1.85-point interval (-1.20 to +4.95) crosses zero, so the external gain is
   directional rather than statistically proven.
+- H18 preserved the exact H14 tree/checksum and improved clean 31-pair native
+  throughput by 4.49%. Its independently audited 1,000-game parent match scored
+  `311/402/287` (51.20%, `+8.34 +/-15.29 Elo`). Fresh H18-PGO improved paired
+  throughput by 2.97% over H15-PGO and scored 34.05% against Blunder versus
+  H15-PGO's same-opening 31.85%. The paired +2.20-point interval (-1.15 to
+  +5.50) crosses zero, so the external gain remains directional.
 - SANJ feature analysis now accepts the current 39-column trace contract,
   including the fixed king-danger diagnostic column; its 42 tunable columns
   and production-score reconstruction remain unchanged.

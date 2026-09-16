@@ -27,7 +27,7 @@ impl nnue_rs::Board for Position {
     }
 }
 
-const fn map_color(color: Color) -> nnue_rs::Color {
+pub(super) const fn map_color(color: Color) -> nnue_rs::Color {
     match color {
         Color::White => nnue_rs::Color::White,
         Color::Black => nnue_rs::Color::Black,

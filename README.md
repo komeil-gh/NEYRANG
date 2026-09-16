@@ -118,7 +118,7 @@ versioned local builds on macOS.
 | `Move Overhead` | 10 ms by default | 30 ms by default |
 | `EvalFile` | Not available | Defaults to the embedded Stockfish-18 small network; `<empty>` selects classical evaluation |
 | `EvalMix` | Not available | Defaults to 100% NNUE; accepts 0 through 100 |
-| `PolicyFile` | Not available | Defaults to the embedded accepted policy; `<empty>` disables it |
+| `PolicyFile` | Not available | Defaults to `<empty>`; `<embedded>` enables the bundled policy |
 
 For a protocol check in a POSIX shell:
 
@@ -209,16 +209,17 @@ host details, private datasets, and raw experiment artifacts outside Git.
 ### Embedded strength assets
 
 The ordinary development build includes the accepted Stockfish-compatible NNUE
-network and SHEGERD policy:
+network and the optional SHEGERD policy:
 
 ```bash
 cargo build --release --locked
 ```
 
-`EvalFile=<embedded>`, `EvalMix=100`, and `PolicyFile=<embedded>` are the defaults.
-Set either file option to `<empty>` to disable that asset. External compatible
-artifacts can still be loaded for controlled experiments. A deliberately
-classical-only developer build remains available with `--no-default-features`.
+`EvalFile=<embedded>` and `EvalMix=100` are the evaluation defaults.
+`PolicyFile=<empty>` keeps the separately trained ordering policy disabled;
+`<embedded>` enables it for controlled experiments. External compatible
+artifacts can still be loaded. A deliberately classical-only developer build
+remains available with `--no-default-features`.
 
 The embedded network is the official Stockfish 18 small network, not a network
 trained by NEYRANG. Its provenance and the `nnue-rs` license are recorded in
@@ -255,7 +256,8 @@ private evidence rather than release assets.
 
 ### External move-policy experiments
 
-The default build already embeds the retained CPU-only SHEGERD policy. To load
+The default build carries the retained CPU-only SHEGERD policy without enabling
+it automatically. To enable that artifact, set `PolicyFile=<embedded>`. To load
 an external compatible artifact instead:
 
 ```bash

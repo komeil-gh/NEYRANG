@@ -92,7 +92,7 @@ impl UciEngine {
             #[cfg(feature = "nnue")]
             eval_mix: DEFAULT_EVAL_MIX,
             #[cfg(feature = "policy")]
-            policy: embedded_policy(),
+            policy: MovePolicy::NONE,
             #[cfg(not(feature = "policy"))]
             policy: MovePolicy::NONE,
         }
@@ -173,7 +173,7 @@ impl UciEngine {
             "option name EvalMix type spin default {DEFAULT_EVAL_MIX} min 0 max 100"
         ))?;
         #[cfg(feature = "policy")]
-        send_line("option name PolicyFile type string default <embedded>")?;
+        send_line("option name PolicyFile type string default <empty>")?;
         send_line("uciok")
     }
 
@@ -611,7 +611,7 @@ mod tests {
 
     #[cfg(all(feature = "nnue", feature = "policy", feature = "stockfish-nnue"))]
     #[test]
-    fn default_build_loads_the_retained_strength_assets() {
+    fn default_build_uses_nnue_and_keeps_optional_policy_disabled() {
         let mut engine = UciEngine::new();
         let mut position = Position::startpos();
         let mv = position
@@ -623,6 +623,9 @@ mod tests {
             engine.evaluator,
             crate::sanj::Evaluator::StockfishNnue { .. }
         ));
+        assert_eq!(engine.policy.score(&position, mv, None, 0), 0);
+
+        engine.set_option("PolicyFile", Some("<embedded>")).unwrap();
         assert_ne!(engine.policy.score(&position, mv, None, 0), 0);
 
         engine.set_option("EvalFile", Some("<empty>")).unwrap();

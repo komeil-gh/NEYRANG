@@ -56,9 +56,10 @@ crossed zero; a later 256-game fixed-node check scored 48.44% against N7, so it
 remains rejected.
 `EvalMix` selects the NNUE percentage from 0 through 100 while retaining
 classical SANJ for the remainder; its default is 100 for the accepted embedded
-network. The Stockfish-compatible evaluator currently performs a full refresh
-per static evaluation; incremental updates are a future throughput optimization,
-not part of the accepted H27 strength change.
+network. The Stockfish-compatible evaluator advances a preallocated per-ply
+accumulator for ordinary moves and copies the parent accumulator across null
+moves. A full-refresh oracle checks the incremental score after every move in a
+legal sequence.
 Decoding is fail-closed. The loaded network is immutable and shared across
 Lazy-SMP workers, while every worker owns a move-delta accumulator stack. The
 engine scalar output is checked bit-for-bit against the independent reference

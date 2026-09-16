@@ -65,6 +65,12 @@ All notable changes to NEYRANG are documented here.
 
 ### Changed
 
+- Stockfish-compatible SANJ evaluation now advances preallocated per-ply
+  accumulators instead of refreshing the full network at every static
+  evaluation; a full-refresh parity test protects the score contract.
+- The separately trained SHEGERD move policy remains bundled and loadable with
+  `PolicyFile=<embedded>`, but the default is now `<empty>` so the retained
+  Stockfish-compatible evaluator uses the engine's native stage ordering.
 - The embedded SHEGERD policy is now P3: a conservative 75% P2 / 25%
   Stockfish-18 teacher blend. It scored 51.86% (`+12.92 +/-13.99 Elo`,
   LOS 96.51%) in a 1,372-game disjoint fixed-node confirmation and improved

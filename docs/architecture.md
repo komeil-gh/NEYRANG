@@ -29,9 +29,10 @@ heads; experimental version 4 adds one post-SCReLU absolute-difference channel
 to a single output head. Each searcher owns its accumulator stack; Lazy-SMP workers
 share only an immutable `Arc` network and never share mutable accumulator state.
 The optional `EvalMix` combines NNUE with classical SANJ using a bounded integer
-percentage; it changes neither artifact format nor ownership. Native networks
-use each searcher's accumulator stack. The accepted Stockfish-compatible path
-currently uses immutable shared weights and full-refresh evaluation.
+percentage; it changes neither artifact format nor ownership. Native and
+Stockfish-compatible networks use each searcher's preallocated per-ply
+accumulator stack. Both retain immutable shared weights; the external network
+path updates child accumulators from the parent position and move.
 Ordinary moves, captures, en-passant, castling, promotions, re-searches, and
 null moves all preserve the scalar full-refresh oracle, including the remaining
 piece count used by version 3. The version-4 imbalance channel uses the existing
@@ -40,10 +41,11 @@ implementation is intentionally independent from `tools/nnue-reference`. SIMD
 and default activation remain later evidence gates.
 
 The default-enabled `policy` feature embeds the accepted stage-aligned
-SHEGERD-P3 additive tables as a CPU move-ordering signal. P3 retains 75% of the
-general P2 policy and adds a 25% Stockfish-18 teacher residual fitted from
-current-engine decisions. External `PolicyFile`
-artifacts are fail-closed and `<empty>` restores classical ordering. REKHNE supplies the previous-move
+SHEGERD-P3 additive tables as an optional CPU move-ordering signal. P3 retains
+75% of the general P2 policy and adds a 25% Stockfish-18 teacher residual fitted
+from current-engine decisions. The UCI default is `<empty>`; `<embedded>` opts
+into the bundled policy. External `PolicyFile` artifacts are fail-closed.
+REKHNE supplies the previous-move
 destination; SHEGERD reproduces the trainer's side normalization, material
 phase, piece codes and SEE buckets. The policy may only rank moves inside an
 existing MovePicker stage, so TT/PV priority, tactical SEE classification,

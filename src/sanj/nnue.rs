@@ -477,21 +477,15 @@ impl Network {
 
     fn activate(&self, us: &[i32; HIDDEN_SIZE], them: &[i32; HIDDEN_SIZE], piece_count: u8) -> i32 {
         let activation_quant = i64::from(self.parameters.activation_quant);
-        let mut output = 0_i64;
         let head = material_output_head(piece_count, self.feature_set.output_heads());
         let weight_offset = head * self.feature_set.output_inputs();
-
-        for index in 0..HIDDEN_SIZE {
-            let us_value = square_clipped(us[index], activation_quant);
-            let them_value = square_clipped(them[index], activation_quant);
-            output += us_value * i64::from(self.output_weights[weight_offset + index]);
-            output +=
-                them_value * i64::from(self.output_weights[weight_offset + HIDDEN_SIZE + index]);
-            if self.feature_set == FeatureSet::Chess768KingBucketsMirrored3LatentImbalance {
-                output += (us_value - them_value).abs()
-                    * i64::from(self.output_weights[weight_offset + 2 * HIDDEN_SIZE + index]);
-            }
-        }
+        let mut output = activation_output(
+            us,
+            them,
+            &self.output_weights[weight_offset..weight_offset + self.feature_set.output_inputs()],
+            activation_quant,
+            self.feature_set == FeatureSet::Chess768KingBucketsMirrored3LatentImbalance,
+        );
 
         output /= activation_quant;
         let mut output = i128::from(output);
@@ -500,6 +494,81 @@ impl Network {
         output /= i128::from(activation_quant) * i128::from(self.parameters.output_quant);
         output.clamp(i128::from(i32::MIN), i128::from(i32::MAX)) as i32
     }
+}
+
+fn activation_output(
+    us: &[i32; HIDDEN_SIZE],
+    them: &[i32; HIDDEN_SIZE],
+    weights: &[i16],
+    activation_quant: i64,
+    latent_imbalance: bool,
+) -> i64 {
+    #[cfg(target_arch = "x86_64")]
+    if !latent_imbalance && activation_quant <= 255 && std::arch::is_x86_feature_detected!("avx2") {
+        // SAFETY: the runtime check above proves AVX2 support; slice lengths are
+        // fixed by the validated network contract. The quantization bound keeps
+        // every squared i32-by-i16 product inside signed i32 before widening.
+        return unsafe { activation_output_avx2(us, them, weights, activation_quant as i32) };
+    }
+
+    let mut output = 0_i64;
+    for index in 0..HIDDEN_SIZE {
+        let us_value = square_clipped(us[index], activation_quant);
+        let them_value = square_clipped(them[index], activation_quant);
+        output += us_value * i64::from(weights[index]);
+        output += them_value * i64::from(weights[HIDDEN_SIZE + index]);
+        if latent_imbalance {
+            output += (us_value - them_value).abs() * i64::from(weights[2 * HIDDEN_SIZE + index]);
+        }
+    }
+    output
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn activation_output_avx2(
+    us: &[i32; HIDDEN_SIZE],
+    them: &[i32; HIDDEN_SIZE],
+    weights: &[i16],
+    activation_quant: i32,
+) -> i64 {
+    use std::arch::x86_64::*;
+
+    let zero = _mm256_setzero_si256();
+    let quant = _mm256_set1_epi32(activation_quant);
+    let mut sum = _mm256_setzero_si256();
+    for index in (0..HIDDEN_SIZE).step_by(8) {
+        sum =
+            unsafe { activation_block_avx2(sum, us, &weights[..HIDDEN_SIZE], index, zero, quant) };
+        sum = unsafe {
+            activation_block_avx2(sum, them, &weights[HIDDEN_SIZE..], index, zero, quant)
+        };
+    }
+    let mut lanes = [0_i64; 4];
+    unsafe { _mm256_storeu_si256(lanes.as_mut_ptr().cast(), sum) };
+    lanes.into_iter().sum()
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn activation_block_avx2(
+    sum: std::arch::x86_64::__m256i,
+    values: &[i32; HIDDEN_SIZE],
+    weights: &[i16],
+    index: usize,
+    zero: std::arch::x86_64::__m256i,
+    quant: std::arch::x86_64::__m256i,
+) -> std::arch::x86_64::__m256i {
+    use std::arch::x86_64::*;
+
+    let values = unsafe { _mm256_loadu_si256(values.as_ptr().add(index).cast()) };
+    let clipped = _mm256_max_epi32(zero, _mm256_min_epi32(values, quant));
+    let squared = _mm256_mullo_epi32(clipped, clipped);
+    let weights = unsafe { _mm_loadu_si128(weights.as_ptr().add(index).cast()) };
+    let products = _mm256_mullo_epi32(squared, _mm256_cvtepi16_epi32(weights));
+    let low = _mm256_cvtepi32_epi64(_mm256_castsi256_si128(products));
+    let high = _mm256_cvtepi32_epi64(_mm256_extracti128_si256::<1>(products));
+    _mm256_add_epi64(_mm256_add_epi64(sum, low), high)
 }
 
 fn castle_rook_squares(color: Color, flag: MoveFlag) -> (Square, Square) {

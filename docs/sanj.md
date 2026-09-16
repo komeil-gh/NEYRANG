@@ -98,9 +98,11 @@ record_id<TAB>target<TAB>FEN
 
 The raw coefficients reconstruct every current constant and formula exactly. A deterministic 100,000-position oracle compares the reconstruction with production evaluation. The schema is accounting infrastructure, not permission to change weights or add terms.
 
-The scalar incremental interface exists behind the default-enabled `nnue`
-feature. Its accumulator also carries the exact remaining-piece count needed by
-version 3's constant-time output-head selection. Version 4 derives its extra
-channel directly from those same two accumulators. NEON/SIMD remains future work
-and must stay bit-exact with the scalar oracle. Training tooling remains
-separate from the engine build.
+The incremental interface exists behind the default-enabled `nnue` feature. Its
+accumulator also carries the exact remaining-piece count needed by version 3's
+constant-time output-head selection. Version 4 derives its extra channel
+directly from those same two accumulators. Retained N7 activation uses a
+runtime-checked AVX2 dot product on supported x86-64 processors and the
+bit-exact scalar path everywhere else; version 4 also remains scalar. A future
+NEON path must preserve the same oracle. Training tooling remains separate from
+the engine build.

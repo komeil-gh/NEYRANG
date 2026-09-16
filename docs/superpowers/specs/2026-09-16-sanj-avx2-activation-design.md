@@ -55,3 +55,13 @@ interval of +6.05 to +37.17 Elo. Its pentanomial result was
 `[18, 121, 198, 107, 56]`. Independent PGN replay accepted all 1,000 games,
 found 500 unique paired openings, normal termination for every game, balanced
 colors, complete telemetry, and no negative time-left sample.
+
+The external Blunder confirmation used the same 500 opening pairs and seed for
+separate 1,000-game parent and candidate matches at `0.5+0.005`, concurrency 8,
+and a 200 ms runner time margin. The parent scored 24.50%; the candidate scored
+23.90%. Comparing the two scores opening-pair by opening-pair gives a -0.60
+percentage-point estimate, or -5.68 logistic Elo, with a paired 95% interval of
+-34.37 to +23.01 Elo. Both retained matches had normal termination for all
+games and zero timeout, crash, forfeit, illegal-move, or protocol anomalies.
+H7 remains a semantics-preserving throughput improvement, but this external
+screen does not establish a strength gain against Blunder.

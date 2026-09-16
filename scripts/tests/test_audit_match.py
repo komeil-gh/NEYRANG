@@ -83,6 +83,27 @@ class ScanLogTests(unittest.TestCase):
         self.assertEqual(counts["warning"], 1)
         self.assertEqual(allowed, [])
 
+    def test_draw_rule_policy_allows_only_named_opponent(self) -> None:
+        threefold = (
+            "Warning; PV continues after threefold repetition - "
+            "move f7d7 from NEYRANG-0.2.0"
+        )
+        fifty_move = (
+            "Warning; PV continues after fifty-move rule - "
+            "move a2a1q from NEYRANG-0.2.0"
+        )
+        candidate = (
+            "Warning; PV continues after fifty-move rule - "
+            "move a7a8q from NEYRANG-G1"
+        )
+        counts, allowed = self.scan(
+            f"{threefold}\n{fifty_move}\n{candidate}\n",
+            warning_policy="allow-opponent-draw-rule-pv",
+        )
+
+        self.assertEqual(counts["warning"], 1)
+        self.assertEqual(allowed, [threefold, fifty_move])
+
     def test_policy_rejects_other_or_malformed_warnings(self) -> None:
         warnings = [
             "Warning; PV continues after fifty-move rule - move f7d7 from NEYRANG-0.2.0",

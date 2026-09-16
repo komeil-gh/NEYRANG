@@ -76,6 +76,11 @@ binaries, and a predeclared acceptance rule. Record game count, W/D/L,
 pentanomial results, time control, engine options, and abnormal terminations.
 `scripts/audit-match.py` accepts UTF-8 logs and BOM-marked UTF-16 logs produced
 by Windows PowerShell redirection before checking anomalies and final totals.
+Warnings are rejected by default. Compatibility runs may explicitly allow only
+the named opponent's well-formed post-threefold PV warning, or its post-threefold
+and post-fifty-move PV warnings, with `allow-opponent-threefold-pv` or
+`allow-opponent-draw-rule-pv`. Candidate warnings and every other warning remain
+fatal to the audit.
 
 Do not treat Perft, tactical positions, node reductions, NPS, or offline model
 loss as Elo evidence.

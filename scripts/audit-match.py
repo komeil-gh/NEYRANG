@@ -45,10 +45,18 @@ LOG_ANOMALIES = {
     "protocol_error": re.compile(r"\bprotocol\s+error\b", re.IGNORECASE),
     "forfeit": re.compile(r"\bforfeit(?:ed)?\b", re.IGNORECASE),
 }
-WARNING_POLICIES = ("reject-all", "allow-opponent-threefold-pv")
+WARNING_POLICIES = (
+    "reject-all",
+    "allow-opponent-threefold-pv",
+    "allow-opponent-draw-rule-pv",
+)
 WARNING_LINE = re.compile(r"\bwarning\b", re.IGNORECASE)
 OPPONENT_THREEFOLD_PV_WARNING = re.compile(
     r"^Warning; PV continues after threefold repetition - "
+    r"move ([a-h][1-8][a-h][1-8][qrbn]?) from (.+)$"
+)
+OPPONENT_DRAW_RULE_PV_WARNING = re.compile(
+    r"^Warning; PV continues after (?:threefold repetition|fifty-move rule) - "
     r"move ([a-h][1-8][a-h][1-8][qrbn]?) from (.+)$"
 )
 
@@ -298,9 +306,13 @@ def warning_is_allowed(
     candidate: str,
     opponent: str,
 ) -> bool:
-    if warning_policy != "allow-opponent-threefold-pv":
+    if warning_policy == "allow-opponent-threefold-pv":
+        pattern = OPPONENT_THREEFOLD_PV_WARNING
+    elif warning_policy == "allow-opponent-draw-rule-pv":
+        pattern = OPPONENT_DRAW_RULE_PV_WARNING
+    else:
         return False
-    match = OPPONENT_THREEFOLD_PV_WARNING.fullmatch(line)
+    match = pattern.fullmatch(line)
     return bool(match and match.group(2) == opponent and match.group(2) != candidate)
 
 

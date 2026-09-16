@@ -120,8 +120,10 @@ if [[ "$strict" != "0" && "$strict" != "1" ]]; then
     echo "STRICT must be 0 or 1" >&2
     exit 2
 fi
-if [[ "$warning_policy" != "reject-all" && "$warning_policy" != "allow-opponent-threefold-pv" ]]; then
-    echo "WARNING_POLICY must be reject-all or allow-opponent-threefold-pv" >&2
+if [[ "$warning_policy" != "reject-all" &&
+    "$warning_policy" != "allow-opponent-threefold-pv" &&
+    "$warning_policy" != "allow-opponent-draw-rule-pv" ]]; then
+    echo "WARNING_POLICY must be reject-all, allow-opponent-threefold-pv, or allow-opponent-draw-rule-pv" >&2
     exit 2
 fi
 if [[ "$warning_policy" != "reject-all" && "$strict" != "0" ]]; then

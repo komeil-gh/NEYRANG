@@ -22,6 +22,11 @@ The compact formula-based PSQT is intentionally inspectable and avoids importing
 
 King danger uses a deliberately bounded coordination gate: a lone minor-piece gesture scores nothing, while multiple attackers—or one attacker backed by a queen—combine attacked king-zone squares and attacker weights into a middlegame penalty capped at 120 centipawns. It is a compact SANJ-specific model, not a copied evaluation table.
 
+H9 computes each non-pawn attack bitboard once per classical evaluation and
+reuses it for both mobility and king pressure. The score formula and every
+weight remain unchanged; the exact 100,000-position SANJ trace is the binding
+semantic oracle.
+
 Known limitations include no pawn hash, no general threats/space/outposts, and no systematic tuning against game data. The evaluator remains an inspectable bootstrap rather than a claim that handcrafted weights are finished.
 
 ## NNUE judgment

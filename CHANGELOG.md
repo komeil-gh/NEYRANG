@@ -150,6 +150,13 @@ All notable changes to NEYRANG are documented here.
   +3.50 percentage points (95% interval +0.47 to +6.53), or +31.92 logistic Elo
   (paired 95% interval +4.11 to +59.73). This claim is specific to the tested
   host-native binary.
+- H9 reuses each classical non-pawn attack set across SANJ mobility and king
+  pressure without changing a score. It preserved the 536,259-node depth-8
+  tree and checksum, reduced the 21-pair native median from 319 ms to 300 ms,
+  and beat H8 `331/370/299` (51.60%, `+11.12 +/-16.20 Elo`) in 1,000 clean
+  equal-time games. Its clean same-opening Blunder screen scored 28.10% versus
+  H8's 27.40%; the paired +0.70-point interval (-2.50 to +3.90) crosses zero,
+  so the external gain is directional rather than statistically proven.
 
 ### Rejected
 

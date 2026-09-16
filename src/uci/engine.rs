@@ -32,7 +32,7 @@ const DEFAULT_EVAL_MIX: u8 = 10;
 #[cfg(feature = "nnue")]
 const EMBEDDED_EVAL: &[u8] = include_bytes!("../../assets/models/sanj-n7.nnue");
 #[cfg(feature = "policy")]
-const EMBEDDED_POLICY: &[u8] = include_bytes!("../../assets/models/shegerd-p2-stage-aligned.bin");
+const EMBEDDED_POLICY: &[u8] = include_bytes!("../../assets/models/shegerd-p3-teacher-blend25.bin");
 
 pub fn run() -> io::Result<()> {
     let stdin = io::stdin();

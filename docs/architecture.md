@@ -38,7 +38,9 @@ implementation is intentionally independent from `tools/nnue-reference`. SIMD
 and default activation remain later evidence gates.
 
 The default-enabled `policy` feature embeds the accepted stage-aligned
-SHEGERD-P1 additive tables as a CPU move-ordering signal. External `PolicyFile`
+SHEGERD-P3 additive tables as a CPU move-ordering signal. P3 retains 75% of the
+general P2 policy and adds a 25% Stockfish-18 teacher residual fitted from
+current-engine decisions. External `PolicyFile`
 artifacts are fail-closed and `<empty>` restores classical ordering. REKHNE supplies the previous-move
 destination; SHEGERD reproduces the trainer's side normalization, material
 phase, piece codes and SEE buckets. The policy may only rank moves inside an

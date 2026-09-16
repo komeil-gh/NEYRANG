@@ -62,8 +62,13 @@ All notable changes to NEYRANG are documented here.
 
 ### Changed
 
+- The embedded SHEGERD policy is now P3: a conservative 75% P2 / 25%
+  Stockfish-18 teacher blend. It scored 51.86% (`+12.92 +/-13.99 Elo`,
+  LOS 96.51%) in a 1,372-game disjoint fixed-node confirmation and improved
+  the same-opening Blunder score from 28.42% to 33.79% over 512 games per
+  engine. Both retained matches completed without engine or protocol failure.
 - Default release builds now embed the retained N7 network at `EvalMix=10` and
-  the accepted stage-aligned SHEGERD policy. `<empty>` still selects the
+  the accepted teacher-residual SHEGERD-P3 policy. `<empty>` still selects the
   classical evaluator or ordering, and `--no-default-features` keeps an
   explicit research-only classical build available.
 - H5h's latent-imbalance network passed format/runtime parity and improved

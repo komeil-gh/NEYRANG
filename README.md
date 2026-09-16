@@ -242,7 +242,7 @@ NEYRANG is free software licensed under the
 [GNU General Public License v3.0 or later](LICENSE) (`GPL-3.0-or-later`).
 See [AUTHORS](AUTHORS) for project authorship.
 
-The retained N7 network and stage-aligned policy are bundled under
+The retained N7 network and teacher-residual P3 policy are bundled under
 `assets/models`; training corpora and rejected experimental networks remain
 private evidence rather than release assets.
 

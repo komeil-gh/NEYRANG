@@ -235,4 +235,15 @@ median throughput). Its audited 1,000-game parent screen nevertheless scored
 49.30% (`-4.86 +/-15.83 Elo`), so the negative point estimate removed the
 playing change before PGO or a Blunder screen.
 
+H21 used 52,328 current H18-versus-Blunder decisions labelled by Stockfish 18
+at 20,000 nodes. Replacing P2 outright improved held-out policy accuracy but
+lost the 512-game parent screen at 46.00%, so it was rejected. A single
+predeclared conservative candidate retained 75% of P2 and blended 25% of the
+teacher-fitted tables. It scored 52.73% (`+19.02 +/-23.18 Elo`) in the first
+512-game parent screen and 51.86% (`+12.92 +/-13.99 Elo`, LOS 96.51%) in a
+1,372-game confirmation using all 686 remaining disjoint openings. On the same
+separate 256-opening Blunder screen, H18-PGO scored 28.42% and H21 scored
+33.79%, a gain of 5.37 percentage points. The accepted P3 artifact changes only
+within-stage move ordering; search rules and SANJ remain unchanged.
+
 NEYRANG does not learn merely by playing games; improvements still require an explicit, tested patch. Any future baseline-protocol repair, null-move refinement, LMP, ProbCut, or singular-extension work must be pre-registered and isolated rather than bundled into the accepted candidate. The complete outcome is in the [0.3 final report](development/0.3.0-final-report.md).

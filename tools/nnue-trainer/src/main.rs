@@ -7,7 +7,7 @@ use bullet::{
         outputs::MaterialCount,
     },
     nn::{
-        InitSettings, Shape,
+        InitSettings, ModelNode, Shape,
         optimiser::{AdamW, AdamWParams},
     },
     trainer::{
@@ -25,7 +25,7 @@ use neyrang_nnue_trainer::{
 
 const HIDDEN_SIZE: usize = 128;
 const EVAL_SCALE: i32 = 400;
-const INITIAL_LR: f32 = 0.001;
+const DEFAULT_INITIAL_LR: f32 = 0.001;
 const NETWORK_SEED: u64 = 20_260_901;
 #[rustfmt::skip]
 const KING_BUCKET_LAYOUT_MIRRORED_3: [usize; 32] = [
@@ -48,6 +48,21 @@ enum TrainerFeatureSet {
     Chess768KingBucketsMirrored3PhaseHeads4,
     Chess768KingBucketsMirrored3PhaseBias4,
     Chess768KingBucketsMirrored3LatentImbalance,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum LossKind {
+    MeanSquaredError,
+    BinaryCrossEntropy,
+}
+
+impl LossKind {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::MeanSquaredError => "mse",
+            Self::BinaryCrossEntropy => "bce",
+        }
+    }
 }
 
 impl TrainerFeatureSet {
@@ -75,6 +90,11 @@ struct Args {
     wdl_proportion: f32,
     feature_set: TrainerFeatureSet,
     input_format: String,
+    superbatches: usize,
+    initial_learning_rate: f32,
+    final_learning_rate: f32,
+    loss: LossKind,
+    initial_weights: Option<String>,
 }
 
 fn main() -> ExitCode {
@@ -111,6 +131,10 @@ fn run(args: Args) -> Result<(), String> {
     if args.input_format == "teacher-text-v1" {
         let loader = TeacherTextLoader::new(&args.train, plan.positions, chunk_positions)?;
         train(args, plan, loader)
+    } else if args.input_format == "teacher-score-text-v2" {
+        let loader =
+            TeacherTextLoader::new_score_only(&args.train, plan.positions, chunk_positions)?;
+        train(args, plan, loader)
     } else {
         let loader = DeterministicViriLoader::new(&args.train, chunk_positions)
             .map_err(|error| error.to_string())?
@@ -127,13 +151,17 @@ fn train(args: Args, plan: EpochPlan, loader: impl DataReader<ChessBoard>) -> Re
             batch_size: plan.batch_size,
             batches_per_superbatch: plan.batches,
             start_superbatch: 1,
-            end_superbatch: 1,
+            end_superbatch: args.superbatches,
         },
         wdl_scheduler: wdl::ConstantWDL {
             value: args.wdl_proportion,
         },
-        lr_scheduler: lr::ConstantLR { value: INITIAL_LR },
-        save_rate: 1,
+        lr_scheduler: lr::CosineDecayLR {
+            initial_lr: args.initial_learning_rate,
+            final_lr: args.final_learning_rate,
+            final_superbatch: args.superbatches,
+        },
+        save_rate: args.superbatches.min(10),
     };
     let settings = LocalSettings {
         threads: args.threads,
@@ -142,19 +170,25 @@ fn train(args: Args, plan: EpochPlan, loader: impl DataReader<ChessBoard>) -> Re
         batch_queue_size: 32,
     };
     println!(
-        "NEYRANG epoch contract: positions={} batch_size={} batches={} position_filter={} wdl_proportion={} feature_set={} network_seed={} position_shuffle_seed={} activation_quant={} output_quant={} input_format={} bullet_rev=629ee50000b2afb7b3337595401c830d3b1e0f42",
+        "NEYRANG epoch contract: positions_per_superbatch={} batch_size={} batches_per_superbatch={} superbatches={} initial_lr={} final_lr={} position_filter={} wdl_proportion={} feature_set={} loss={} network_seed={} position_shuffle_seed={} activation_quant={} output_quant={} input_format={} bullet_rev=629ee50000b2afb7b3337595401c830d3b1e0f42",
         plan.positions,
         plan.batch_size,
         plan.batches,
+        args.superbatches,
+        args.initial_learning_rate,
+        args.final_learning_rate,
         args.position_filter.as_str(),
         args.wdl_proportion,
         args.feature_set.as_str(),
+        args.loss.as_str(),
         NETWORK_SEED,
         POSITION_SHUFFLE_SEED,
         ACTIVATION_QUANT,
         OUTPUT_QUANT,
         args.input_format,
     );
+    let loss = args.loss;
+    let initial_weights = args.initial_weights.as_deref();
     match args.feature_set {
         TrainerFeatureSet::Chess768 => {
             let mut trainer = ValueTrainerBuilder::default()
@@ -174,14 +208,15 @@ fn train(args: Args, plan: EpochPlan, loader: impl DataReader<ChessBoard>) -> Re
                         .round()
                         .quantise::<i32>(OUTPUT_BIAS_QUANT),
                 ])
-                .loss_fn(|output, target| output.sigmoid().squared_error(target))
-                .build(|builder, stm_inputs, ntm_inputs| {
+                .build_custom(move |builder, (stm_inputs, ntm_inputs), target| {
                     let l0 = builder.new_affine("l0", 768, HIDDEN_SIZE);
                     let l1 = builder.new_affine("l1", 2 * HIDDEN_SIZE, 1);
                     let stm_hidden = l0.forward(stm_inputs).screlu();
                     let ntm_hidden = l0.forward(ntm_inputs).screlu();
-                    l1.forward(stm_hidden.concat(ntm_hidden))
+                    let output = l1.forward(stm_hidden.concat(ntm_hidden));
+                    (output, training_loss(loss, output, target))
                 });
+            load_initial_weights(&mut trainer, initial_weights)?;
             trainer.run(&schedule, &settings, &loader);
         }
         TrainerFeatureSet::Chess768KingBucketsMirrored3 => {
@@ -211,8 +246,7 @@ fn train(args: Args, plan: EpochPlan, loader: impl DataReader<ChessBoard>) -> Re
                         .round()
                         .quantise::<i32>(OUTPUT_BIAS_QUANT),
                 ])
-                .loss_fn(|output, target| output.sigmoid().squared_error(target))
-                .build(|builder, stm_inputs, ntm_inputs| {
+                .build_custom(move |builder, (stm_inputs, ntm_inputs), target| {
                     let factoriser = builder.new_weights(
                         "l0f",
                         Shape::new(HIDDEN_SIZE, 768),
@@ -223,7 +257,8 @@ fn train(args: Args, plan: EpochPlan, loader: impl DataReader<ChessBoard>) -> Re
                     let l1 = builder.new_affine("l1", 2 * HIDDEN_SIZE, 1);
                     let stm_hidden = l0.forward(stm_inputs).screlu();
                     let ntm_hidden = l0.forward(ntm_inputs).screlu();
-                    l1.forward(stm_hidden.concat(ntm_hidden))
+                    let output = l1.forward(stm_hidden.concat(ntm_hidden));
+                    (output, training_loss(loss, output, target))
                 });
             let factorised_clip = AdamWParams {
                 max_weight: 0.99,
@@ -236,6 +271,7 @@ fn train(args: Args, plan: EpochPlan, loader: impl DataReader<ChessBoard>) -> Re
             trainer
                 .optimiser
                 .set_params_for_weight("l0f", factorised_clip);
+            load_initial_weights(&mut trainer, initial_weights)?;
             trainer.run(&schedule, &settings, &loader);
         }
         TrainerFeatureSet::Chess768KingBucketsMirrored3PhaseHeads4 => {
@@ -269,21 +305,24 @@ fn train(args: Args, plan: EpochPlan, loader: impl DataReader<ChessBoard>) -> Re
                         .round()
                         .quantise::<i32>(OUTPUT_BIAS_QUANT),
                 ])
-                .loss_fn(|output, target| output.sigmoid().squared_error(target))
-                .build(|builder, stm_inputs, ntm_inputs, output_buckets| {
-                    let factoriser = builder.new_weights(
-                        "l0f",
-                        Shape::new(HIDDEN_SIZE, 768),
-                        InitSettings::Zeroed,
-                    );
-                    let mut l0 = builder.new_affine("l0", 768 * KING_BUCKET_COUNT, HIDDEN_SIZE);
-                    l0.weights = l0.weights + factoriser.repeat(KING_BUCKET_COUNT);
-                    let l1 = builder.new_affine("l1", 2 * HIDDEN_SIZE, PHASE_HEAD_COUNT);
-                    let stm_hidden = l0.forward(stm_inputs).screlu();
-                    let ntm_hidden = l0.forward(ntm_inputs).screlu();
-                    l1.forward(stm_hidden.concat(ntm_hidden))
-                        .select(output_buckets)
-                });
+                .build_custom(
+                    move |builder, (stm_inputs, ntm_inputs, output_buckets), target| {
+                        let factoriser = builder.new_weights(
+                            "l0f",
+                            Shape::new(HIDDEN_SIZE, 768),
+                            InitSettings::Zeroed,
+                        );
+                        let mut l0 = builder.new_affine("l0", 768 * KING_BUCKET_COUNT, HIDDEN_SIZE);
+                        l0.weights = l0.weights + factoriser.repeat(KING_BUCKET_COUNT);
+                        let l1 = builder.new_affine("l1", 2 * HIDDEN_SIZE, PHASE_HEAD_COUNT);
+                        let stm_hidden = l0.forward(stm_inputs).screlu();
+                        let ntm_hidden = l0.forward(ntm_inputs).screlu();
+                        let output = l1
+                            .forward(stm_hidden.concat(ntm_hidden))
+                            .select(output_buckets);
+                        (output, training_loss(loss, output, target))
+                    },
+                );
             let factorised_clip = AdamWParams {
                 max_weight: 0.99,
                 min_weight: -0.99,
@@ -295,6 +334,7 @@ fn train(args: Args, plan: EpochPlan, loader: impl DataReader<ChessBoard>) -> Re
             trainer
                 .optimiser
                 .set_params_for_weight("l0f", factorised_clip);
+            load_initial_weights(&mut trainer, initial_weights)?;
             trainer.run(&schedule, &settings, &loader);
         }
         TrainerFeatureSet::Chess768KingBucketsMirrored3PhaseBias4 => {
@@ -335,28 +375,31 @@ fn train(args: Args, plan: EpochPlan, loader: impl DataReader<ChessBoard>) -> Re
                         .round()
                         .quantise::<i32>(OUTPUT_BIAS_QUANT),
                 ])
-                .loss_fn(|output, target| output.sigmoid().squared_error(target))
-                .build(|builder, stm_inputs, ntm_inputs, output_buckets| {
-                    let factoriser = builder.new_weights(
-                        "l0f",
-                        Shape::new(HIDDEN_SIZE, 768),
-                        InitSettings::Zeroed,
-                    );
-                    let mut l0 = builder.new_affine("l0", 768 * KING_BUCKET_COUNT, HIDDEN_SIZE);
-                    l0.weights = l0.weights + factoriser.repeat(KING_BUCKET_COUNT);
-                    let l1 = builder.new_affine("l1", 2 * HIDDEN_SIZE, 1);
-                    let phase_biases = builder.new_weights(
-                        "l1p",
-                        Shape::new(PHASE_HEAD_COUNT, 1),
-                        InitSettings::Zeroed,
-                    );
-                    let stm_hidden = l0.forward(stm_inputs).screlu();
-                    let ntm_hidden = l0.forward(ntm_inputs).screlu();
-                    (l1.forward(stm_hidden.concat(ntm_hidden))
-                        .broadcast_across_rows(PHASE_HEAD_COUNT)
-                        + phase_biases)
-                        .select(output_buckets)
-                });
+                .build_custom(
+                    move |builder, (stm_inputs, ntm_inputs, output_buckets), target| {
+                        let factoriser = builder.new_weights(
+                            "l0f",
+                            Shape::new(HIDDEN_SIZE, 768),
+                            InitSettings::Zeroed,
+                        );
+                        let mut l0 = builder.new_affine("l0", 768 * KING_BUCKET_COUNT, HIDDEN_SIZE);
+                        l0.weights = l0.weights + factoriser.repeat(KING_BUCKET_COUNT);
+                        let l1 = builder.new_affine("l1", 2 * HIDDEN_SIZE, 1);
+                        let phase_biases = builder.new_weights(
+                            "l1p",
+                            Shape::new(PHASE_HEAD_COUNT, 1),
+                            InitSettings::Zeroed,
+                        );
+                        let stm_hidden = l0.forward(stm_inputs).screlu();
+                        let ntm_hidden = l0.forward(ntm_inputs).screlu();
+                        let output = (l1
+                            .forward(stm_hidden.concat(ntm_hidden))
+                            .broadcast_across_rows(PHASE_HEAD_COUNT)
+                            + phase_biases)
+                            .select(output_buckets);
+                        (output, training_loss(loss, output, target))
+                    },
+                );
             let factorised_clip = AdamWParams {
                 max_weight: 0.99,
                 min_weight: -0.99,
@@ -368,6 +411,7 @@ fn train(args: Args, plan: EpochPlan, loader: impl DataReader<ChessBoard>) -> Re
             trainer
                 .optimiser
                 .set_params_for_weight("l0f", factorised_clip);
+            load_initial_weights(&mut trainer, initial_weights)?;
             trainer.run(&schedule, &settings, &loader);
         }
         TrainerFeatureSet::Chess768KingBucketsMirrored3LatentImbalance => {
@@ -397,8 +441,7 @@ fn train(args: Args, plan: EpochPlan, loader: impl DataReader<ChessBoard>) -> Re
                         .round()
                         .quantise::<i32>(OUTPUT_BIAS_QUANT),
                 ])
-                .loss_fn(|output, target| output.sigmoid().squared_error(target))
-                .build(|builder, stm_inputs, ntm_inputs| {
+                .build_custom(move |builder, (stm_inputs, ntm_inputs), target| {
                     let factoriser = builder.new_weights(
                         "l0f",
                         Shape::new(HIDDEN_SIZE, 768),
@@ -410,7 +453,8 @@ fn train(args: Args, plan: EpochPlan, loader: impl DataReader<ChessBoard>) -> Re
                     let stm_hidden = l0.forward(stm_inputs).screlu();
                     let ntm_hidden = l0.forward(ntm_inputs).screlu();
                     let imbalance = (stm_hidden - ntm_hidden).abs();
-                    l1.forward(stm_hidden.concat(ntm_hidden).concat(imbalance))
+                    let output = l1.forward(stm_hidden.concat(ntm_hidden).concat(imbalance));
+                    (output, training_loss(loss, output, target))
                 });
             let factorised_clip = AdamWParams {
                 max_weight: 0.99,
@@ -423,14 +467,47 @@ fn train(args: Args, plan: EpochPlan, loader: impl DataReader<ChessBoard>) -> Re
             trainer
                 .optimiser
                 .set_params_for_weight("l0f", factorised_clip);
+            load_initial_weights(&mut trainer, initial_weights)?;
             trainer.run(&schedule, &settings, &loader);
         }
     }
     println!(
-        "NEYRANG epoch complete: positions={} checkpoint={}/{}-1",
-        plan.positions, args.output_directory, args.net_id
+        "NEYRANG epoch complete: positions_per_superbatch={} superbatches={} checkpoint={}/{}-{}",
+        plan.positions, args.superbatches, args.output_directory, args.net_id, args.superbatches,
     );
     Ok(())
+}
+
+fn load_initial_weights<Opt, Inp, Out>(
+    trainer: &mut bullet::value::ValueTrainer<Opt, Inp, Out>,
+    path: Option<&str>,
+) -> Result<(), String>
+where
+    Opt: bullet_trainer::optimiser::OptimiserState<bullet::nn::ExecutionContext>,
+    Inp: bullet::game::inputs::SparseInputType,
+{
+    if let Some(path) = path {
+        trainer
+            .optimiser
+            .load_weights_from_file(path)
+            .map_err(|error| format!("load initial weights: {error:?}"))?;
+    }
+    Ok(())
+}
+
+fn training_loss<'a>(
+    kind: LossKind,
+    output: ModelNode<'a>,
+    target: ModelNode<'a>,
+) -> ModelNode<'a> {
+    match kind {
+        LossKind::MeanSquaredError => output.sigmoid().squared_error(target),
+        LossKind::BinaryCrossEntropy => {
+            let logits = (output * 0.0).concat(output);
+            let targets = (1.0 - target).concat(target);
+            logits.softmax_crossentropy_loss(targets).reduce_sum_rows()
+        }
+    }
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -449,6 +526,11 @@ fn parse_args_from(mut values: impl Iterator<Item = String>) -> Result<Args, Str
     let mut wdl_proportion = None;
     let mut feature_set = None;
     let mut input_format = "viriformat".to_string();
+    let mut superbatches = 1;
+    let mut initial_learning_rate = DEFAULT_INITIAL_LR;
+    let mut final_learning_rate = DEFAULT_INITIAL_LR;
+    let mut loss = LossKind::MeanSquaredError;
+    let mut initial_weights = None;
     while let Some(flag) = values.next() {
         let value = values
             .next()
@@ -464,7 +546,27 @@ fn parse_args_from(mut values: impl Iterator<Item = String>) -> Result<Args, Str
             "--position-filter" => position_filter = Some(value.parse()?),
             "--wdl-proportion" => wdl_proportion = Some(parse_probability(&flag, &value)?),
             "--feature-set" => feature_set = Some(parse_feature_set(&value)?),
-            "--input-format" if matches!(value.as_str(), "viriformat" | "teacher-text-v1") => {
+            "--superbatches" => superbatches = parse_usize(&flag, &value)?,
+            "--initial-learning-rate" => {
+                initial_learning_rate = parse_positive_float(&flag, &value)?;
+            }
+            "--final-learning-rate" => {
+                final_learning_rate = parse_positive_float(&flag, &value)?;
+            }
+            "--initial-weights" => initial_weights = Some(value),
+            "--loss" => {
+                loss = match value.as_str() {
+                    "mse" => LossKind::MeanSquaredError,
+                    "bce" => LossKind::BinaryCrossEntropy,
+                    _ => return Err("--loss requires mse or bce".into()),
+                };
+            }
+            "--input-format"
+                if matches!(
+                    value.as_str(),
+                    "viriformat" | "teacher-text-v1" | "teacher-score-text-v2"
+                ) =>
+            {
                 input_format = value;
             }
             _ => return Err(format!("unknown argument: {flag}")),
@@ -482,11 +584,32 @@ fn parse_args_from(mut values: impl Iterator<Item = String>) -> Result<Args, Str
         wdl_proportion: wdl_proportion.ok_or("missing --wdl-proportion")?,
         feature_set: feature_set.ok_or("missing --feature-set")?,
         input_format,
+        superbatches,
+        initial_learning_rate,
+        final_learning_rate,
+        loss,
+        initial_weights,
     };
-    if args.input_format == "teacher-text-v1"
-        && (args.position_filter != PositionFilter::None || args.wdl_proportion != 0.0)
+    if args.superbatches == 0 {
+        return Err("--superbatches requires a positive integer".into());
+    }
+    if args.final_learning_rate > args.initial_learning_rate {
+        return Err(format!(
+            "--final-learning-rate cannot exceed initial rate {}",
+            args.initial_learning_rate
+        ));
+    }
+    if let Some(path) = &args.initial_weights
+        && !Path::new(path).is_file()
     {
-        return Err("teacher-text-v1 requires --position-filter none --wdl-proportion 0; export owns eligibility".into());
+        return Err(format!("initial weights are not a file: {path}"));
+    }
+    if matches!(
+        args.input_format.as_str(),
+        "teacher-text-v1" | "teacher-score-text-v2"
+    ) && (args.position_filter != PositionFilter::None || args.wdl_proportion != 0.0)
+    {
+        return Err("teacher text requires --position-filter none --wdl-proportion 0; export owns eligibility".into());
     }
     Ok(args)
 }
@@ -520,9 +643,21 @@ fn parse_probability(flag: &str, value: &str) -> Result<f32, String> {
     Ok(parsed)
 }
 
+fn parse_positive_float(flag: &str, value: &str) -> Result<f32, String> {
+    let parsed = value
+        .parse::<f32>()
+        .map_err(|_| format!("{flag} requires a positive finite number, got {value:?}"))?;
+    if !parsed.is_finite() || parsed <= 0.0 {
+        return Err(format!(
+            "{flag} requires a positive finite number, got {value:?}"
+        ));
+    }
+    Ok(parsed)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{PositionFilter, TrainerFeatureSet, parse_args_from};
+    use super::{LossKind, PositionFilter, TrainerFeatureSet, parse_args_from};
 
     #[test]
     fn teacher_input_is_explicit_and_rejects_incompatible_filter_or_blend() {
@@ -552,15 +687,77 @@ mod tests {
         let mut text: Vec<String> = base.into_iter().map(str::to_owned).collect();
         text.extend(["--input-format".into(), "teacher-text-v1".into()]);
         assert!(parse_args_from(text.clone().into_iter()).is_ok());
+        let mut score_only = text.clone();
+        *score_only.last_mut().unwrap() = "teacher-score-text-v2".into();
+        let mut bce = score_only.clone();
+        bce.extend(["--loss".into(), "bce".into()]);
+        assert_eq!(
+            parse_args_from(bce.into_iter()).unwrap().loss,
+            LossKind::BinaryCrossEntropy
+        );
+        assert_eq!(
+            parse_args_from(score_only.into_iter()).unwrap().loss,
+            LossKind::MeanSquaredError
+        );
         for (flag, value) in [
             ("--position-filter", "bullet-default"),
             ("--wdl-proportion", "0.75"),
             ("--input-format", "unknown"),
+            ("--loss", "unknown"),
         ] {
             let mut bad = text.clone();
-            let index = bad.iter().position(|v| v == flag).unwrap();
-            bad[index + 1] = value.into();
+            if let Some(index) = bad.iter().position(|v| v == flag) {
+                bad[index + 1] = value.into();
+            } else {
+                bad.extend([flag.into(), value.into()]);
+            }
             assert!(parse_args_from(bad.into_iter()).is_err());
+        }
+    }
+
+    #[test]
+    fn trainer_cli_accepts_bounded_cosine_decay() {
+        let base = [
+            "--train",
+            "train.txt",
+            "--output-dir",
+            "new-output",
+            "--net-id",
+            "synthetic",
+            "--positions",
+            "8",
+            "--batch-size",
+            "4",
+            "--buffer-mb",
+            "1",
+            "--threads",
+            "1",
+            "--position-filter",
+            "none",
+            "--wdl-proportion",
+            "0",
+            "--feature-set",
+            "chess768",
+        ];
+        let mut scheduled = base.map(str::to_owned).to_vec();
+        scheduled.extend([
+            "--superbatches".into(),
+            "40".into(),
+            "--final-learning-rate".into(),
+            "0.00000243".into(),
+        ]);
+        let args = parse_args_from(scheduled.into_iter()).unwrap();
+        assert_eq!(args.superbatches, 40);
+        assert_eq!(args.final_learning_rate, 0.00000243);
+
+        for (flag, value) in [
+            ("--superbatches", "0"),
+            ("--final-learning-rate", "0"),
+            ("--final-learning-rate", "0.01"),
+        ] {
+            let mut invalid = base.map(str::to_owned).to_vec();
+            invalid.extend([flag.into(), value.into()]);
+            assert!(parse_args_from(invalid.into_iter()).is_err());
         }
     }
 

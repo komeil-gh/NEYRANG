@@ -53,14 +53,13 @@ command-line tools for testing and benchmarking.
 
 | Branch | Engine version | Scope |
 | --- | --- | --- |
-| [`main`](https://github.com/komeil-gh/NEYRANG/tree/main) | `0.2.0` | Stable baseline; single-threaded search and classical evaluation |
-| [`dev/0.3-search`](https://github.com/komeil-gh/NEYRANG/tree/dev/0.3-search) | `0.3.0-dev` | Search and timing improvements, parallel search, and experimental evaluation tooling |
+| [`main`](https://github.com/komeil-gh/NEYRANG/tree/main) | `0.3.0` | Stable release with retained search, timing, parallel-search, and strength assets |
+| [`v0.3.0`](https://github.com/komeil-gh/NEYRANG/tree/v0.3.0) | `0.3.0` | Immutable source for this release |
 
-Use `main` for the `0.2.0` baseline and `dev/0.3-search` to work with the newer
-engine and research tools. Development results do not constitute a `0.3.0`
-release. The development branch embeds the NEYRANG-trained SANJ-N7 residual
-network and retained SHEGERD policy. A normal release build therefore uses only
-the project's own playing code and generated strength artifacts.
+The release embeds the NEYRANG-trained SANJ-N7 residual network and retained
+SHEGERD policy. A normal build therefore uses only the project's own playing
+code and generated strength artifacts. Historical `0.2.0` source remains
+available through its immutable tag.
 
 ## Build and run
 
@@ -85,13 +84,6 @@ On Windows, the executable is `target/release/neyrang.exe`; in PowerShell, run
 `.\target\release\neyrang.exe bench`. The remaining shell examples use POSIX
 syntax.
 
-To build the development version from the same clone:
-
-```bash
-git switch dev/0.3-search
-cargo build --release --locked
-```
-
 For a binary used only on the machine that builds it, Rust can enable that
 host's full CPU instruction set:
 
@@ -111,7 +103,7 @@ NEYRANG itself does not include a graphical board.
 The [En Croissant guide](docs/en-croissant.md) covers engine registration and
 versioned local builds on macOS.
 
-| UCI option | `0.2.0` | `0.3.0-dev` |
+| UCI option | `0.2.0` | `0.3.0` |
 | --- | --- | --- |
 | `Hash` | 64 MB by default | 64 MB by default |
 | `Threads` | Accepted; search uses one thread | Defaults to 1; higher values enable Lazy SMP |
@@ -148,15 +140,15 @@ interrupt a search, or `quit` to close the session.
 - **Search:** iterative deepening, alpha-beta/PVS, quiescence, aspiration
   windows, transposition tables, SEE-based move ordering, and late move reductions.
 - **Evaluation:** NEYRANG's own SANJ evaluator and incremental NNUE runtime,
-  using the embedded SANJ-N7 residual over the handcrafted evaluator. The
-  development branch also provides separate data and training tools.
+  using the embedded SANJ-N7 residual over the handcrafted evaluator. Separate
+  data and training tools remain outside the playing path.
 - **Time and protocol:** asynchronous UCI commands, cooperative search stopping,
-  and soft/hard time limits. The development branch adds Lazy SMP parallel search.
+  soft/hard time limits, and Lazy SMP parallel search.
 
-On the development branch, **REKHNE** owns search, **SANJ** owns evaluation,
-and **SHEGERD** owns move ordering. Chess rules remain separate from these
+**REKHNE** owns search, **SANJ** owns evaluation, and **SHEGERD** owns move
+ordering. Chess rules remain separate from these
 components. The boundaries are documented in the
-[naming guide](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/docs/naming.md).
+[naming guide](docs/naming.md).
 
 ## Verification and benchmarks
 
@@ -175,9 +167,11 @@ move. Recorded reference results:
 | Rook/pawn endgame | 5 | 674,624 |
 
 Exact FENs and test commands are in the [testing guide](docs/testing.md).
-The `0.2.0` depth-5 benchmark visits **196,627 nodes** with checksum
-`4a4c31e290740db3`. Node counts and checksums identify a particular version and
-workload; elapsed time and nodes per second depend on the machine and build.
+The `0.3.0` default depth-5 benchmark visits **34,345 nodes**. Its registered
+depth-8 and depth-12 workloads visit **536,259** and **29,459,618** nodes with
+checksums `9d8d22b14e51010d` and `0f8416196d8f7941`. Node counts and checksums
+identify a particular version and workload; elapsed time and nodes per second
+depend on the machine and build.
 
 Search changes are checked with tactical tests, deterministic benchmarks,
 color-reversed engine matches, and sequential probability ratio tests (SPRT).
@@ -194,9 +188,9 @@ make quality
 scripts/test-match-config.sh
 ```
 
-The development branch also requires Python infrastructure tests, independent
-NNUE reference tests, and the OpenBench build contract. The
-[contribution guide](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/CONTRIBUTING.md)
+The complete gate also requires Python infrastructure tests, independent NNUE
+reference tests, and the OpenBench build contract. The
+[contribution guide](CONTRIBUTING.md)
 lists their prerequisites and commands.
 
 Keep each search or evaluation experiment focused. Record the hypothesis,
@@ -234,8 +228,8 @@ or [changelog](CHANGELOG.md) for the checked-out branch:
 
 | Task | Documentation |
 | --- | --- |
-| Understand search and evaluation | [REKHNE](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/docs/rekhne.md) · [SANJ](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/docs/sanj.md) |
-| Integrate the engine | [OpenBench](https://github.com/komeil-gh/NEYRANG/blob/dev/0.3-search/docs/openbench.md) · [En Croissant](docs/en-croissant.md) |
+| Understand search and evaluation | [REKHNE](docs/rekhne.md) · [SANJ](docs/sanj.md) |
+| Integrate the engine | [OpenBench](docs/openbench.md) · [En Croissant](docs/en-croissant.md) |
 
 ## Contributing and security
 
@@ -258,9 +252,8 @@ private evidence rather than release assets.
 
 ### External move-policy experiments
 
-The default build carries the retained CPU-only SHEGERD policy without enabling
-it automatically. To enable that artifact, set `PolicyFile=<embedded>`. To load
-an external compatible artifact instead:
+The default build carries and enables the retained CPU-only SHEGERD policy as
+`PolicyFile=<embedded>`. To load an external compatible artifact instead:
 
 ```bash
 cargo build --release --locked

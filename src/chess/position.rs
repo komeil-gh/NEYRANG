@@ -224,6 +224,40 @@ impl Position {
         super::movegen::is_in_check(self, color)
     }
 
+    /// Return true for conservative dead positions where checkmate is impossible.
+    pub fn is_dead_position(&self) -> bool {
+        let pawns_or_heavy = [PieceType::Pawn, PieceType::Rook, PieceType::Queen]
+            .into_iter()
+            .fold(0, |pieces, kind| {
+                pieces | self.pieces(Color::White, kind) | self.pieces(Color::Black, kind)
+            });
+        if pawns_or_heavy != 0 {
+            return false;
+        }
+
+        let knights = self.pieces(Color::White, PieceType::Knight)
+            | self.pieces(Color::Black, PieceType::Knight);
+        let mut bishops = self.pieces(Color::White, PieceType::Bishop)
+            | self.pieces(Color::Black, PieceType::Bishop);
+        if knights == 0 {
+            let Some(first) = Square::from_index(bishops.trailing_zeros() as u8) else {
+                return true;
+            };
+            let square_color = (first.file() + first.rank()) & 1;
+            while bishops != 0 {
+                let square = Square::from_index(bishops.trailing_zeros() as u8)
+                    .expect("a bishop bit identifies a valid square");
+                if (square.file() + square.rank()) & 1 != square_color {
+                    return false;
+                }
+                bishops &= bishops - 1;
+            }
+            return true;
+        }
+
+        bishops == 0 && knights.count_ones() == 1
+    }
+
     pub fn find_legal_move(&mut self, notation: &str) -> Option<Move> {
         self.legal_moves()
             .iter()

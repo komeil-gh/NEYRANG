@@ -17,7 +17,7 @@ tool boundaries around the four named concepts.
 ## Current interface names
 
 - binary and Rust crate: `neyrang`
-- UCI name: `NEYRANG 0.3.0-dev`
+- UCI name: `NEYRANG 0.3.0`
 - evaluation evidence feature: `sanj-tools`
 - evaluation evidence command: `neyrang sanj-trace`
 - experimental evaluation feature: `nnue`

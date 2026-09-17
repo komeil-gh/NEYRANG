@@ -9,12 +9,12 @@ scripts/en-croissant.sh prepare
 The command prints the exact executable path, for example:
 
 ```text
-.../dist/en-croissant/neyrang-0.3.0-dev-macos-arm64
+.../dist/en-croissant/neyrang-0.3.0-macos-arm64
 ```
 
 In En Croissant, open **Engines**, choose the local-engine add action, and select
 that executable. En Croissant probes it with `uci` and `isready`; the detected
-development identity should be `NEYRANG 0.3.0-dev`, with `Hash`, `Threads`, and
+release identity should be `NEYRANG 0.3.0`, with `Hash`, `Threads`, and
 `Move Overhead` settings.
 
 The prepared artifact is separate from `target/`, so cleaning Cargo build output does not leave the GUI pointing at a missing file. Run `prepare` again after changing the engine. The generated `dist/` directory is intentionally not committed.

@@ -4,6 +4,8 @@ All notable changes to NEYRANG are documented here.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-17
+
 ### Added
 
 - Experimental version-4 `Chess768x3hmli` NNUE artifacts and trainer/reference
@@ -31,7 +33,7 @@ All notable changes to NEYRANG are documented here.
 - The NEYRANG identity and explicit REKHNE search, SANJ evaluation, and SHEGERD
   strength-technique module boundaries, with a fail-closed migration contract
   for binaries, packages, schemas, and NNUE artifacts.
-- An OpenBench-compatible root Makefile honoring `EXE=`, plus a contract test that builds the named executable, checks three sequential and three concurrent 180,591-node benches, requires positive parsable NPS, and verifies UCI `Hash`/`Threads` readiness.
+- An OpenBench-compatible root Makefile honoring `EXE=`, plus a contract test that builds the named executable, checks three sequential and three concurrent registered benches, requires positive parsable NPS, and verifies UCI `Hash`/`Threads` readiness.
 - Cross-platform GitHub CI for formatting, Clippy, default/all-feature Rust tests, Python infrastructure tests, match-runner checks, release Perft gates, and the OpenBench contract on Linux and macOS.
 - Evidence-first engine-regression and experiment issue forms, a playing-change pull-request template, contribution/security policies, an OpenBench deployment guide, and a source-backed competitive roadmap.
 - A reusable paired-match auditor that independently parses PGNs, reconstructs W/D/L and pentanomial counts, verifies opening/color pairs and complete telemetry, audits metadata, and scans strict logs for failure classes.
@@ -96,7 +98,7 @@ All notable changes to NEYRANG are documented here.
   contract test rejects any tracked path or byte sequence containing the retired
   identity, and current readers reject pre-contract schemas rather than silently
   relabeling historical artifacts.
-- The development version is `NEYRANG 0.3.0-dev`; the executable and Rust crate
+- The release version is `NEYRANG 0.3.0`; the executable and Rust crate
   are `neyrang`, while the immutable `v0.2.0` tag remains version provenance.
 - Development legal move generation now avoids make/check/unmake in the common path and validates exceptional moves against simulated final occupancy. The deterministic search tree and checksum are unchanged.
 - The retained F1 candidate reduced median depth-8 wall time by 33.99% and raised median NPS by 51.50% across 15 interleaved runs per frozen binary.
@@ -130,6 +132,17 @@ All notable changes to NEYRANG are documented here.
 - H18 keeps each lazy MovePicker stage in one fixed-capacity active-index range,
   so repeated best-move selection no longer rescans unrelated or already used
   moves. Scores, stage boundaries, tie order, tree, and checksum are unchanged.
+- H30 combines three exact retained-path optimizations: active MovePicker
+  indices are collected during classification, classical SANJ uses one
+  color-local piece traversal, and SANJ-N7's AVX2 output dot product uses exact
+  signed 64-bit products. Depth-8/depth-12 nodes and checksums remain exact.
+- H35 returns an internal draw for the conservative dead-position subset:
+  bare kings, one minor versus a bare king, and bishop-only material where all
+  bishops occupy the same square color. Two knights and mixed/opposite-color
+  minor endings remain outside the rule.
+- H41 lets a completed iteration that drops at least 30 centipawns continue to
+  1.3 times the soft limit, always clamped by the existing hard deadline. Root
+  move churn alone does not extend time.
 ### Evidence
 
 - O1 captured 6,326 macOS top-of-stack samples from an unchanged SHA-256-bound
@@ -143,13 +156,13 @@ All notable changes to NEYRANG are documented here.
   sealed 5,440-record final holdout from 825 sampled pairs; its match aggregate,
   rows, targets, feature values, predictions and loss remain uninspected. No
   evaluator weight or playing source changed.
-- F1 completed a strict 2,000-game / 1,000-pair timed screen at 62.20%, with 2,000 normal terminations and no timing, legality, crash, or protocol anomaly. This is development evidence; version `0.2.0` remains the latest release.
-- G1 completed a separate strict 2,000-game / 1,000-pair timed screen at 50.98%, with 2,000 normal terminations and no timing, legality, crash, or protocol anomaly. This is a tree-identical performance regression guard; version `0.2.0` remains the latest release.
+- F1 completed a strict 2,000-game / 1,000-pair timed screen at 62.20%, with 2,000 normal terminations and no timing, legality, crash, or protocol anomaly. This was development evidence before the 0.3.0 release.
+- G1 completed a separate strict 2,000-game / 1,000-pair timed screen at 50.98%, with 2,000 normal terminations and no timing, legality, crash, or protocol anomaly. This is a tree-identical performance regression guard retained in 0.3.0.
 - H2b completed 4,000 fresh paired games without a timing, crash, legality, warning, or protocol failure and produced 2,910 independently replayed unique evaluation records. The source is retained for later tuning, its holdout remains sealed, and no evaluation weight changed.
 - H2c was rejected in full after one timeout following 7,462 complete games; the independently audited prefix is preserved only as failure evidence and is excluded from every corpus and tuning decision.
 - P1 completed and independently audited 2,000 cumulative G1-versus-v0.2.0 games at 65.875% (`+114.26 +/-12.79 Elo`), with 2,000 normal terminations, complete telemetry, and zero allowed or rejected warning or other anomaly. This permits a separately registered SPRT but does not change the released version.
 - A two-shard real-binary smoke completed 8/8 games and passed independent coordinator replay with exact aggregate W/D/L and pentanomial counts. This validates infrastructure only and is not strength evidence.
-- P3 passed its frozen scaling gate at `2.010776x / 3.956388x` aggregate NPS for Threads 2/4. Its binding same-binary 2,000-game Threads-2-versus-Threads-1 screen then completed `711/701/588` (53.075%, `+21.39 +/-10.90 Elo`) with pentanomial `[57,184,437,223,99]`. Independent replay verified all 1,000 pairs and 196,758 plies with no timing, legality, crash, warning, or protocol anomaly. This retains P3 on the development branch but does not change version `0.2.0` or replace a separately preregistered normalized SPRT.
+- P3 passed its frozen scaling gate at `2.010776x / 3.956388x` aggregate NPS for Threads 2/4. Its binding same-binary 2,000-game Threads-2-versus-Threads-1 screen then completed `711/701/588` (53.075%, `+21.39 +/-10.90 Elo`) with pentanomial `[57,184,437,223,99]`. Independent replay verified all 1,000 pairs and 196,758 plies with no timing, legality, crash, warning, or protocol anomaly. This retains P3 in 0.3.0 but does not replace a separately preregistered normalized SPRT.
 - The first committed N1b recorder campaign completed and independently replayed 3,683/3,683 fixed-node train/validation games with zero rejection and 320,947 white-relative scored positions; 413 partitioned holdout openings were not played. This is data-pipeline evidence only, not training or Elo evidence, and remains below the one-million-position gate.
 - N1e completed 160,109/160,109 new train games with zero rejection and assembled 18,140,767 train positions disjoint from the unchanged 463,228-position validation corpus. One exact 16,008,492-position Metal epoch passed both raw/quantized parity gates and lowered fixed-validation MSE from `0.076680656365` to `0.074149893964`; the pre-registered paired game bootstrap interval is wholly negative. This retains the 16M network as offline learning-curve evidence only—there is no engine integration, game result or Elo claim.
 - N2a's N1e network lost its strict 1,000-game fixed-node screen `177/633/190` and was rejected for play with no runtime anomaly. N2b then trained a score-only replacement that passed parity and search-facing holdout metrics on a new zero-overlap 22,205-game corpus, but its registered paired bootstrap interval `[-0.000633537, 0.000026689]` crossed zero. It was rejected before games; classical SANJ remains default and neither N2 result is release Elo evidence.
@@ -207,10 +220,37 @@ All notable changes to NEYRANG are documented here.
   throughput by 2.97% over H15-PGO and scored 34.05% against Blunder versus
   H15-PGO's same-opening 31.85%. The paired +2.20-point interval (-1.15 to
   +5.50) crosses zero, so the external gain remains directional.
+- H30 preserved the 536,259-node depth-8 and 29,459,618-node depth-12 trees
+  with checksums `9d8d22b14e51010d` and `0f8416196d8f7941`. Across 31
+  interleaved native pairs, median throughput improved 29.87%. Its audited
+  512-game Blunder 7.6.0 screen scored 33.79%; the engine still lost
+  decisively, so no victory or absolute-rating claim follows.
+- H35 passed its conservative dead-position regression and a clean 512-game
+  parent screen at 50.20%. H41 then passed a clean 1,000-game equal-time parent
+  screen at 50.50% and scored 35.74% against Blunder 7.6.0 on the same 256
+  opening pairs used by H35. The +2.44-point external difference is
+  directional, not statistically proven, and 0.3.0 still loses this match.
+- The portable 0.3.0 release artifact (`3373654a5a3f5b20a3cec4ac2a7f3772a60090a6b8401cacc8948b1392e7c93d`)
+  reproduced H41 exactly across 256 fixed-node games: every one of 128
+  color-reversed pairs tied, for 67 wins, 67 losses and 122 draws. Its separate
+  independently audited 512-game release screen against Blunder 7.6.0 scored
+  `92/130/290` (30.66%, `-141.73 +/-26.28 Elo`) with 512 normal terminations
+  and no candidate crash, disconnect, forfeit, illegal move, protocol error,
+  stall, time forfeit or timeout. This is the final 0.3.0 external-strength
+  result; NEYRANG does not beat Blunder 7.6.0 at the tested conditions.
 - SANJ feature analysis now accepts the current 39-column trace contract,
   including the fixed king-danger diagnostic column; its 42 tunable columns
   and production-score reconstruction remain unchanged.
 ### Rejected
+
+- H31-H42 isolated removal, pruning, extension, evaluation, PGO, and
+  time-management candidates behind fixed-node and equal-time gates. H33,
+  H36-H40, and H42 failed a registered playing or engineering gate and were
+  reverted; H32 failed its throughput floor. H31's attempt to remove the
+  unproven Fischer root prior missed its non-negative point-estimate floor, so
+  the prior remains. H42 is the clearest warning against node-only evidence:
+  phase-complete endgame mobility scored 51.07% at fixed nodes but only 41.21%
+  at equal time, and was removed before any external-engine game.
 
 - H27-H29 embedded an official Stockfish 18 small NNUE through `nnue-rs`.
   The final adapter scored `341/393/290` against its source-identical parent

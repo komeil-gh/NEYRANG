@@ -96,9 +96,13 @@ def objective_and_gradient(
     *,
     scale: float,
     regularization: float,
+    fixed_output: np.ndarray | None = None,
 ) -> tuple[float, np.ndarray]:
     candidate = np.asarray(candidate, dtype=np.float64)
-    exponent = np.clip(-scale * (design @ candidate) / 400.0, -50.0, 50.0)
+    output = design @ candidate
+    if fixed_output is not None:
+        output = output + fixed_output
+    exponent = np.clip(-scale * output / 400.0, -50.0, 50.0)
     prediction = 1.0 / (1.0 + np.power(10.0, exponent))
     clipped = np.clip(prediction, 1e-12, 1.0 - 1e-12)
     cross_entropy = -(
@@ -208,7 +212,14 @@ def _fit_one(
 
     design = partition.design[mask]
     target = partition.target[mask]
-    row_weights = load_analysis_module().group_weights(partition.groups[mask])
+    analysis = load_analysis_module()
+    row_weights = analysis.group_weights(partition.groups[mask])
+    fixed_output = (
+        partition.king_danger[mask]
+        * analysis.FIXED_KING_DANGER_WEIGHT
+        * partition.phase[mask]
+        / 24.0
+    )
 
     def objective(candidate: np.ndarray) -> tuple[float, np.ndarray]:
         return objective_and_gradient(
@@ -220,6 +231,7 @@ def _fit_one(
             radii,
             scale=scale,
             regularization=regularization,
+            fixed_output=fixed_output,
         )
 
     result = minimize(
@@ -301,8 +313,8 @@ def _comparison(
     return output
 
 
-def _load_registration() -> dict[str, Any]:
-    registration = json.loads(REGISTRATION_PATH.read_text(encoding="utf-8"))
+def _load_registration(path: Path) -> dict[str, Any]:
+    registration = json.loads(path.read_text(encoding="utf-8"))
     if registration.get("schema") != "neyrang-sanj-h3b-fitter-registration-v1":
         raise ValueError("unexpected H3b registration schema")
     if registration.get("status") != "binding-before-real-fit":
@@ -496,6 +508,7 @@ def fit_registered(
     validation_path: Path,
     *,
     implementation_commit: str,
+    registration_path: Path = REGISTRATION_PATH,
 ) -> dict[str, Any]:
     if COMMIT.fullmatch(implementation_commit) is None:
         raise ValueError("implementation commit must be a full lowercase Git SHA")
@@ -503,7 +516,7 @@ def fit_registered(
     validate_feature_path(
         validation_path, expected_name="validation.features.tsv"
     )
-    registration = _load_registration()
+    registration = _load_registration(registration_path)
     registered_train = REPO_ROOT / registration["inputs"]["train"]["path"]
     registered_validation = REPO_ROOT / registration["inputs"]["validation"]["path"]
     if train_path.resolve() != registered_train.resolve():
@@ -559,11 +572,11 @@ def fit_registered(
 
     return {
         "schema": "neyrang-sanj-h3b-fitter-result-v1",
-        "phase": "H3b",
+        "phase": registration.get("phase", "H3b"),
         "implementation_git_commit": implementation_commit,
         "registration": {
-            "path": str(REGISTRATION_PATH.relative_to(REPO_ROOT)),
-            "sha256": sha256_file(REGISTRATION_PATH),
+            "path": str(registration_path.resolve().relative_to(REPO_ROOT)),
+            "sha256": sha256_file(registration_path),
         },
         "implementation": {
             "fitter_path": str(Path(__file__).resolve().relative_to(REPO_ROOT)),
@@ -595,13 +608,18 @@ def fit_registered(
     }
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args_from(values: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--train-features", type=Path, required=True)
     parser.add_argument("--validation-features", type=Path, required=True)
     parser.add_argument("--implementation-commit", required=True)
+    parser.add_argument("--registration", type=Path, default=REGISTRATION_PATH)
     parser.add_argument("--output", type=Path, required=True)
-    return parser.parse_args()
+    return parser.parse_args(values)
+
+
+def parse_args() -> argparse.Namespace:
+    return parse_args_from()
 
 
 def main() -> int:
@@ -610,6 +628,7 @@ def main() -> int:
         args.train_features,
         args.validation_features,
         implementation_commit=args.implementation_commit,
+        registration_path=args.registration,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("x", encoding="utf-8", newline="\n") as handle:

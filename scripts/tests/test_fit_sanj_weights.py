@@ -63,6 +63,7 @@ class SanjWeightFitterTests(unittest.TestCase):
         baseline = np.array([2.0, -1.0])
         radii = np.array([3.0, 2.0])
         candidate = np.array([2.4, -0.7])
+        fixed_output = np.array([0.25, -0.5, 0.75])
 
         value, gradient = fitter.objective_and_gradient(
             candidate,
@@ -73,6 +74,7 @@ class SanjWeightFitterTests(unittest.TestCase):
             radii,
             scale=0.8,
             regularization=0.01,
+            fixed_output=fixed_output,
         )
         epsilon = 1e-5
         numeric = np.empty_like(candidate)
@@ -90,6 +92,7 @@ class SanjWeightFitterTests(unittest.TestCase):
                 radii,
                 scale=0.8,
                 regularization=0.01,
+                fixed_output=fixed_output,
             )[0]
             right_value = fitter.objective_and_gradient(
                 right,
@@ -100,6 +103,7 @@ class SanjWeightFitterTests(unittest.TestCase):
                 radii,
                 scale=0.8,
                 regularization=0.01,
+                fixed_output=fixed_output,
             )[0]
             numeric[index] = (right_value - left_value) / (2.0 * epsilon)
 
@@ -123,11 +127,11 @@ class SanjWeightFitterTests(unittest.TestCase):
             np.asarray(analysis.CURRENT_EFFECTIVE_WEIGHTS, dtype=np.int64)
         )
 
-        self.assertEqual(literals["mg_material"], [82, 337, 365, 477, 1025, 0])
-        self.assertEqual(literals["eg_material"], [94, 281, 297, 512, 936, 0])
-        self.assertEqual(literals["tempo"], 12)
-        self.assertEqual(literals["mg_psqt"], [7, 2, 9, 5, 2, 1, 2, -9, -3])
-        self.assertEqual(literals["eg_psqt"], [12, 1, 7, 4, 3, 1, 8])
+        self.assertEqual(literals["mg_material"], [69, 300, 312, 405, 1094, 0])
+        self.assertEqual(literals["eg_material"], [79, 280, 330, 589, 1077, 0])
+        self.assertEqual(literals["tempo"], 6)
+        self.assertEqual(literals["mg_psqt"], [3, 0, 14, 6, 4, 3, 4, -6, -5])
+        self.assertEqual(literals["eg_psqt"], [6, 0, 9, 4, 4, 1, 4])
 
     def test_material_order_gate_rejects_unsafe_vector(self) -> None:
         fitter = load_fitter()
@@ -148,6 +152,24 @@ class SanjWeightFitterTests(unittest.TestCase):
         self.assertIs(rejected["holdout_access_authorized"], False)
         self.assertIs(rejected["weight_source_changed"], False)
         self.assertIs(accepted["candidate_frozen"], True)
+
+    def test_registration_path_is_explicitly_selectable(self) -> None:
+        fitter = load_fitter()
+        args = fitter.parse_args_from(
+            [
+                "--train-features",
+                "train.features.tsv",
+                "--validation-features",
+                "validation.features.tsv",
+                "--implementation-commit",
+                "0" * 40,
+                "--registration",
+                "n13.json",
+                "--output",
+                "report.json",
+            ]
+        )
+        self.assertEqual(args.registration, Path("n13.json"))
 
 
 if __name__ == "__main__":

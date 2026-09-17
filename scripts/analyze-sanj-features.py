@@ -109,49 +109,50 @@ CURRENT_TRACE_SCHEMA = "neyrang-sanj-trace-v2"
 PRE_CONTRACT_TRACE_SCHEMA = re.compile(
     r"^[a-z0-9][a-z0-9-]*-eval-trace-v1$"
 )
+FIXED_KING_DANGER_WEIGHT = -1
 CURRENT_EFFECTIVE_WEIGHTS = (
-    82,
-    313,
-    353,
-    477,
-    1_020,
-    7,
-    2,
-    9,
-    5,
-    2,
-    1,
-    2,
-    -9,
-    -3,
-    28,
-    -11,
-    -10,
-    2,
-    4,
-    5,
-    2,
-    1,
-    18,
-    10,
-    9,
-    94,
-    263,
-    287,
-    512,
-    936,
-    12,
-    1,
-    7,
+    69,
+    276,
+    300,
+    405,
+    1_089,
+    3,
+    0,
+    14,
+    6,
     4,
     3,
-    1,
-    8,
-    38,
-    -16,
-    -8,
     4,
-    12,
+    -6,
+    -5,
+    28,
+    -9,
+    -10,
+    0,
+    5,
+    8,
+    4,
+    3,
+    27,
+    15,
+    14,
+    79,
+    262,
+    320,
+    589,
+    1_077,
+    6,
+    0,
+    9,
+    4,
+    4,
+    1,
+    4,
+    41,
+    -14,
+    -9,
+    6,
+    6,
 )
 
 
@@ -167,6 +168,7 @@ class Partition:
     phase: np.ndarray
     mg_coefficients: np.ndarray
     eg_coefficients: np.ndarray
+    king_danger: np.ndarray
     tempo_sign: np.ndarray
 
 
@@ -185,7 +187,10 @@ def exact_integer_cp(partition: Partition, weights: np.ndarray) -> np.ndarray:
     if candidate.shape != (42,) or not np.array_equal(candidate, np.trunc(candidate)):
         raise ValueError("effective weights must be 42 integers")
     candidate = candidate.astype(np.int64)
-    middlegame = partition.mg_coefficients @ candidate[:25]
+    middlegame = (
+        partition.mg_coefficients @ candidate[:25]
+        + partition.king_danger * FIXED_KING_DANGER_WEIGHT
+    )
     endgame = partition.eg_coefficients @ candidate[25:41]
     numerator = (
         middlegame * partition.phase
@@ -235,11 +240,12 @@ def load_partition(path: Path) -> Partition:
     if np.any((phase < 0.0) | (phase > 24.0)):
         raise ValueError(f"{path}: phase is outside [0,24]")
     target = np.asarray([float(row["target"]) for row in rows])
-    if not np.isin(target, np.asarray([0.0, 0.5, 1.0])).all():
-        raise ValueError(f"{path}: target is outside WDL values")
+    if not np.isfinite(target).all() or np.any((target < 0.0) | (target > 1.0)):
+        raise ValueError(f"{path}: target is outside [0,1]")
 
     mg_coefficients = _integer_columns(rows, MG_FEATURES)
     eg_coefficients = _integer_columns(rows, EG_FEATURES)
+    king_danger = _integer_columns(rows, ("king_danger_delta",))[:, 0]
     columns: list[np.ndarray] = []
     names: list[str] = []
     for index, feature in enumerate(MG_FEATURES):
@@ -283,6 +289,7 @@ def load_partition(path: Path) -> Partition:
         phase=phase,
         mg_coefficients=mg_coefficients,
         eg_coefficients=eg_coefficients,
+        king_danger=king_danger,
         tempo_sign=tempo_sign,
     )
 

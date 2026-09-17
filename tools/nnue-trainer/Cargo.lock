@@ -213,7 +213,7 @@ checksum = "4caf9c718f831a8568f030576e6a6e6aa487ed5f8732ddb0ba79e9a3ea0421ca"
 
 [[package]]
 name = "neyrang"
-version = "0.3.0-dev"
+version = "0.3.0"
 
 [[package]]
 name = "neyrang-nnue-trainer"

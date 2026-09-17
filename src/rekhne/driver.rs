@@ -40,6 +40,14 @@ const fn null_move_reduction(depth: i32) -> i32 {
     if depth >= 6 { 3 } else { NULL_MOVE_REDUCTION }
 }
 
+fn adjusted_soft_limit(soft: Duration, hard: Option<Duration>, unstable: bool) -> Duration {
+    if unstable {
+        (soft * 13 / 10).min(hard.unwrap_or(Duration::MAX))
+    } else {
+        soft
+    }
+}
+
 #[derive(Clone, Copy)]
 struct SearchContext {
     preferred: Option<Move>,
@@ -549,6 +557,7 @@ impl<'a> Searcher<'a> {
                 break;
             }
 
+            let previous_score = best_score;
             let pv = self.pv_line(0);
             if let Some(&mv) = pv.first() {
                 best_move = mv;
@@ -556,6 +565,7 @@ impl<'a> Searcher<'a> {
             }
             best_score = score;
             best_depth = depth;
+            let unstable = depth >= 4 && previous_score.saturating_sub(score) >= 30;
             self.publish_progress();
             let info = SearchInfo {
                 depth,
@@ -569,7 +579,7 @@ impl<'a> Searcher<'a> {
             };
             on_info(&info);
 
-            if self.soft_limit_reached()
+            if self.soft_limit_reached(unstable)
                 || score.abs() >= VALUE_MATE - MAX_PLY as i32
                 || self.node_limit_reached()
             {
@@ -1243,7 +1253,7 @@ impl<'a> Searcher<'a> {
     }
 
     fn is_draw(&self, position: &Position) -> bool {
-        if position.halfmove_clock() >= 100 {
+        if position.halfmove_clock() >= 100 || position.is_dead_position() {
             return true;
         }
         let current = self
@@ -1291,12 +1301,11 @@ impl<'a> Searcher<'a> {
         })
     }
 
-    fn soft_limit_reached(&self) -> bool {
+    fn soft_limit_reached(&self, unstable: bool) -> bool {
         !self.limits.infinite
-            && self
-                .limits
-                .soft_time
-                .is_some_and(|limit| self.started.elapsed() >= limit)
+            && self.limits.soft_time.is_some_and(|soft| {
+                self.started.elapsed() >= adjusted_soft_limit(soft, self.limits.hard_time, unstable)
+            })
     }
 
     fn visit_node(&mut self, quiescence: bool) {
@@ -1357,11 +1366,25 @@ mod timing_tests {
         time::{Duration, Instant},
     };
 
-    use super::{SearchContext, Searcher, VALUE_DRAW};
+    use super::{SearchContext, Searcher, VALUE_DRAW, adjusted_soft_limit};
     use crate::{
         chess::{Move, Position},
         rekhne::{SearchLimits, tt::Bound},
     };
+
+    #[test]
+    fn unstable_iteration_extends_soft_time_without_crossing_hard_time() {
+        let soft = Duration::from_millis(20);
+        assert_eq!(adjusted_soft_limit(soft, None, false), soft);
+        assert_eq!(
+            adjusted_soft_limit(soft, None, true),
+            Duration::from_millis(26)
+        );
+        assert_eq!(
+            adjusted_soft_limit(soft, Some(Duration::from_millis(25)), true),
+            Duration::from_millis(25)
+        );
+    }
 
     #[test]
     fn go_receipt_time_survives_worker_dispatch_and_advances_tt_generation() {

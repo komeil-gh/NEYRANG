@@ -177,6 +177,32 @@ def audit_expected_metadata(
     return expected, errors
 
 
+def audit_limit_metadata(
+    metadata: dict[str, str], time_controls: Counter[str | None]
+) -> list[str]:
+    """Require retained metadata to describe the limit recorded by fastchess."""
+    limit_mode = metadata.get("limit_mode")
+    recorded = set(time_controls)
+    if limit_mode in {"nodes", "per-engine-nodes"}:
+        if metadata.get("time_control") != "-":
+            return [
+                "node-limited metadata time_control is "
+                f"{metadata.get('time_control')!r}, expected '-'"
+            ]
+        if recorded != {"-"}:
+            return [f"node-limited PGN time controls are {sorted(recorded)!r}, expected ['-']"]
+    elif limit_mode == "time":
+        expected = metadata.get("time_control")
+        if not expected or recorded != {expected}:
+            return [
+                f"time-limited PGN time controls are {sorted(recorded)!r}, "
+                f"metadata records {expected!r}"
+            ]
+    else:
+        return [f"metadata limit_mode is {limit_mode!r}, expected a known limit mode"]
+    return []
+
+
 def read_canonical_openings(path: Path) -> tuple[list[str], list[str]]:
     expected: list[str] = []
     errors: list[str] = []
@@ -555,6 +581,7 @@ def main() -> int:
             errors.append(
                 f"metadata games is {metadata.get('games')!r}, expected {args.expected_games}"
             )
+        errors.extend(audit_limit_metadata(metadata, time_controls))
     if args.warning_policy != "reject-all":
         if metadata is None:
             errors.append("compatibility warning policy requires --meta")

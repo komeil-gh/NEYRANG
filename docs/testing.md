@@ -120,9 +120,15 @@ workload without fresh evidence.
 Use balanced openings, color-reversed pairs, equal resource limits, frozen
 binaries, and a predeclared acceptance rule. Record game count, W/D/L,
 pentanomial results, time control, engine options, and abnormal terminations.
+Node-limited runs record `time_control=-` in metadata and PGN headers; timed
+runs record the exact `TC` value instead. The independent auditor rejects a
+limit-mode/metadata mismatch.
 For asymmetric compatibility runs, set `ENGINE_A_THREADS` and
 `ENGINE_B_THREADS` independently; use `default` for an engine that does not
 expose the UCI `Threads` option.
+Set `ENGINE_A_EVAL_MIX` and `ENGINE_B_EVAL_MIX` independently when comparing
+evaluation blends. Values must be integers from 0 through 100 and are recorded
+in the match metadata.
 `scripts/audit-match.py` accepts UTF-8 logs and BOM-marked UTF-16 logs produced
 by Windows PowerShell redirection before checking anomalies and final totals.
 Warnings are rejected by default. Compatibility runs may explicitly allow only
@@ -207,3 +213,25 @@ evaluation sets sealed. This command does not launch training or promote an engi
 ```bash
 python3 -m unittest scripts.tests.test_teacher_corpus
 ```
+
+### Score-only teacher self-play
+
+`scripts.generate_teacher_selfplay` creates disjoint train, validation, and
+holdout text partitions from a pinned UCI teacher. It uses one engine thread per
+worker, fixed nodes, seeded opening variation, global canonical-FEN deduplication,
+and a manifest binding the engine, generator, options, counts, and artifact
+hashes. Generated corpora remain private artifacts.
+
+```bash
+.venv/bin/python -m scripts.generate_teacher_selfplay \
+  --teacher /path/to/stockfish \
+  --output testing/private/teacher-run \
+  --games 1000 --workers 8 --nodes 2000 --hash-mb 64 \
+  --max-plies 160 --variation-plies 16 --multipv 4 \
+  --batch-size 16384 --seed registered-seed
+```
+
+The score-only `neyrang-teacher-wdl-logit400-v2` format requires trainer
+options `--position-filter none --wdl-proportion 0`. Validation selects a
+checkpoint; holdout stays unopened until that choice is frozen. Offline loss,
+quantization parity, and throughput still do not replace paired games.

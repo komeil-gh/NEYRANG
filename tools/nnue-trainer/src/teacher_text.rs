@@ -12,6 +12,13 @@ use neyrang::chess::Position;
 use crate::{POSITION_SHUFFLE_SEED, deterministic_shuffle};
 
 const HEADER: &str = "# neyrang-teacher-wdl-logit400-v1";
+const SCORE_ONLY_HEADER: &str = "# neyrang-teacher-wdl-logit400-v2";
+
+#[derive(Clone, Copy)]
+enum TextFormat {
+    ScoreAndResult,
+    ScoreOnly,
+}
 
 #[derive(Clone, Debug)]
 /// Bounded, pre-parsed teacher input. Corpus provenance and quiet-move/result
@@ -23,13 +30,28 @@ pub struct TeacherTextLoader {
 impl TeacherTextLoader {
     pub fn new(path: impl AsRef<Path>, expected: usize, limit: usize) -> Result<Self, String> {
         let file = File::open(path).map_err(|e| format!("open teacher input: {e}"))?;
-        Self::from_reader(BufReader::new(file), expected, limit)
+        Self::from_reader(
+            BufReader::new(file),
+            expected,
+            limit,
+            TextFormat::ScoreAndResult,
+        )
+    }
+
+    pub fn new_score_only(
+        path: impl AsRef<Path>,
+        expected: usize,
+        limit: usize,
+    ) -> Result<Self, String> {
+        let file = File::open(path).map_err(|e| format!("open teacher input: {e}"))?;
+        Self::from_reader(BufReader::new(file), expected, limit, TextFormat::ScoreOnly)
     }
 
     fn from_reader(
         mut reader: impl BufRead,
         expected: usize,
         limit: usize,
+        format: TextFormat,
     ) -> Result<Self, String> {
         if expected == 0 || expected > limit {
             return Err("teacher row count must be positive and fit the loader buffer".into());
@@ -52,7 +74,11 @@ impl TeacherTextLoader {
                 return Err(format!("teacher line {line_number} exceeds 256 bytes"));
             }
             if line_number == 1 {
-                if line.trim_end() != HEADER {
+                let expected_header = match format {
+                    TextFormat::ScoreAndResult => HEADER,
+                    TextFormat::ScoreOnly => SCORE_ONLY_HEADER,
+                };
+                if line.trim_end() != expected_header {
                     return Err("missing teacher target encoding header".into());
                 }
                 continue;
@@ -60,8 +86,9 @@ impl TeacherTextLoader {
             if positions.len() == expected {
                 return Err("teacher input contains more than the registered row count".into());
             }
-            positions
-                .push(parse_row(&line).map_err(|e| format!("teacher line {line_number}: {e}"))?);
+            positions.push(
+                parse_row(&line, format).map_err(|e| format!("teacher line {line_number}: {e}"))?,
+            );
         }
         if positions.len() != expected {
             return Err(format!(
@@ -89,13 +116,20 @@ impl DataReader<ChessBoard> for TeacherTextLoader {
     }
 }
 
-fn parse_row(line: &str) -> Result<ChessBoard, String> {
+fn parse_row(line: &str, format: TextFormat) -> Result<ChessBoard, String> {
     let fields: Vec<_> = line.split('|').map(str::trim).collect();
-    let [fen, score, result] = fields.as_slice() else {
-        return Err("expected FEN | White logit400 score | actual White result".into());
+    let (fen, score, result) = match (format, fields.as_slice()) {
+        (TextFormat::ScoreAndResult, [fen, score, result]) => (*fen, *score, *result),
+        (TextFormat::ScoreOnly, [fen, score]) => (*fen, *score, "0.5"),
+        (TextFormat::ScoreAndResult, _) => {
+            return Err("expected FEN | White logit400 score | actual White result".into());
+        }
+        (TextFormat::ScoreOnly, _) => {
+            return Err("expected FEN | White logit400 score".into());
+        }
     };
     let score: i16 = score.parse().map_err(|_| "invalid integer teacher score")?;
-    if !(-3040..=3040).contains(&score) || !matches!(*result, "0.0" | "0.5" | "1.0") {
+    if !(-3040..=3040).contains(&score) || !matches!(result, "0.0" | "0.5" | "1.0") {
         return Err("teacher score or actual result outside encoding contract".into());
     }
     // The upstream text parser assumes valid ranks and kings. Reuse our checked
@@ -104,7 +138,10 @@ fn parse_row(line: &str) -> Result<ChessBoard, String> {
     if position.all_occupancy().count_ones() > 32 {
         return Err("Bullet input supports at most 32 pieces".into());
     }
-    line.parse()
+    match format {
+        TextFormat::ScoreAndResult => line.parse(),
+        TextFormat::ScoreOnly => format!("{fen} | {score} | 0.5").parse(),
+    }
 }
 
 #[cfg(test)]
@@ -133,7 +170,13 @@ mod tests {
             for (result, expected) in [("0.0", 0), ("0.5", 1), ("1.0", 2)] {
                 let fen = FEN.replace(" w ", &format!(" {turn} "));
                 let text = corpus(&[format!("{fen} | 555 | {result}")]);
-                let loader = TeacherTextLoader::from_reader(text.as_bytes(), 1, 1).unwrap();
+                let loader = TeacherTextLoader::from_reader(
+                    text.as_bytes(),
+                    1,
+                    1,
+                    TextFormat::ScoreAndResult,
+                )
+                .unwrap();
                 assert_eq!(loader.positions[0].score(), sign * 555);
                 assert_eq!(
                     loader.positions[0].result() as u8,
@@ -150,8 +193,10 @@ mod tests {
                 .map(|n| format!("{FEN} | {n} | 0.5"))
                 .collect::<Vec<_>>(),
         );
-        let a = TeacherTextLoader::from_reader(text.as_bytes(), 8, 8).unwrap();
-        let b = TeacherTextLoader::from_reader(text.as_bytes(), 8, 8).unwrap();
+        let a = TeacherTextLoader::from_reader(text.as_bytes(), 8, 8, TextFormat::ScoreAndResult)
+            .unwrap();
+        let b = TeacherTextLoader::from_reader(text.as_bytes(), 8, 8, TextFormat::ScoreAndResult)
+            .unwrap();
         let order = scores(&a, 0, 8);
         assert_eq!(order, scores(&b, 0, 8));
         assert_ne!(order, (0..8).collect::<Vec<_>>());
@@ -177,14 +222,25 @@ mod tests {
     fn rejects_bad_contract_counts_and_unsafe_parser_inputs() {
         let valid = corpus(&[format!("{FEN} | 0 | 0.5")]);
         for (expected, limit) in [(0, 1), (1, 0), (2, 1), (2, 2)] {
-            assert!(TeacherTextLoader::from_reader(valid.as_bytes(), expected, limit).is_err());
+            assert!(
+                TeacherTextLoader::from_reader(
+                    valid.as_bytes(),
+                    expected,
+                    limit,
+                    TextFormat::ScoreAndResult,
+                )
+                .is_err()
+            );
         }
         for text in [
             String::new(),
             valid.replace(HEADER, "# cp"),
             format!("{valid}{FEN} | 0 | 0.5\n"),
         ] {
-            assert!(TeacherTextLoader::from_reader(text.as_bytes(), 1, 1).is_err());
+            assert!(
+                TeacherTextLoader::from_reader(text.as_bytes(), 1, 1, TextFormat::ScoreAndResult,)
+                    .is_err()
+            );
         }
         for row in [
             format!("{FEN} | -32768 | 0.5"),
@@ -202,9 +258,19 @@ mod tests {
         ] {
             let text = corpus(&[row]);
             assert!(
-                TeacherTextLoader::from_reader(text.as_bytes(), 1, 1).is_err(),
+                TeacherTextLoader::from_reader(text.as_bytes(), 1, 1, TextFormat::ScoreAndResult,)
+                    .is_err(),
                 "{text}"
             );
         }
+    }
+
+    #[test]
+    fn score_only_rows_use_an_ignored_draw_placeholder() {
+        let text = format!("{SCORE_ONLY_HEADER}\n{FEN} | -321\n");
+        let loader =
+            TeacherTextLoader::from_reader(text.as_bytes(), 1, 1, TextFormat::ScoreOnly).unwrap();
+        assert_eq!(loader.positions[0].score(), -321);
+        assert_eq!(loader.positions[0].result() as u8, 1);
     }
 }

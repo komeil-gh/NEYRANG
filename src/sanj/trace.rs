@@ -214,12 +214,12 @@ impl fmt::Display for EvalTrace {
         write!(
             formatter,
             concat!(
-                "{}\t{}\t",
                 "{}\t{}\t{}\t{}\t{}\t{}\t",
                 "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t",
                 "{}\t{}\t{}\t{}\t",
                 "{}\t{}\t{}\t{}\t",
                 "{}\t{}\t{}\t{}\t",
+                "{}\t{}\t",
                 "{}\t{}\t{}\t{}\t{}"
             ),
             stm,

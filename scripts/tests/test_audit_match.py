@@ -145,6 +145,20 @@ class ScanLogTests(unittest.TestCase):
 
 
 class ExpectedMetadataTests(unittest.TestCase):
+    def test_node_limit_requires_dash_time_control_in_metadata_and_pgn(self) -> None:
+        self.assertEqual(
+            AUDIT_MATCH.audit_limit_metadata(
+                {"limit_mode": "nodes", "time_control": "-"},
+                AUDIT_MATCH.Counter({"-": 10}),
+            ),
+            [],
+        )
+        errors = AUDIT_MATCH.audit_limit_metadata(
+            {"limit_mode": "nodes", "time_control": "10+0.1"},
+            AUDIT_MATCH.Counter({"-": 10}),
+        )
+        self.assertIn("expected '-'", errors[0])
+
     def test_exact_fields_pass(self) -> None:
         expected, errors = AUDIT_MATCH.audit_expected_metadata(
             {"limit_mode": "per-engine-nodes", "engine_a_nodes": "30000"},

@@ -17,6 +17,8 @@ output="$(
     ENGINE_B=/usr/bin/true \
     ENGINE_A_GIT_SHA=candidate-sha \
     ENGINE_B_GIT_SHA=baseline-sha \
+    ENGINE_A_EVAL_MIX=100 \
+    ENGINE_B_EVAL_MIX=10 \
     OPENINGS_FILE="$repo_root/scripts/openings.epd" \
     OPENING_SEED=20260829 \
     TIME_MARGIN_MS=0 \
@@ -55,6 +57,8 @@ require_output "timeleft=true"
 require_output "latency=true"
 require_output "timemargin=0"
 require_output "option.Move\\ Overhead=30"
+require_output "option.EvalMix=100"
+require_output "option.EvalMix=10"
 require_output "-show-latency"
 require_output "-strict"
 require_output "-autosaveinterval 2"
@@ -69,7 +73,11 @@ fi
 for expected in \
     "engine_a_git_sha=candidate-sha" \
     "engine_b_git_sha=baseline-sha" \
+    "engine_a_eval_mix=100" \
+    "engine_b_eval_mix=10" \
     "opening_seed=20260829" \
+    "limit_mode=nodes" \
+    "time_control=-" \
     "nodes=5000" \
     "time_margin_ms=0" \
     "move_overhead_ms=30" \
@@ -90,6 +98,14 @@ for expected in \
         exit 1
     fi
 done
+
+if DRY_RUN=1 FASTCHESS_BIN=true ENGINE_A=/usr/bin/true ENGINE_B=/usr/bin/true \
+    ENGINE_A_EVAL_MIX=101 OPENINGS_FILE="$repo_root/scripts/openings.epd" \
+    GAMES=10 PGN_OUT="$scratch/invalid-eval-mix.pgn" "$script_dir/match.sh" \
+    >/dev/null 2>&1; then
+    echo "match runner accepted an out-of-range EvalMix" >&2
+    exit 1
+fi
 
 echo "match configuration test passed"
 
@@ -119,6 +135,7 @@ done
 
 for expected in \
     "limit_mode=per-engine-nodes" \
+    "time_control=-" \
     "nodes=" \
     "engine_a_nodes=30000" \
     "engine_b_nodes=29200"; do

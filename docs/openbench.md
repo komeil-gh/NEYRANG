@@ -25,7 +25,7 @@ Override `PROFILE` or `TARGET_CPU` only in a registered build configuration:
 make EXE=NEYRANG-01234567 PROFILE=release TARGET_CPU=generic
 ```
 
-The retained development source currently reports 35,176 nodes at the default depth-5 bench. Time and NPS remain host-dependent. Any source change that alters the deterministic tree must update the registered bench only after the change is understood and accepted.
+The 0.3.0 release source reports 34,345 nodes at the default depth-5 bench. Time and NPS remain host-dependent. Any source change that alters the deterministic tree must update the registered bench only after the change is understood and accepted.
 
 OpenBench uses the configured `rustc>=1.98` entry to decide whether a worker can build NEYRANG, then invokes `make -j EXE=...` without a C/C++ compiler override for Rust builds. Every registered worker must therefore provide both Rust 1.98 or newer and Cargo; compiler discovery alone does not install the Rust toolchain.
 
@@ -120,7 +120,7 @@ Retained EPD shards must be created through:
   --seed 2026090100000001 \
   --generator-source-commit FULL_GIT_SHA \
   --compiler-identity "rustc VERSION" \
-  --source-license UNLICENSED-NEYRANG-INTERNAL
+  --source-license GPL-3.0-or-later
 ```
 
 The wrapper independently enforces the 15-second OpenBench stall rule, exact
@@ -131,8 +131,8 @@ no-clobber output publication, and overwrite refusal. Its adjacent
 `neyrang-genfens-shard-v1` manifest is an
 opening-input provenance record, not a scored NNUE corpus.
 
-N1a defines and independently audits the versioned, lossless
-[NNUE game-record contract](development/nnue-data.md). N1e now closes the
+N1a defines and independently audits the versioned, lossless NNUE game-record
+contract implemented by `tools/nnue-data`. N1e now closes the
 sixteen-million-position fixed-validation gate, deterministic whole-game
 quarantine, pinned Bullet ingestion, bounded raw-float/quantized FEN parity,
 full-corpus diagnostics and paired game bootstrap. The 64M and larger scale

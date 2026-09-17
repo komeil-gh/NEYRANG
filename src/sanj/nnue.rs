@@ -504,10 +504,13 @@ fn activation_output(
     latent_imbalance: bool,
 ) -> i64 {
     #[cfg(target_arch = "x86_64")]
-    if !latent_imbalance && activation_quant <= 255 && std::arch::is_x86_feature_detected!("avx2") {
+    if !latent_imbalance
+        && activation_quant <= 46_340
+        && std::arch::is_x86_feature_detected!("avx2")
+    {
         // SAFETY: the runtime check above proves AVX2 support; slice lengths are
         // fixed by the validated network contract. The quantization bound keeps
-        // every squared i32-by-i16 product inside signed i32 before widening.
+        // each squared activation inside signed i32 before exact i64 products.
         return unsafe { activation_output_avx2(us, them, weights, activation_quant as i32) };
     }
 
@@ -565,10 +568,13 @@ unsafe fn activation_block_avx2(
     let clipped = _mm256_max_epi32(zero, _mm256_min_epi32(values, quant));
     let squared = _mm256_mullo_epi32(clipped, clipped);
     let weights = unsafe { _mm_loadu_si128(weights.as_ptr().add(index).cast()) };
-    let products = _mm256_mullo_epi32(squared, _mm256_cvtepi16_epi32(weights));
-    let low = _mm256_cvtepi32_epi64(_mm256_castsi256_si128(products));
-    let high = _mm256_cvtepi32_epi64(_mm256_extracti128_si256::<1>(products));
-    _mm256_add_epi64(_mm256_add_epi64(sum, low), high)
+    let weights = _mm256_cvtepi16_epi32(weights);
+    let even_products = _mm256_mul_epi32(squared, weights);
+    let odd_products = _mm256_mul_epi32(
+        _mm256_srli_epi64::<32>(squared),
+        _mm256_srli_epi64::<32>(weights),
+    );
+    _mm256_add_epi64(_mm256_add_epi64(sum, even_products), odd_products)
 }
 
 fn castle_rook_squares(color: Color, flag: MoveFlag) -> (Square, Square) {
@@ -697,4 +703,37 @@ fn crc32(bytes: &[u8]) -> u32 {
         }
     }
     !crc
+}
+
+#[cfg(all(test, target_arch = "x86_64"))]
+mod tests {
+    use super::{HIDDEN_SIZE, activation_output_avx2, square_clipped};
+
+    #[test]
+    fn wide_avx2_activation_matches_scalar_at_retained_quantization() {
+        if !std::arch::is_x86_feature_detected!("avx2") {
+            return;
+        }
+        let mut us = [0_i32; HIDDEN_SIZE];
+        let mut them = [0_i32; HIDDEN_SIZE];
+        let mut weights = [0_i16; 2 * HIDDEN_SIZE];
+        for index in 0..HIDDEN_SIZE {
+            us[index] = (index as i32 * 97) % 2_100 - 200;
+            them[index] = (index as i32 * 193) % 2_300 - 300;
+            weights[index] = ((index as i32 * 503) % 65_535 - 32_767) as i16;
+            weights[HIDDEN_SIZE + index] = ((index as i32 * 997) % 65_535 - 32_767) as i16;
+        }
+        let quant = 1_536_i64;
+        let expected = (0..HIDDEN_SIZE)
+            .map(|index| {
+                square_clipped(us[index], quant) * i64::from(weights[index])
+                    + square_clipped(them[index], quant) * i64::from(weights[HIDDEN_SIZE + index])
+            })
+            .sum::<i64>();
+
+        // SAFETY: the runtime check above proves AVX2 support and all arrays
+        // have the fixed lengths required by the activation kernel.
+        let actual = unsafe { activation_output_avx2(&us, &them, &weights, quant as i32) };
+        assert_eq!(actual, expected);
+    }
 }

@@ -27,7 +27,7 @@ reuses it for both mobility and king pressure. The score formula and every
 weight remain unchanged; the exact 100,000-position SANJ trace is the binding
 semantic oracle.
 
-Known limitations include no pawn hash, no general threats/space/outposts, and no systematic tuning against game data. The evaluator remains an inspectable bootstrap rather than a claim that handcrafted weights are finished.
+Known limitations include no pawn hash and no general threats, space, or outpost terms. Limited data-driven experiments have been run, but there is no retained systematic full-weight tuning pass. The evaluator remains an inspectable bootstrap rather than a claim that handcrafted weights are finished.
 
 ## NNUE judgment
 
@@ -79,7 +79,9 @@ are selection evidence, not a release Elo estimate.
 
 ## Exact SANJ trace
 
-The development branch includes a feature-gated, streaming trace for dataset work. It is an independent reconstruction rather than instrumentation in the tournament hot path. The normal release remains byte-for-byte identical to the accepted G1 binary.
+The release includes a feature-gated, streaming trace for dataset work. It is
+an independent reconstruction rather than instrumentation in the tournament
+hot path; the default playing path does not call the exporter.
 
 Build and run it explicitly:
 
@@ -109,8 +111,9 @@ The raw coefficients reconstruct every current constant and formula exactly. A d
 The incremental interface exists behind the default-enabled `nnue` feature. Its
 accumulator also carries the exact remaining-piece count needed by version 3's
 constant-time output-head selection. Version 4 derives its extra channel
-directly from those same two accumulators. Retained N7 activation uses a
-runtime-checked AVX2 dot product on supported x86-64 processors and the
-bit-exact scalar path everywhere else; version 4 also remains scalar. A future
-NEON path must preserve the same oracle. Training tooling remains separate from
-the engine build.
+directly from those same two accumulators. The runtime-checked AVX2 dot product
+uses exact signed 64-bit products and is valid for activation quantization up to
+46340. Retained N7 uses activation quantization 1536 and therefore takes the
+vector output path; version 4 remains scalar because its extra channel has a
+different output contract. A future NEON path must preserve the same oracle.
+Training tooling remains separate from the engine build.

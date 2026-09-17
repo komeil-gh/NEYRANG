@@ -113,12 +113,13 @@ class EvalFeatureAnalysisTests(unittest.TestCase):
             phase=np.array([2, 2], dtype=np.int64),
             mg_coefficients=mg,
             eg_coefficients=eg,
+            king_danger=np.array([3, -3], dtype=np.int64),
             tempo_sign=np.array([1, 1], dtype=np.int64),
         )
 
         actual = analysis.exact_integer_cp(partition, weights)
 
-        self.assertEqual(actual.tolist(), [18, 6])
+        self.assertEqual(actual.tolist(), [11, 1])
 
     def test_partition_loader_builds_the_registered_42_columns(self) -> None:
         analysis = load_analysis()
@@ -173,7 +174,7 @@ class EvalFeatureAnalysisTests(unittest.TestCase):
                     {
                         "schema": "neyrang-sanj-trace-v2",
                         "record_id": f"source:pair-{index:06d}:game-1:ply-016",
-                        "target": "0.5",
+                        "target": "0.73" if index == 1 else "0.5",
                         "fen": "8/8/8/8/8/8/8/K6k w - - 0 1",
                         "stm": "w" if index == 1 else "b",
                         "phase": str(phase),
@@ -204,6 +205,7 @@ class EvalFeatureAnalysisTests(unittest.TestCase):
             ["source:pair-000001", "source:pair-000002"],
         )
         self.assertTrue(np.allclose(partition.cp, [112.0, 88.0]))
+        self.assertTrue(np.allclose(partition.target, [0.73, 0.5]))
 
     def test_partition_loader_accepts_hash_bound_pre_contract_schema(self) -> None:
         analysis = load_analysis()
@@ -258,6 +260,7 @@ class EvalFeatureAnalysisTests(unittest.TestCase):
                 phase=np.full(4, 24, dtype=np.int64),
                 mg_coefficients=np.zeros((4, 25), dtype=np.int64),
                 eg_coefficients=np.zeros((4, 16), dtype=np.int64),
+                king_danger=np.zeros(4, dtype=np.int64),
                 tempo_sign=np.ones(4, dtype=np.int64),
             )
 

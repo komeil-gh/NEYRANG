@@ -45,7 +45,7 @@ H3g adds a separate parent-side futility gate at non-root, non-PV depths one thr
 
 H3h reuses the exact SEE value already computed by the staged MovePicker. At non-root, non-PV depths through six, a later non-promotion capture below `-100 * depth` is skipped without another SEE call. The first move, preferred move, checks, PV nodes, nodes in check, null subtrees, promotions, and mate-loss defense remain searchable.
 
-The retained development branch also uses conservative depth-scaled null-move pruning at eligible null-window nodes: R2 at depths four and five, then R3 from depth six. It requires no check or earlier null, a non-mate beta, static evaluation at least beta, and meaningful friendly non-pawn material. Pawn-only and lone-minor endings are excluded. Legal terminal detection precedes the probe. Synthetic null descendants cannot use real-game repetition/fifty-move adjudication, the TT, or persistent killer/history training, and null state is restored exactly. There is no verification search in this variant.
+The retained release also uses conservative depth-scaled null-move pruning at eligible null-window nodes: R2 at depths four and five, then R3 from depth six. It requires no check or earlier null, a non-mate beta, static evaluation at least beta, and meaningful friendly non-pawn material. Pawn-only and lone-minor endings are excluded. Legal terminal detection precedes the probe. Synthetic null descendants cannot use real-game repetition/fifty-move adjudication, the TT, or persistent killer/history training, and null state is restored exactly. There is no verification search in this variant.
 
 Before the null-move probe, a separately tested reverse-futility guard can return the static SANJ score at non-root, non-PV depths one through three when it exceeds beta by at least `150 * depth`. The guard is disabled in check, null subtrees, mate-score windows, low-material endings, and nodes whose TT move is quiet. Legal terminal detection remains authoritative.
 
@@ -57,13 +57,13 @@ the same score. This cache is stack-local and does not change search decisions.
 
 P3 implements root-diversified Lazy SMP behind `Threads>1`; `Threads=1` continues through the old local table and search entry point. The main worker starts with the established root order. Helper `i` starts with legal root move `i mod root_move_count`, then private histories and the shared TT allow searches to diverge naturally. Only the main worker emits iterative information. After all workers finish, root moves receive the registered score vote `score - minimum_score + 14`; vote ties use completed depth, PV length, and main-worker priority. The chosen representative contributes score/PV while nodes, qnodes, seldepth, elapsed time, hashfull, and search statistics are aggregated.
 
-The shared TT uses one atomic word per entry, relaxed operations, a 16-bit signature, and one generation advanced by the controller. Mate scores are normalized at the same boundary as the local TT. Timed workers share a start instant before helper creation, so spawn overhead consumes the budget. Node-limited searches use one exact global budget. Frozen P3 passed its 1/2/4-thread scaling and deadline gates, then scored 53.075% in the complete audited 2,000-game Threads-2-versus-Threads-1 screen. The path is retained on the development branch; more cores are extra compute, not a free single-thread efficiency claim or a release-wide Elo promise.
+The shared TT uses one atomic word per entry, relaxed operations, a 16-bit signature, and one generation advanced by the controller. Mate scores are normalized at the same boundary as the local TT. Timed workers share a start instant before helper creation, so spawn overhead consumes the budget. Node-limited searches use one exact global budget. Frozen P3 passed its 1/2/4-thread scaling and deadline gates, then scored 53.075% in the complete audited 2,000-game Threads-2-versus-Threads-1 screen. The path is retained in 0.3.0; more cores are extra compute, not a free single-thread efficiency claim or a release-wide Elo promise.
 
 ## Draws and limits
 
-The search checks the 50-move counter and counts matching hashes within the reversible history window for threefold repetition. Maximum ply is 128. At the boundary it returns static evaluation rather than indexing past fixed search storage.
+The search checks the 50-move counter and counts matching hashes within the reversible history window for threefold repetition. It also returns a draw for the conservative dead-position subset: bare kings, one minor versus a bare king, and bishop-only material where every bishop occupies the same square color. Maximum ply is 128. At the boundary it returns static evaluation rather than indexing past fixed search storage.
 
-The UCI thread can set an atomic stop flag while search is active. Local node limits are checked every node; the parallel path reserves against one exact aggregate counter. Hard time is sampled at the first node, every node for budgets of at most 5 ms, and every 1,024 nodes otherwise. Soft time is evaluated after completed iterations. A legal root fallback is retained even when the usable budget is zero, and an interrupted iteration never replaces the last stable result. The default configurable `Move Overhead` is 30 ms after the [0.3 timing audit](development/0.3.0-timing-audit.md) measured the external macOS/runner latency tail.
+The UCI thread can set an atomic stop flag while search is active. Local node limits are checked every node; the parallel path reserves against one exact aggregate counter. Hard time is sampled at the first node, every node for budgets of at most 5 ms, and every 1,024 nodes otherwise. Soft time is evaluated after completed iterations. From depth four, a completed iteration whose score fell by at least 30 centipawns may continue to 1.3 times the soft limit, always clamped by the unchanged hard limit; a root-move change alone does not extend time. A legal root fallback is retained even when the usable budget is zero, and an interrupted iteration never replaces the last stable result. The default configurable `Move Overhead` is 30 ms after the 0.3 timing audit measured the external runner latency tail.
 
 ## Measured development changes
 
@@ -91,7 +91,7 @@ The later F1 legality-filter and G1 exact-SEE optimizations preserve the final 1
 
 The first 0.2 guarded null-move candidate reduced the benchmark to 182,768 nodes but did not accept H1 in a capped 1,000-game SPRT against the LMR parent, so that historical implementation was reverted. Reverse futility pruning was not attempted in 0.2.0.
 
-The [0.3 retrospective campaign](development/0.3.0-game-campaign.md) completed 4,000 fixed games across the preserved 0.1/SEE/qsearch/LMR/0.2 binaries. SEE ordering measured `+29.25 +/-17.09 Elo`, qsearch SEE pruning measured `+66.46 +/-18.72 Elo`, isolated LMR remained inconclusive at `+6.25 +/-12.52 Elo`, and cumulative v0.2.0 measured `+90.97 +/-18.38 Elo` against v0.1.0. Five 2-11 ms time forfeits in historical parents triggered a separate timing audit. Exact v0.2.0 reproduced strict zero-margin losses; isolated hardening closed with a clean 1,000-game timing stress and defined `BASE_0_3` at `303711a`.
+The 0.3 retrospective campaign completed 4,000 fixed games across the preserved 0.1/SEE/qsearch/LMR/0.2 binaries. SEE ordering measured `+29.25 +/-17.09 Elo`, qsearch SEE pruning measured `+66.46 +/-18.72 Elo`, isolated LMR remained inconclusive at `+6.25 +/-12.52 Elo`, and cumulative v0.2.0 measured `+90.97 +/-18.38 Elo` against v0.1.0. Five 2-11 ms time forfeits in historical parents triggered a separate timing audit. Exact v0.2.0 reproduced strict zero-margin losses; isolated hardening closed with a clean 1,000-game timing stress and defined `BASE_0_3` at `303711a`.
 
 The 0.3 ordering work then kept the staged MovePicker after 7,046 valid comparison games. A real oracle-equivalent `see_ge` primitive was verified, but the only registered lazy main-search caller was rejected after 12,000 valid games: its final 10,000-game normalized SPRT capped at LLR `+0.69` inside the decision bounds. Commit `2e9637e` restored the accepted MovePicker/B0 search behavior while retaining the unused threshold primitive.
 
@@ -253,4 +253,23 @@ audited 512-game equal-time parent screen scored `140/210/162` (47.85%,
 `-14.94 +/-19.79 Elo`). The negative point estimate rejected the candidate,
 and its playing code was removed without an external-engine screen.
 
-NEYRANG does not learn merely by playing games; improvements still require an explicit, tested patch. Any future baseline-protocol repair, null-move refinement, LMP, ProbCut, or singular-extension work must be pre-registered and isolated rather than bundled into the accepted candidate. The complete outcome is in the [0.3 final report](development/0.3.0-final-report.md).
+H30 then revisited only exact retained-path throughput. It collected active
+MovePicker indices during classification, fused the existing classical SANJ
+piece traversals, and enabled SANJ-N7's exact 64-bit AVX2 output dot product.
+Depth-8 and depth-12 stayed exact at 536,259 / 29,459,618 nodes with checksums
+`9d8d22b14e51010d` / `0f8416196d8f7941`; 31 interleaved native pairs improved
+median throughput by 29.87%. Its clean 512-game Blunder 7.6.0 screen scored
+33.79%, so this retention is throughput evidence, not a victory claim.
+
+H35 retained the conservative dead-position rule after a clean 512-game parent
+screen at 50.20%. H41 retained the score-drop-only time extension after a
+clean 1,000-game parent screen at 50.50%. On the exact 256 opening pairs used
+by H35, H41 scored 35.74% against Blunder 7.6.0 versus H35's 33.30%. The
+2.44-point difference is directional rather than statistically proven, and
+0.3.0 still loses decisively to Blunder under this test. The final portable
+release reproduced H41 exactly over 128 fixed-node opening pairs, then scored
+`92/130/290` (30.66%, `-141.73 +/-26.28 Elo`) in its independent 512-game
+release screen against Blunder 7.6.0. That clean final result supersedes the
+earlier H41 point estimate as the release claim; it is not a Blunder victory.
+
+NEYRANG does not learn merely by playing games; improvements still require an explicit, tested patch. Any future baseline-protocol repair, null-move refinement, LMP, ProbCut, or singular-extension work must be pre-registered and isolated rather than bundled into the accepted candidate. Accepted and rejected outcomes are recorded in the changelog.

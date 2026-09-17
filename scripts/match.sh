@@ -11,6 +11,8 @@ engine_a_name="${ENGINE_A_NAME:-NEYRANG-new}"
 engine_b_name="${ENGINE_B_NAME:-NEYRANG-reference}"
 engine_a_eval_file="${ENGINE_A_EVAL_FILE:-}"
 engine_b_eval_file="${ENGINE_B_EVAL_FILE:-}"
+engine_a_eval_mix="${ENGINE_A_EVAL_MIX:-}"
+engine_b_eval_mix="${ENGINE_B_EVAL_MIX:-}"
 engine_a_policy_file="${ENGINE_A_POLICY_FILE:-}"
 engine_b_policy_file="${ENGINE_B_POLICY_FILE:-}"
 games="${GAMES:-200}"
@@ -171,6 +173,13 @@ for eval_file in "$engine_a_eval_file" "$engine_b_eval_file"; do
         exit 2
     fi
 done
+for eval_mix in "$engine_a_eval_mix" "$engine_b_eval_mix"; do
+    if [[ -n "$eval_mix" ]] &&
+        { ! [[ "$eval_mix" =~ ^[0-9]+$ ]] || (( eval_mix > 100 )); }; then
+        echo "EvalMix must be an integer from 0 through 100 when set" >&2
+        exit 2
+    fi
+done
 for policy_file in "$engine_a_policy_file" "$engine_b_policy_file"; do
     if [[ -n "$policy_file" && ! -r "$policy_file" ]]; then
         echo "PolicyFile is not readable: $policy_file" >&2
@@ -243,6 +252,10 @@ if [[ -n "$nodes" ]]; then
 elif [[ -n "$engine_a_nodes" ]]; then
     limit_mode="per-engine-nodes"
 fi
+recorded_time_control="$time_control"
+if [[ "$limit_mode" != "time" ]]; then
+    recorded_time_control="-"
+fi
 if [[ -n "$move_overhead_ms" ]]; then
     each_engine_options+=("option.Move Overhead=$move_overhead_ms")
 fi
@@ -253,6 +266,9 @@ command=(
 )
 if [[ -n "$engine_a_eval_file" ]]; then
     command+=("option.EvalFile=$engine_a_eval_file")
+fi
+if [[ -n "$engine_a_eval_mix" ]]; then
+    command+=("option.EvalMix=$engine_a_eval_mix")
 fi
 if [[ -n "$engine_a_policy_file" ]]; then
     command+=("option.PolicyFile=$engine_a_policy_file")
@@ -268,6 +284,9 @@ command+=(
 )
 if [[ -n "$engine_b_eval_file" ]]; then
     command+=("option.EvalFile=$engine_b_eval_file")
+fi
+if [[ -n "$engine_b_eval_mix" ]]; then
+    command+=("option.EvalMix=$engine_b_eval_mix")
 fi
 if [[ -n "$engine_b_policy_file" ]]; then
     command+=("option.PolicyFile=$engine_b_policy_file")
@@ -317,6 +336,7 @@ fi
     echo "engine_a_sha256=$engine_a_sha256"
     echo "engine_a_eval_file=$engine_a_eval_file"
     echo "engine_a_eval_file_sha256=$engine_a_eval_file_sha256"
+    echo "engine_a_eval_mix=$engine_a_eval_mix"
     echo "engine_a_policy_file=$engine_a_policy_file"
     echo "engine_a_policy_file_sha256=$engine_a_policy_file_sha256"
     echo "engine_b=$engine_b"
@@ -325,6 +345,7 @@ fi
     echo "engine_b_sha256=$engine_b_sha256"
     echo "engine_b_eval_file=$engine_b_eval_file"
     echo "engine_b_eval_file_sha256=$engine_b_eval_file_sha256"
+    echo "engine_b_eval_mix=$engine_b_eval_mix"
     echo "engine_b_policy_file=$engine_b_policy_file"
     echo "engine_b_policy_file_sha256=$engine_b_policy_file_sha256"
     echo "fastchess=$fastchess_path"
@@ -344,7 +365,7 @@ fi
     echo "games=$games"
     echo "pairs=$((games / 2))"
     echo "limit_mode=$limit_mode"
-    echo "time_control=$time_control"
+    echo "time_control=$recorded_time_control"
     echo "nodes=$nodes"
     echo "engine_a_nodes=$engine_a_nodes"
     echo "engine_b_nodes=$engine_b_nodes"

@@ -89,6 +89,34 @@ fn stalemate_and_fifty_move_rule_return_draw_scores() {
 }
 
 #[test]
+fn dead_material_is_scored_as_a_draw_without_overclaiming_two_knights() {
+    for fen in [
+        "8/5k2/8/8/8/8/3K4/8 w - - 0 1",
+        "8/5k2/8/8/8/8/3KN3/8 w - - 0 1",
+        "8/5k2/8/8/8/8/3KB3/8 w - - 0 1",
+        "b7/5k2/8/8/8/8/3KB3/8 w - - 0 1",
+    ] {
+        let mut position = Position::from_fen(fen).expect("dead-position fixture is valid");
+        assert!(position.is_dead_position(), "{fen}");
+        let hashes = [position.hash()];
+        let stop = AtomicBool::new(false);
+        let mut searcher = Searcher::new(&stop);
+        let result = searcher.search(&mut position, &SearchLimits::depth(3), &hashes, |_| {});
+        assert_eq!(result.score, 0, "{fen}");
+    }
+
+    for fen in [
+        "8/5k2/8/8/8/8/3KNN2/8 w - - 0 1",
+        "8/5k2/8/8/8/8/3KBN2/8 w - - 0 1",
+        "8/2b2k2/8/8/8/8/3KB3/8 w - - 0 1",
+        "8/5kr1/8/8/8/8/3K4/8 w - - 0 1",
+    ] {
+        let position = Position::from_fen(fen).expect("live-material fixture is valid");
+        assert!(!position.is_dead_position(), "{fen}");
+    }
+}
+
+#[test]
 fn principal_variation_stops_at_threefold_after_uncapturable_en_passant() {
     const MOVES: &str = "e2c4 c8d7 c1d2 g8f6 f1d3 a5b4 c3e4 b4b2 d2c3 b2b6 \
         e4f6 g7f6 c3f6 h8g8 e1g1 h7h5 d3e2 g8g6 f6c3 g6g5 c3f6 g5f5 c4h4 b6b4 \

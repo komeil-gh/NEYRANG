@@ -12,7 +12,7 @@ use neyrang_nnue_reference::{
 
 #[test]
 fn importer_requires_explicit_quantization_and_preserves_it_in_the_artifact() {
-    let directory = unique_temp_directory();
+    let directory = unique_temp_directory("quantization");
     fs::create_dir(&directory).unwrap();
     let input = directory.join("quantised.bin");
     let output = directory.join("network.nnue");
@@ -57,7 +57,7 @@ fn importer_requires_explicit_quantization_and_preserves_it_in_the_artifact() {
 
 #[test]
 fn importer_requires_an_explicit_king_bucket_feature_contract() {
-    let directory = unique_temp_directory();
+    let directory = unique_temp_directory("king-buckets");
     fs::create_dir(&directory).unwrap();
     let input = directory.join("quantised-x3.bin");
     let output = directory.join("network-x3.nnue");
@@ -103,13 +103,13 @@ fn bullet_fixture_with_inputs(inputs: usize) -> Vec<u8> {
     bytes
 }
 
-fn unique_temp_directory() -> PathBuf {
+fn unique_temp_directory(label: &str) -> PathBuf {
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
     std::env::temp_dir().join(format!(
-        "neyrang-nnue-import-{}-{nonce}",
+        "neyrang-nnue-import-{label}-{}-{nonce}",
         std::process::id()
     ))
 }

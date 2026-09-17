@@ -219,6 +219,14 @@ All notable changes to NEYRANG are documented here.
   independent playing strength. The dependency, adapter, model, and all
   default-build claims based on them were removed.
 
+- The corrective independent baseline at `bec082f` scored `88/106/318`
+  (27.54%, `-168.06 +/-28.25 Elo`) against Blunder 7.6 in 512 equal-time
+  games over 256 color-reversed openings at `0.5+0.005` and 64 MiB hash.
+  The retained audit reports zero crashes, disconnects, forfeits, illegal
+  moves, protocol errors, stalls, time forfeits, or timeouts. This result,
+  not the imported-evaluator screens, is the current external-strength
+  baseline for NEYRANG's playing binary.
+
 - Raising guarded null-move reduction from R3 to R4 only at depth eight and
   deeper reduced the depth-9 tree by 2.27%, but its clean audited 512-game
   parent screen scored `140/210/162` (47.85%, `-14.94 +/-19.79 Elo`). The

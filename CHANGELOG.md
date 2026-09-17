@@ -227,6 +227,14 @@ All notable changes to NEYRANG are documented here.
   not the imported-evaluator screens, is the current external-strength
   baseline for NEYRANG's playing binary.
 
+- The same frozen independent binary scored `404/73/35` (86.04%,
+  `+315.86 +/-35.66 Elo`) against the official Kojiro 0.1.4 AVX2/PEXT binary
+  in 512 equal-time games over the same 256 color-reversed openings. The PGN
+  audit accepted all 512 normal terminations, colors, openings, telemetry and
+  results. The strict log audit intentionally rejected the run because Kojiro
+  emitted 1,583 invalid or stale-PV warnings; NEYRANG emitted none. This is a
+  compatibility benchmark, not clean protocol evidence.
+
 - Raising guarded null-move reduction from R3 to R4 only at depth eight and
   deeper reduced the depth-9 tree by 2.27%, but its clean audited 512-game
   parent screen scored `140/210/162` (47.85%, `-14.94 +/-19.79 Elo`). The
